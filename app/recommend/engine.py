@@ -5,9 +5,12 @@ historical performance on that specific instrument.
 This is a decision-support tool based on technical indicators and historical
 backtests — not financial advice, and it does not account for execution
 costs beyond a flat commission estimate. `recommend_for_symbol` can
-optionally layer on an earnings-surprise-history overlay (see
-`app.fundamentals.earnings`) that nudges confidence when a report is due
-soon; the base ensemble in `recommend()` stays purely technical.
+optionally layer on two independent overlays that nudge confidence without
+changing the technical BUY/SELL/HOLD call itself: an earnings-surprise-
+history overlay (`app.fundamentals.earnings`, confidence adjusts when a
+report is due soon) and a news-sentiment overlay
+(`app.fundamentals.news_sentiment`, confidence adjusts based on recent,
+sufficiently-relevant news tone).
 """
 
 from __future__ import annotations
@@ -17,6 +20,7 @@ import pandas as pd
 from app.backtest.engine import run_backtest
 from app.data.providers import get_ohlcv
 from app.fundamentals.earnings import apply_earnings_overlay
+from app.fundamentals.news_sentiment import apply_news_overlay
 from app.strategies import Strategy, all_strategies
 
 BULLISH_ACTIONS = {"BUY", "HOLD_LONG"}
@@ -108,6 +112,8 @@ def recommend_for_symbol(
     allow_short: bool = True,
     include_earnings: bool = False,
     finnhub_api_key: str | None = None,
+    include_news: bool = False,
+    alphavantage_api_key: str | None = None,
 ) -> dict:
     df = get_ohlcv(symbol, period=period, interval=interval)
     result = recommend(
@@ -120,4 +126,6 @@ def recommend_for_symbol(
     )
     if include_earnings:
         result = apply_earnings_overlay(result, symbol, api_key=finnhub_api_key)
+    if include_news:
+        result = apply_news_overlay(result, symbol, api_key=alphavantage_api_key)
     return result

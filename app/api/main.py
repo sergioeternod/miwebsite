@@ -12,9 +12,11 @@ load_dotenv()  # lee .env si existe (API keys como FINNHUB_API_KEY); no sobreesc
 from app.api.schemas import BacktestRequest, CompareRequest, RankRequest, ScreenRequest, SimulateRequest, ValidateRequest
 from app.backtest.engine import BacktestResult, compare_strategies, run_backtest
 from app.config import EXAMPLE_SYMBOLS
+from app.data.alphavantage_client import AlphaVantageUnavailableError
 from app.data.finnhub_client import FinnhubUnavailableError
 from app.data.providers import DataUnavailableError, get_ohlcv
 from app.fundamentals.earnings import apply_earnings_overlay, earnings_report
+from app.fundamentals.news_sentiment import apply_news_overlay, news_report
 from app.ranking import rank_real_symbols, rank_synthetic_profiles
 from app.recommend.engine import recommend
 from app.screener import screen_real_symbols, screen_synthetic
@@ -64,6 +66,7 @@ def get_recommendation(
     commission_bps: float = 5.0,
     allow_short: bool = True,
     with_earnings: bool = False,
+    with_news: bool = False,
 ) -> dict:
     try:
         df = get_ohlcv(symbol, period=period, interval=interval)
@@ -79,6 +82,8 @@ def get_recommendation(
     )
     if with_earnings:
         result = apply_earnings_overlay(result, symbol)
+    if with_news:
+        result = apply_news_overlay(result, symbol)
     return result
 
 
@@ -89,6 +94,16 @@ def get_earnings(symbol: str) -> dict:
     try:
         return earnings_report(symbol)
     except FinnhubUnavailableError as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
+
+
+@app.get("/news/{symbol}")
+def get_news(symbol: str) -> dict:
+    """Recent news-sentiment summary for a symbol (Alpha Vantage). Requires
+    ALPHAVANTAGE_API_KEY to be configured server-side."""
+    try:
+        return news_report(symbol)
+    except AlphaVantageUnavailableError as exc:
         raise HTTPException(status_code=503, detail=str(exc)) from exc
 
 

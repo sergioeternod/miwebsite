@@ -5,8 +5,9 @@ Examples:
     python -m app.cli backtest --symbol AAPL --strategy sma_crossover --period 2y
     python -m app.cli compare --symbol BTC-USD --period 1y
     python -m app.cli recommend --symbol EURUSD=X --period 1y
-    python -m app.cli recommend --symbol AAPL --with-earnings
+    python -m app.cli recommend --symbol AAPL --with-earnings --with-news
     python -m app.cli earnings --symbol AAPL
+    python -m app.cli news --symbol AAPL
     python -m app.cli simulate --synthetic --out /tmp/report.json
     python -m app.cli simulate --symbol AAPL --period 3y --strategy macd_crossover
 """
@@ -22,9 +23,11 @@ from dotenv import load_dotenv
 load_dotenv()  # lee .env si existe (API keys como FINNHUB_API_KEY); no sobreescribe variables ya definidas en el entorno
 
 from app.backtest.engine import compare_strategies, run_backtest
+from app.data.alphavantage_client import AlphaVantageUnavailableError
 from app.data.finnhub_client import FinnhubUnavailableError
 from app.data.providers import DataUnavailableError, get_ohlcv
 from app.fundamentals.earnings import apply_earnings_overlay, earnings_report
+from app.fundamentals.news_sentiment import apply_news_overlay, news_report
 from app.ranking import rank_real_symbols, rank_synthetic_profiles
 from app.recommend.engine import recommend
 from app.screener import screen_real_symbols, screen_synthetic
@@ -83,11 +86,18 @@ def cmd_recommend(args: argparse.Namespace) -> None:
     )
     if args.with_earnings:
         result = apply_earnings_overlay(result, args.symbol, api_key=args.finnhub_key)
+    if args.with_news:
+        result = apply_news_overlay(result, args.symbol, api_key=args.av_key)
     _print_json(result)
 
 
 def cmd_earnings(args: argparse.Namespace) -> None:
     report = earnings_report(args.symbol, api_key=args.finnhub_key)
+    _print_json(report)
+
+
+def cmd_news(args: argparse.Namespace) -> None:
+    report = news_report(args.symbol, api_key=args.av_key)
     _print_json(report)
 
 
@@ -285,6 +295,12 @@ def build_parser() -> argparse.ArgumentParser:
     recommend_parser.add_argument(
         "--finnhub-key", default=None, help="API key de Finnhub (si se omite, usa la variable de entorno FINNHUB_API_KEY)"
     )
+    recommend_parser.add_argument(
+        "--with-news", action="store_true", help="Ajusta la confianza con el sentimiento de noticias recientes (Alpha Vantage)"
+    )
+    recommend_parser.add_argument(
+        "--av-key", default=None, help="API key de Alpha Vantage (si se omite, usa la variable de entorno ALPHAVANTAGE_API_KEY)"
+    )
     recommend_parser.set_defaults(func=cmd_recommend)
 
     earnings_parser = subparsers.add_parser(
@@ -295,6 +311,15 @@ def build_parser() -> argparse.ArgumentParser:
         "--finnhub-key", default=None, help="API key de Finnhub (si se omite, usa la variable de entorno FINNHUB_API_KEY)"
     )
     earnings_parser.set_defaults(func=cmd_earnings)
+
+    news_parser = subparsers.add_parser(
+        "news", help="Sentimiento de noticias recientes relevantes a un símbolo (Alpha Vantage)"
+    )
+    news_parser.add_argument("--symbol", required=True)
+    news_parser.add_argument(
+        "--av-key", default=None, help="API key de Alpha Vantage (si se omite, usa la variable de entorno ALPHAVANTAGE_API_KEY)"
+    )
+    news_parser.set_defaults(func=cmd_news)
 
     simulate_parser = subparsers.add_parser(
         "simulate", help="Simula una estrategia (o todas) sobre datos históricos reales o sintéticos"
@@ -378,7 +403,7 @@ def main(argv: list[str] | None = None) -> int:
     args = parser.parse_args(argv)
     try:
         args.func(args)
-    except (DataUnavailableError, FinnhubUnavailableError, ValueError) as exc:
+    except (DataUnavailableError, FinnhubUnavailableError, AlphaVantageUnavailableError, ValueError) as exc:
         print(f"Error: {exc}", file=sys.stderr)
         return 1
     return 0

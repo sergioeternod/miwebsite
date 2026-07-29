@@ -61,6 +61,15 @@ información histórica de mercado.
   sorpresas coincide o contradice la señal técnica — nunca cambia la señal
   BUY/SELL/HOLD en sí. Ver "Recomendaciones con historial de earnings" más
   abajo para configurar el acceso.
+- **Overlay de sentimiento de noticias (Alpha Vantage)** (`app/fundamentals/news_sentiment.py`):
+  opcional (`--with-news` / `with_news=true`) — mismo mecanismo que el overlay
+  de earnings, pero con el "estado de ánimo" general del mercado: usa el
+  score de sentimiento por ticker de artículos de noticias recientes de
+  Alpha Vantage. Solo ajusta la confianza si hay al menos 3 artículos
+  relevantes (≥15% de relevancia al símbolo) y una mayoría clara en una
+  dirección — un solo titular aislado no mueve nada. Igual que el de
+  earnings, nunca cambia la señal BUY/SELL/HOLD, solo su confianza, con el
+  motivo siempre explícito.
 - **Validación: expectativa vs realidad** (`app/validation/`) — tres análisis
   que comparan lo que una estrategia/recomendación "esperaba" contra lo que
   realmente pasó después:
@@ -95,12 +104,14 @@ información histórica de mercado.
   ahora mismo?", antes de entrar a comparar estrategias sobre un símbolo en
   particular.
 - **API REST (FastAPI)** y **CLI** para correr backtests, simulaciones,
-  recomendaciones, validaciones, rankings, el screener y el overlay de earnings.
-- Suite de tests (`pytest`, 104 casos) sobre datos sintéticos y llamadas HTTP
+  recomendaciones, validaciones, rankings, el screener y los overlays de
+  earnings/noticias.
+- Suite de tests (`pytest`, 125 casos) sobre datos sintéticos y llamadas HTTP
   simuladas, sin depender de red real — incluye cobertura de posiciones
   largas y cortas, rangos de fecha, las tres validaciones de expectativa vs
-  realidad, montos en dólares, el ranking de símbolos, el screener y el
-  overlay de earnings (con el cliente Finnhub mockeado).
+  realidad, montos en dólares, el ranking de símbolos, el screener y los
+  overlays de earnings/noticias (con los clientes Finnhub/Alpha Vantage
+  mockeados).
 
 ## Comparación de las 5 estrategias
 
@@ -264,6 +275,45 @@ buen reporte → sube" funcionó en el pasado haría falta un archivo histórico
 de sorpresas con timestamp exacto por fecha (no solo el estado actual), que
 es un dataset aparte. Queda fuera de este alcance inicial.
 
+## Recomendaciones con sentimiento de noticias (Alpha Vantage)
+
+Mismo mecanismo que el overlay de earnings, pero con la señal complementaria:
+en vez del historial de resultados de una empresa específica, usa el tono de
+las noticias recientes que la mencionan — el "estado de ánimo" general del
+mercado sobre ese símbolo ahora mismo.
+
+**Cómo funciona**: `recommend --with-news` consulta a Alpha Vantage los
+artículos recientes con un score de sentimiento por ticker (de -1 muy
+negativo a +1 muy positivo). Para evitar que un solo titular ruidoso mueva
+la aguja, el ajuste solo se aplica si hay:
+- Al menos **3 artículos relevantes** (relevancia ≥15% a ese símbolo
+  específico, no solo mencionado de pasada), y
+- Una **mayoría clara** en una dirección (no solo un promedio ligeramente
+  positivo con artículos mitad y mitad).
+
+Si esas condiciones se cumplen y el sentimiento coincide con la señal
+técnica → sube la confianza; si la contradice → la baja, como alerta. Igual
+que con earnings, la señal BUY/SELL/HOLD **nunca cambia**, y la respuesta
+siempre incluye el detalle (`news.rationale`) de cuántos artículos y con qué
+tono se usaron para el ajuste.
+
+**Configuración**: consigue una API key gratis en
+[alphavantage.co](https://www.alphavantage.co/support/#api-key) y guárdala
+en tu `.env` (ver "Configuración de API keys" más arriba):
+```bash
+python -m app.cli recommend --symbol AAPL --with-news
+python -m app.cli news --symbol AAPL   # solo el sentimiento de noticias, sin la parte técnica
+```
+El tier gratis de Alpha Vantage tiene un límite bajo (25 requests/día en
+total, no por símbolo) — si lo agotas, el overlay se omite de forma
+controlada (`news.available = false`) igual que sin key configurada.
+
+**Limitación intencional** (igual que earnings): esto es para la
+recomendación *en vivo*. Para *validar* si el sentimiento de noticias
+predijo bien el movimiento en el pasado haría falta un archivo histórico de
+artículos con sentimiento y timestamp exacto — no solo las noticias de hoy —
+que también queda fuera de este alcance inicial.
+
 ## Instalación
 
 ```bash
@@ -272,9 +322,9 @@ pip install -r requirements.txt
 
 ## Configuración de API keys
 
-Las API keys (Finnhub, y a futuro Alpha Vantage) **nunca van hardcodeadas en
-el código ni se commitean al repositorio** — se guardan en un archivo `.env`
-local, que ya está en `.gitignore`.
+Las API keys (Finnhub, Alpha Vantage) **nunca van hardcodeadas en el código
+ni se commitean al repositorio** — se guardan en un archivo `.env` local, que
+ya está en `.gitignore`.
 
 **1. Copia la plantilla y pon tus keys reales:**
 ```bash
@@ -286,23 +336,27 @@ FINNHUB_API_KEY=tu_key_de_finnhub
 ALPHAVANTAGE_API_KEY=tu_key_de_alphavantage
 ```
 La app carga `.env` automáticamente al arrancar (CLI o `uvicorn`) con
-`python-dotenv` — no hace falta exportar nada a mano. `ALPHAVANTAGE_API_KEY`
-queda guardada para cuando se integre sentimiento de noticias; por ahora solo
-`FINNHUB_API_KEY` la usa la app (overlay de earnings).
+`python-dotenv` — no hace falta exportar nada a mano. `FINNHUB_API_KEY`
+habilita el overlay de earnings (`--with-earnings`) y `ALPHAVANTAGE_API_KEY`
+el de sentimiento de noticias (`--with-news`); cada uno funciona
+independiente del otro.
 
-**2. Verifica que quedó bien:**
+**2. Verifica que quedaron bien:**
 ```bash
 python -m app.cli earnings --symbol AAPL
+python -m app.cli news --symbol AAPL
 ```
-Si ves el historial de earnings (o un error de Finnhub distinto a "no hay
-API key configurada"), quedó bien leída.
+Si ves el historial de earnings / las noticias (o un error del proveedor
+distinto a "no hay API key configurada"), quedaron bien leídas.
 
 **Alternativas a `.env`** (si prefieres no usar el archivo):
-- Pasar la key directamente en cada comando: `--finnhub-key tu_key`.
+- Pasar la key directamente en cada comando: `--finnhub-key tu_key` /
+  `--av-key tu_key`.
 - Variable de entorno de la sesión — se pierde al cerrar la terminal:
   - Windows PowerShell: `$env:FINNHUB_API_KEY="tu_key"`
   - Windows CMD: `set FINNHUB_API_KEY=tu_key`
   - macOS/Linux: `export FINNHUB_API_KEY=tu_key`
+  (mismo patrón con `ALPHAVANTAGE_API_KEY`)
 - Variable de entorno permanente en Windows (persiste entre sesiones):
   `setx FINNHUB_API_KEY "tu_key"` (abre una terminal nueva para que tome efecto).
 
@@ -321,6 +375,13 @@ python -m app.cli recommend --symbol EURUSD=X --period 1y
 # Recomendación ajustada por historial de earnings (requiere FINNHUB_API_KEY)
 python -m app.cli recommend --symbol AAPL --with-earnings
 python -m app.cli earnings --symbol AAPL
+
+# Recomendación ajustada por sentimiento de noticias (requiere ALPHAVANTAGE_API_KEY)
+python -m app.cli recommend --symbol AAPL --with-news
+python -m app.cli news --symbol AAPL
+
+# Ambos overlays a la vez
+python -m app.cli recommend --symbol AAPL --with-earnings --with-news
 
 # Simulador: datos reales o un escenario sintético (sin red)
 python -m app.cli simulate --symbol AAPL --period 3y --strategy macd_crossover
@@ -386,8 +447,9 @@ uvicorn app.api.main:app --reload
 - `GET /health`
 - `GET /strategies`
 - `GET /symbols/examples`
-- `GET /recommend/{symbol}?period=2y&interval=1d&with_earnings=true` — `with_earnings` requiere `FINNHUB_API_KEY` en el servidor
+- `GET /recommend/{symbol}?period=2y&interval=1d&with_earnings=true&with_news=true` — `with_earnings` requiere `FINNHUB_API_KEY`, `with_news` requiere `ALPHAVANTAGE_API_KEY`, ambos configurados en el servidor
 - `GET /earnings/{symbol}` — historial de sorpresas de EPS + próxima fecha de reporte (Finnhub); responde 503 si no hay `FINNHUB_API_KEY` configurada
+- `GET /news/{symbol}` — sentimiento de noticias recientes (Alpha Vantage); responde 503 si no hay `ALPHAVANTAGE_API_KEY` configurada
 - `POST /backtest` — body: `{"symbol": "AAPL", "strategy": "sma_crossover", "period": "2y", "allow_short": true}`
 - `POST /backtest/compare` — body: `{"symbol": "BTC-USD", "period": "1y"}`
 - `POST /simulate` — body: `{"symbol": "AAPL", "start_date": "2023-06-01", "end_date": "2023-09-30"}` o `{"synthetic": true, "strategy": "sma_crossover", "start_date": "2023-04-01", "end_date": "2023-09-30"}`
@@ -403,7 +465,9 @@ app/
   data/providers.py     # obtención de OHLCV (Yahoo Finance)
   data/synthetic.py      # generador de escenarios históricos sintéticos
   data/finnhub_client.py  # cliente HTTP de earnings surprises/calendario (Finnhub)
+  data/alphavantage_client.py  # cliente HTTP de noticias con sentimiento (Alpha Vantage)
   fundamentals/earnings.py  # resumen + overlay de earnings sobre la recomendación técnica
+  fundamentals/news_sentiment.py  # resumen + overlay de sentimiento de noticias
   indicators/technical.py
   strategies/           # framework base (long/short) + 5 estrategias concretas
   backtest/             # motor de backtesting + métricas
@@ -477,10 +541,12 @@ instrumento.)
 En el entorno sandbox donde se desarrolló este MVP, la política de red del
 contenedor bloquea el acceso saliente a Yahoo Finance
 (`fc.yahoo.com` responde 403 en el proxy de egress) y, por la misma política,
-también bloquea `finnhub.io`. Por eso el motor de datos, indicadores,
-estrategias, backtester y recomendaciones se validaron con datos sintéticos
-(`tests/`), y el cliente de Finnhub se probó con llamadas HTTP simuladas
-(`tests/test_finnhub_client.py`, `tests/test_earnings.py`) en vez de contra
-la API real. Para usar datos reales o el overlay de earnings, ejecuta la app
-en un entorno con acceso a internet sin restricciones a `finance.yahoo.com`
-ni a `finnhub.io` (por ejemplo, tu máquina local).
+también bloquea `finnhub.io` y `alphavantage.co`. Por eso el motor de datos,
+indicadores, estrategias, backtester y recomendaciones se validaron con
+datos sintéticos (`tests/`), y los clientes de Finnhub/Alpha Vantage se
+probaron con llamadas HTTP simuladas (`tests/test_finnhub_client.py`,
+`tests/test_earnings.py`, `tests/test_alphavantage_client.py`,
+`tests/test_news_sentiment.py`) en vez de contra las APIs reales. Para usar
+datos reales o los overlays de earnings/noticias, ejecuta la app en un
+entorno con acceso a internet sin restricciones a `finance.yahoo.com`,
+`finnhub.io` ni `alphavantage.co` (por ejemplo, tu máquina local).
