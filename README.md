@@ -111,16 +111,26 @@ información histórica de mercado.
   "¿cuáles son los más probables de ganar?" sin tener que ya saber qué
   símbolo consultar. Igual que el resto: universo de ejemplo completo por
   defecto, o perfiles sintéticos sin red.
+- **Simulador de portafolio día a día** (`app/portfolio.py`): a partir de una
+  fecha de inicio (ej. `2026-01-01`), primero **autoselecciona un portafolio**
+  — los símbolos con la señal BUY/SELL más fuerte justo antes de esa fecha,
+  usando solo datos anteriores (sin adelantarse al futuro) — y luego **camina
+  día por día** hasta el último dato disponible, recalculando la
+  recomendación ensemble de cada símbolo con solo la información de ese día
+  hacia atrás y ejecutando la compra/venta/mantener resultante como una
+  posición simulada. Reporta la curva de capital combinada del portafolio,
+  la ganancia/pérdida en dólares total y por símbolo, y la bitácora completa
+  de operaciones — la respuesta directa a "corre esto día a día desde tal
+  fecha y dime cuánto gané o perdí".
 - **API REST (FastAPI)** y **CLI** para correr backtests, simulaciones,
   recomendaciones, validaciones, rankings, el screener, el escáner de
-  oportunidades y los overlays de earnings/noticias.
-- Suite de tests (`pytest`, 133 casos) sobre datos sintéticos y llamadas HTTP
+  oportunidades, el simulador de portafolio y los overlays de earnings/noticias.
+- Suite de tests (`pytest`, 146 casos) sobre datos sintéticos y llamadas HTTP
   simuladas, sin depender de red real — incluye cobertura de posiciones
   largas y cortas, rangos de fecha, las tres validaciones de expectativa vs
   realidad, montos en dólares, el ranking de símbolos, el screener, el
-  escáner de oportunidades y los overlays de earnings/noticias (con los
-  clientes Finnhub/Alpha Vantage
-  mockeados).
+  escáner de oportunidades, el simulador de portafolio y los overlays de
+  earnings/noticias (con los clientes Finnhub/Alpha Vantage mockeados).
 
 ## Comparación de las 5 estrategias
 
@@ -261,6 +271,39 @@ acepta los mismos overlays que `recommend`:
 python -m app.cli opportunities --out oportunidades.json
 python -m app.cli opportunities --symbols AAPL,MSFT,TSLA,BTC-USD,ETH-USD,EURUSD=X --with-earnings --with-news
 ```
+
+## Simulador de portafolio día a día
+
+Corriendo `portfolio-sim --synthetic --portfolio-size 2` desde 2026-01-01
+(los perfiles sintéticos por defecto tienen ~3 años de "calentamiento" antes
+de esa fecha, así que cae justo donde termina el historial previo):
+
+```
+Portafolio autoseleccionado (antes de 2026-01-01, sin ver datos futuros):
+  Símbolo B (tendencia bajista) → señal SELL, 94.7% de confianza
+  Símbolo C (lateral)           → señal SELL, 89.6% de confianza
+
+Periodo simulado: 2026-01-01 → 2026-03-31 (90 días)
+Capital inicial: $10,000  →  Capital final: $9,491.40  (-$508.60, -5.09%)
+  Símbolo B: $4,858.46 (-$141.54, 2 operaciones, 50% de acierto)
+  Símbolo C: $4,632.95 (-$367.05, 3 operaciones, 0% de acierto)
+```
+
+Ninguno de los dos perdió apostando exactamente igual que su régimen
+"debería" — el ensemble entra y sale varias veces dentro del periodo, no se
+queda quieto en un solo lado. Con red disponible, corre exactamente esto
+sobre símbolos reales:
+```bash
+python -m app.cli portfolio-sim --start-date 2026-01-01 --out portafolio.json
+python -m app.cli portfolio-sim --start-date 2026-01-01 --symbols AAPL,MSFT,TSLA,BTC-USD,ETH-USD --portfolio-size 3
+```
+Con `--symbols` real, el periodo `--period` (por defecto `3y`) debe cubrir
+`--start-date` más suficiente historial de calentamiento para los
+indicadores — el valor por defecto ya lo hace. Nota de rendimiento: cada día
+simulado recalcula el ensemble completo (5 estrategias) para cada símbolo
+del portafolio, así que periodos largos o portafolios grandes tardan más —
+usa `--step N` para recalcular cada N días en vez de todos (más rápido, algo
+menos preciso día a día).
 
 ## Recomendaciones con historial de earnings (Finnhub)
 
@@ -440,6 +483,11 @@ python -m app.cli screen --out screener.json  # sin --symbols escanea el univers
 python -m app.cli opportunities --synthetic
 python -m app.cli opportunities --symbols AAPL,MSFT,BTC-USD,EURUSD=X --with-earnings --with-news
 python -m app.cli opportunities --out oportunidades.json  # sin --symbols escanea el universo de ejemplo
+
+# Simulador de portafolio día a día: ¿cuánto gané/perdí simulando desde una fecha?
+python -m app.cli portfolio-sim --synthetic --start-date 2026-01-01
+python -m app.cli portfolio-sim --start-date 2026-01-01 --symbols AAPL,MSFT,TSLA,BTC-USD,ETH-USD --portfolio-size 3
+python -m app.cli portfolio-sim --start-date 2026-01-01 --out portafolio.json
 ```
 
 ## Uso — Pantalla web
@@ -505,6 +553,7 @@ uvicorn app.api.main:app --reload
 - `POST /rank` — body: `{"symbols": ["AAPL", "MSFT", "BTC-USD"], "period": "2y"}` o `{"synthetic": true}`
 - `POST /screen` — body: `{"symbols": ["AAPL", "MSFT", "BTC-USD"], "top_n": 10}`, `{"synthetic": true}`, o `{}` (escanea el universo de ejemplo)
 - `POST /opportunities` — body: `{"symbols": ["AAPL", "MSFT", "BTC-USD"], "with_earnings": true, "with_news": true, "top_n": 10}`, `{"synthetic": true}`, o `{}` (escanea el universo de ejemplo)
+- `POST /simulate-portfolio` — body: `{"start_date": "2026-01-01", "portfolio_size": 3}`, `{"start_date": "2026-01-01", "symbols": ["AAPL", "MSFT", "BTC-USD"]}`, o `{"start_date": "2026-01-01", "synthetic": true}`
 
 ## Estructura del proyecto
 
@@ -527,6 +576,7 @@ app/
   ranking.py             # comparación estrategia × símbolo
   screener.py            # ranking de rentabilidad por ventana (semana/mes/año)
   opportunities.py       # escáner multi-símbolo del motor de recomendaciones (+ overlays)
+  portfolio.py           # simulador de portafolio día a día (autoselección + walk-forward)
   api/main.py            # FastAPI (sirve también la pantalla web en "/")
   static/index.html       # pantalla web (5 pestañas: Simulador/Validación/Símbolos/Más rentables/Recomendación)
   cli.py                 # interfaz de línea de comandos

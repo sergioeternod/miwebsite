@@ -78,6 +78,23 @@ class OpportunitiesRequest(BaseModel):
     top_n: int = Field(5, description="Cuántos símbolos mostrar en cada lista (compra/venta)")
 
 
+class PortfolioSimulateRequest(BaseModel):
+    start_date: str = Field(..., description="ISO, ej. 2026-01-01. Fecha desde la que se simula día a día")
+    end_date: str | None = Field(None, description="ISO. Si se omite, usa hasta el último dato disponible")
+    symbols: list[str] | None = Field(
+        None, description="Universo del que se selecciona el portafolio. Si se omite y synthetic=false, usa el universo de ejemplo"
+    )
+    synthetic: bool = False
+    seed: int = 42
+    portfolio_size: int = Field(5, description="Cuántos símbolos selecciona automáticamente el portafolio")
+    period: str = "3y"
+    interval: str = "1d"
+    initial_capital: float = 10_000.0
+    commission_bps: float = 5.0
+    allow_short: bool = True
+    step: int = Field(1, description="Cada cuántos días se recalcula la señal (1 = todos los días)")
+
+
 class ValidateRequest(BaseModel):
     symbol: str | None = Field(None, description="Omitir si synthetic=true")
     synthetic: bool = False

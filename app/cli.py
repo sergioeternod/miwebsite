@@ -10,6 +10,8 @@ Examples:
     python -m app.cli news --symbol AAPL
     python -m app.cli opportunities --synthetic
     python -m app.cli opportunities --symbols AAPL,MSFT,TSLA,BTC-USD --with-earnings
+    python -m app.cli portfolio-sim --synthetic --start-date 2026-01-01
+    python -m app.cli portfolio-sim --start-date 2026-01-01 --symbols AAPL,MSFT,TSLA,BTC-USD,ETH-USD
     python -m app.cli simulate --synthetic --out /tmp/report.json
     python -m app.cli simulate --symbol AAPL --period 3y --strategy macd_crossover
 """
@@ -31,6 +33,7 @@ from app.data.providers import DataUnavailableError, get_ohlcv
 from app.fundamentals.earnings import apply_earnings_overlay, earnings_report
 from app.fundamentals.news_sentiment import apply_news_overlay, news_report
 from app.opportunities import find_opportunities_real, find_opportunities_synthetic
+from app.portfolio import simulate_portfolio_real, simulate_portfolio_synthetic
 from app.ranking import rank_real_symbols, rank_synthetic_profiles
 from app.recommend.engine import recommend
 from app.screener import screen_real_symbols, screen_synthetic
@@ -281,6 +284,51 @@ def cmd_opportunities(args: argparse.Namespace) -> None:
     _print_json(report)
 
 
+def cmd_portfolio_sim(args: argparse.Namespace) -> None:
+    kwargs = dict(
+        end_date=args.end_date,
+        portfolio_size=args.portfolio_size,
+        initial_capital=args.capital,
+        commission_bps=args.commission_bps,
+        allow_short=not args.no_short,
+        step=args.step,
+    )
+    if args.synthetic:
+        report = simulate_portfolio_synthetic(start_date=args.start_date, seed=args.seed, **kwargs)
+    else:
+        symbols = [s.strip() for s in args.symbols.split(",") if s.strip()] if args.symbols else None
+        report = simulate_portfolio_real(args.start_date, symbols=symbols, period=args.period, interval=args.interval, **kwargs)
+
+    if args.out:
+        with open(args.out, "w", encoding="utf-8") as f:
+            json.dump(report, f, indent=2, ensure_ascii=False, default=str)
+
+    summary = {
+        "start_date": report["start_date"],
+        "end_date": report["end_date"],
+        "num_trading_days": report["num_trading_days"],
+        "portfolio": report["portfolio"],
+        "initial_capital": report["initial_capital"],
+        "final_equity": report["final_equity"],
+        "total_pnl_amount": report["total_pnl_amount"],
+        "total_return_pct": report["total_return_pct"],
+        "per_symbol_summary": [
+            {
+                "symbol": p["symbol"],
+                "final_equity": p["final_equity"],
+                "pnl_amount": p["pnl_amount"],
+                "num_trades": p["metrics"]["num_trades"],
+                "win_rate_pct": p["metrics"]["win_rate_pct"],
+            }
+            for p in report["per_symbol"]
+        ],
+        "errors": report["errors"],
+    }
+    if args.out:
+        summary["full_report_saved_to"] = args.out
+    _print_json(summary)
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="Trading signals CLI")
     subparsers = parser.add_subparsers(dest="command", required=True)
@@ -442,6 +490,29 @@ def build_parser() -> argparse.ArgumentParser:
     opportunities_parser.add_argument("--top-n", type=int, default=5, help="Cuántos símbolos mostrar por lista (compra/venta)")
     opportunities_parser.add_argument("--out", default=None, help="Ruta donde guardar el reporte completo en JSON")
     opportunities_parser.set_defaults(func=cmd_opportunities)
+
+    portfolio_sim_parser = subparsers.add_parser(
+        "portfolio-sim",
+        help="Simula un portafolio día a día desde una fecha: selecciona símbolos, ejecuta compra/venta simuladas y reporta ganancia/pérdida",
+    )
+    portfolio_sim_parser.add_argument("--start-date", default="2026-01-01", help="ISO, ej. 2026-01-01 — desde cuándo se simula día a día")
+    portfolio_sim_parser.add_argument("--end-date", default=None, help="ISO. Si se omite, usa hasta el último dato disponible")
+    portfolio_sim_parser.add_argument(
+        "--symbols", default=None, help="Universo del que se elige el portafolio; si se omite usa el universo de ejemplo"
+    )
+    portfolio_sim_parser.add_argument("--synthetic", action="store_true", help="Usa perfiles de mercado sintéticos (sin red)")
+    portfolio_sim_parser.add_argument("--seed", type=int, default=42, help="Semilla de los perfiles sintéticos")
+    portfolio_sim_parser.add_argument("--portfolio-size", type=int, default=5, help="Cuántos símbolos selecciona el portafolio")
+    portfolio_sim_parser.add_argument("--period", default="3y", help="Historial a traer por símbolo real (necesita cubrir --start-date + calentamiento)")
+    portfolio_sim_parser.add_argument("--interval", default="1d")
+    portfolio_sim_parser.add_argument("--capital", type=float, default=10_000.0)
+    portfolio_sim_parser.add_argument("--commission-bps", type=float, default=5.0)
+    portfolio_sim_parser.add_argument("--no-short", action="store_true", help="Desactiva las posiciones en corto")
+    portfolio_sim_parser.add_argument(
+        "--step", type=int, default=1, help="Cada cuántos días se recalcula la señal (1 = todos los días; más alto = más rápido)"
+    )
+    portfolio_sim_parser.add_argument("--out", default=None, help="Ruta donde guardar el reporte completo en JSON")
+    portfolio_sim_parser.set_defaults(func=cmd_portfolio_sim)
 
     return parser
 

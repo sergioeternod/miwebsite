@@ -13,6 +13,7 @@ from app.api.schemas import (
     BacktestRequest,
     CompareRequest,
     OpportunitiesRequest,
+    PortfolioSimulateRequest,
     RankRequest,
     ScreenRequest,
     SimulateRequest,
@@ -26,6 +27,7 @@ from app.data.providers import DataUnavailableError, get_ohlcv
 from app.fundamentals.earnings import apply_earnings_overlay, earnings_report
 from app.fundamentals.news_sentiment import apply_news_overlay, news_report
 from app.opportunities import find_opportunities_real, find_opportunities_synthetic
+from app.portfolio import simulate_portfolio_real, simulate_portfolio_synthetic
 from app.ranking import rank_real_symbols, rank_synthetic_profiles
 from app.recommend.engine import recommend
 from app.screener import screen_real_symbols, screen_synthetic
@@ -282,6 +284,32 @@ def post_opportunities(request: OpportunitiesRequest) -> dict:
             return find_opportunities_synthetic(seed=request.seed, **kwargs)
         return find_opportunities_real(
             request.symbols,
+            period=request.period,
+            interval=request.interval,
+            **kwargs,
+        )
+    except DataUnavailableError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@app.post("/simulate-portfolio")
+def post_simulate_portfolio(request: PortfolioSimulateRequest) -> dict:
+    kwargs = dict(
+        end_date=request.end_date,
+        portfolio_size=request.portfolio_size,
+        initial_capital=request.initial_capital,
+        commission_bps=request.commission_bps,
+        allow_short=request.allow_short,
+        step=request.step,
+    )
+    try:
+        if request.synthetic:
+            return simulate_portfolio_synthetic(start_date=request.start_date, seed=request.seed, **kwargs)
+        return simulate_portfolio_real(
+            request.start_date,
+            symbols=request.symbols,
             period=request.period,
             interval=request.interval,
             **kwargs,
