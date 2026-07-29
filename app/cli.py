@@ -5,6 +5,8 @@ Examples:
     python -m app.cli backtest --symbol AAPL --strategy sma_crossover --period 2y
     python -m app.cli compare --symbol BTC-USD --period 1y
     python -m app.cli recommend --symbol EURUSD=X --period 1y
+    python -m app.cli recommend --symbol AAPL --with-earnings
+    python -m app.cli earnings --symbol AAPL
     python -m app.cli simulate --synthetic --out /tmp/report.json
     python -m app.cli simulate --symbol AAPL --period 3y --strategy macd_crossover
 """
@@ -16,7 +18,9 @@ import json
 import sys
 
 from app.backtest.engine import compare_strategies, run_backtest
+from app.data.finnhub_client import FinnhubUnavailableError
 from app.data.providers import DataUnavailableError, get_ohlcv
+from app.fundamentals.earnings import apply_earnings_overlay, earnings_report
 from app.ranking import rank_real_symbols, rank_synthetic_profiles
 from app.recommend.engine import recommend
 from app.screener import screen_real_symbols, screen_synthetic
@@ -73,7 +77,14 @@ def cmd_recommend(args: argparse.Namespace) -> None:
         commission_bps=args.commission_bps,
         allow_short=not args.no_short,
     )
+    if args.with_earnings:
+        result = apply_earnings_overlay(result, args.symbol, api_key=args.finnhub_key)
     _print_json(result)
+
+
+def cmd_earnings(args: argparse.Namespace) -> None:
+    report = earnings_report(args.symbol, api_key=args.finnhub_key)
+    _print_json(report)
 
 
 def cmd_simulate(args: argparse.Namespace) -> None:
@@ -264,7 +275,22 @@ def build_parser() -> argparse.ArgumentParser:
     recommend_parser.add_argument("--capital", type=float, default=10_000.0)
     recommend_parser.add_argument("--commission-bps", type=float, default=5.0)
     recommend_parser.add_argument("--no-short", action="store_true", help="Desactiva las posiciones en corto")
+    recommend_parser.add_argument(
+        "--with-earnings", action="store_true", help="Ajusta la confianza con el historial de sorpresas de earnings (Finnhub)"
+    )
+    recommend_parser.add_argument(
+        "--finnhub-key", default=None, help="API key de Finnhub (si se omite, usa la variable de entorno FINNHUB_API_KEY)"
+    )
     recommend_parser.set_defaults(func=cmd_recommend)
+
+    earnings_parser = subparsers.add_parser(
+        "earnings", help="Historial de sorpresas de EPS (real vs. estimado) y próxima fecha de reporte (Finnhub)"
+    )
+    earnings_parser.add_argument("--symbol", required=True)
+    earnings_parser.add_argument(
+        "--finnhub-key", default=None, help="API key de Finnhub (si se omite, usa la variable de entorno FINNHUB_API_KEY)"
+    )
+    earnings_parser.set_defaults(func=cmd_earnings)
 
     simulate_parser = subparsers.add_parser(
         "simulate", help="Simula una estrategia (o todas) sobre datos históricos reales o sintéticos"
@@ -348,7 +374,7 @@ def main(argv: list[str] | None = None) -> int:
     args = parser.parse_args(argv)
     try:
         args.func(args)
-    except (DataUnavailableError, ValueError) as exc:
+    except (DataUnavailableError, FinnhubUnavailableError, ValueError) as exc:
         print(f"Error: {exc}", file=sys.stderr)
         return 1
     return 0

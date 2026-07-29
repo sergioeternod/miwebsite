@@ -9,7 +9,9 @@ from fastapi.staticfiles import StaticFiles
 from app.api.schemas import BacktestRequest, CompareRequest, RankRequest, ScreenRequest, SimulateRequest, ValidateRequest
 from app.backtest.engine import BacktestResult, compare_strategies, run_backtest
 from app.config import EXAMPLE_SYMBOLS
+from app.data.finnhub_client import FinnhubUnavailableError
 from app.data.providers import DataUnavailableError, get_ohlcv
+from app.fundamentals.earnings import apply_earnings_overlay, earnings_report
 from app.ranking import rank_real_symbols, rank_synthetic_profiles
 from app.recommend.engine import recommend
 from app.screener import screen_real_symbols, screen_synthetic
@@ -58,19 +60,33 @@ def get_recommendation(
     initial_capital: float = 10_000.0,
     commission_bps: float = 5.0,
     allow_short: bool = True,
+    with_earnings: bool = False,
 ) -> dict:
     try:
         df = get_ohlcv(symbol, period=period, interval=interval)
     except DataUnavailableError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
 
-    return recommend(
+    result = recommend(
         df,
         symbol=symbol,
         initial_capital=initial_capital,
         commission_bps=commission_bps,
         allow_short=allow_short,
     )
+    if with_earnings:
+        result = apply_earnings_overlay(result, symbol)
+    return result
+
+
+@app.get("/earnings/{symbol}")
+def get_earnings(symbol: str) -> dict:
+    """Historical EPS surprise track record + upcoming earnings date for a
+    symbol (Finnhub). Requires FINNHUB_API_KEY to be configured server-side."""
+    try:
+        return earnings_report(symbol)
+    except FinnhubUnavailableError as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
 
 
 @app.post("/backtest")

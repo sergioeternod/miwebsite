@@ -3,8 +3,11 @@ combines them into one BUY/SELL/HOLD call, weighted by each strategy's own
 historical performance on that specific instrument.
 
 This is a decision-support tool based on technical indicators and historical
-backtests — not financial advice, and it does not account for fundamentals,
-news, or execution costs beyond a flat commission estimate.
+backtests — not financial advice, and it does not account for execution
+costs beyond a flat commission estimate. `recommend_for_symbol` can
+optionally layer on an earnings-surprise-history overlay (see
+`app.fundamentals.earnings`) that nudges confidence when a report is due
+soon; the base ensemble in `recommend()` stays purely technical.
 """
 
 from __future__ import annotations
@@ -13,6 +16,7 @@ import pandas as pd
 
 from app.backtest.engine import run_backtest
 from app.data.providers import get_ohlcv
+from app.fundamentals.earnings import apply_earnings_overlay
 from app.strategies import Strategy, all_strategies
 
 BULLISH_ACTIONS = {"BUY", "HOLD_LONG"}
@@ -102,9 +106,11 @@ def recommend_for_symbol(
     initial_capital: float = 10_000.0,
     commission_bps: float = 5.0,
     allow_short: bool = True,
+    include_earnings: bool = False,
+    finnhub_api_key: str | None = None,
 ) -> dict:
     df = get_ohlcv(symbol, period=period, interval=interval)
-    return recommend(
+    result = recommend(
         df,
         symbol=symbol,
         strategies=strategies,
@@ -112,3 +118,6 @@ def recommend_for_symbol(
         commission_bps=commission_bps,
         allow_short=allow_short,
     )
+    if include_earnings:
+        result = apply_earnings_overlay(result, symbol, api_key=finnhub_api_key)
+    return result

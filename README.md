@@ -52,6 +52,15 @@ información histórica de mercado.
   desempeño histórico de cada estrategia en ese instrumento específico,
   devolviendo una recomendación con nivel de confianza y el razonamiento
   técnico detrás.
+- **Overlay de expectativa de resultados (Finnhub)** (`app/fundamentals/earnings.py`):
+  opcional (`--with-earnings` / `with_earnings=true`) — usa el historial de
+  sorpresas de EPS (real vs. estimado de analistas) de Finnhub para saber si
+  la empresa suele superar o fallar expectativas, y cuándo tiene un reporte
+  próximo. Si hay un reporte dentro de los próximos 14 días, ajusta (sube o
+  baja) la confianza de la recomendación técnica según si el historial de
+  sorpresas coincide o contradice la señal técnica — nunca cambia la señal
+  BUY/SELL/HOLD en sí. Ver "Recomendaciones con historial de earnings" más
+  abajo para configurar el acceso.
 - **Validación: expectativa vs realidad** (`app/validation/`) — tres análisis
   que comparan lo que una estrategia/recomendación "esperaba" contra lo que
   realmente pasó después:
@@ -86,11 +95,12 @@ información histórica de mercado.
   ahora mismo?", antes de entrar a comparar estrategias sobre un símbolo en
   particular.
 - **API REST (FastAPI)** y **CLI** para correr backtests, simulaciones,
-  recomendaciones, validaciones, rankings y el screener.
-- Suite de tests (`pytest`, 83 casos) sobre datos sintéticos, sin depender de
-  red — incluye cobertura de posiciones largas y cortas, rangos de fecha, las
-  tres validaciones de expectativa vs realidad, montos en dólares, el
-  ranking de símbolos y el screener.
+  recomendaciones, validaciones, rankings, el screener y el overlay de earnings.
+- Suite de tests (`pytest`, 104 casos) sobre datos sintéticos y llamadas HTTP
+  simuladas, sin depender de red real — incluye cobertura de posiciones
+  largas y cortas, rangos de fecha, las tres validaciones de expectativa vs
+  realidad, montos en dólares, el ranking de símbolos, el screener y el
+  overlay de earnings (con el cliente Finnhub mockeado).
 
 ## Comparación de las 5 estrategias
 
@@ -211,6 +221,49 @@ python -m app.cli screen --out screener.json
 python -m app.cli screen --symbols AAPL,MSFT,TSLA,BTC-USD,ETH-USD,EURUSD=X
 ```
 
+## Recomendaciones con historial de earnings (Finnhub)
+
+La recomendación técnica (`recommend`) no sabe nada de si una empresa
+reportará resultados pronto ni de si suele superar o fallar las expectativas
+de los analistas. El overlay de earnings llena ese hueco con datos duros
+(sorpresas de EPS históricas), no con sentimiento de noticias por NLP —
+evita depender de un modelo de lenguaje para decidir "positivo/negativo" y
+en cambio usa el propio track record de la empresa.
+
+**Cómo funciona**: por cada llamada a `recommend --with-earnings`, la app
+consulta a Finnhub el historial de EPS real-vs-estimado de las últimas
+llamadas de resultados y su próxima fecha de reporte. Si ese reporte cae
+dentro de los próximos 14 días:
+- Si la empresa **suele superar expectativas** (≥65% de aciertos, sorpresa
+  promedio positiva) y la señal técnica es **BUY** → sube la confianza.
+- Si **suele fallar expectativas** y la señal técnica es **SELL** → sube la
+  confianza (ambas apuntan para el mismo lado).
+- Si el historial de earnings **contradice** la señal técnica (ej. suele
+  fallar pero la señal es BUY) → baja la confianza, como una alerta.
+- Si no hay reporte próximo, o el historial es mixto, no se toca nada.
+
+La señal BUY/SELL/HOLD **nunca cambia** por este overlay — solo su nivel de
+confianza, y siempre queda explícito en la respuesta (campo `earnings`) para
+qué se ajustó y por qué.
+
+**Configuración**: consigue una API key gratis en
+[finnhub.io](https://finnhub.io) y expórtala como variable de entorno:
+```bash
+export FINNHUB_API_KEY=tu_api_key   # Windows PowerShell: $env:FINNHUB_API_KEY="tu_api_key"
+python -m app.cli recommend --symbol AAPL --with-earnings
+python -m app.cli earnings --symbol AAPL   # solo el historial de earnings, sin la parte técnica
+```
+También puedes pasar la key directamente con `--finnhub-key` en vez de la
+variable de entorno. Sin key configurada (o sin acceso de red a Finnhub), el
+overlay se omite de forma controlada — la recomendación técnica se devuelve
+igual, con `earnings.available = false` y el motivo.
+
+**Limitación intencional**: esto sirve para la recomendación *en vivo*, no
+para backtesting histórico de earnings — para *validar* si "expectativa de
+buen reporte → sube" funcionó en el pasado haría falta un archivo histórico
+de sorpresas con timestamp exacto por fecha (no solo el estado actual), que
+es un dataset aparte. Queda fuera de este alcance inicial.
+
 ## Instalación
 
 ```bash
@@ -224,6 +277,10 @@ python -m app.cli strategies
 python -m app.cli backtest --symbol AAPL --strategy sma_crossover --period 2y
 python -m app.cli compare --symbol BTC-USD --period 1y
 python -m app.cli recommend --symbol EURUSD=X --period 1y
+
+# Recomendación ajustada por historial de earnings (requiere FINNHUB_API_KEY)
+python -m app.cli recommend --symbol AAPL --with-earnings
+python -m app.cli earnings --symbol AAPL
 
 # Simulador: datos reales o un escenario sintético (sin red)
 python -m app.cli simulate --symbol AAPL --period 3y --strategy macd_crossover
@@ -289,7 +346,8 @@ uvicorn app.api.main:app --reload
 - `GET /health`
 - `GET /strategies`
 - `GET /symbols/examples`
-- `GET /recommend/{symbol}?period=2y&interval=1d`
+- `GET /recommend/{symbol}?period=2y&interval=1d&with_earnings=true` — `with_earnings` requiere `FINNHUB_API_KEY` en el servidor
+- `GET /earnings/{symbol}` — historial de sorpresas de EPS + próxima fecha de reporte (Finnhub); responde 503 si no hay `FINNHUB_API_KEY` configurada
 - `POST /backtest` — body: `{"symbol": "AAPL", "strategy": "sma_crossover", "period": "2y", "allow_short": true}`
 - `POST /backtest/compare` — body: `{"symbol": "BTC-USD", "period": "1y"}`
 - `POST /simulate` — body: `{"symbol": "AAPL", "start_date": "2023-06-01", "end_date": "2023-09-30"}` o `{"synthetic": true, "strategy": "sma_crossover", "start_date": "2023-04-01", "end_date": "2023-09-30"}`
@@ -304,10 +362,12 @@ app/
   config.py            # clases de activos, símbolos de ejemplo
   data/providers.py     # obtención de OHLCV (Yahoo Finance)
   data/synthetic.py      # generador de escenarios históricos sintéticos
+  data/finnhub_client.py  # cliente HTTP de earnings surprises/calendario (Finnhub)
+  fundamentals/earnings.py  # resumen + overlay de earnings sobre la recomendación técnica
   indicators/technical.py
   strategies/           # framework base (long/short) + 5 estrategias concretas
   backtest/             # motor de backtesting + métricas
-  recommend/engine.py    # ensemble de recomendaciones
+  recommend/engine.py    # ensemble de recomendaciones (+ overlay opcional de earnings)
   simulate.py            # simulador (datos reales o sintéticos, con rango de fechas)
   validation/            # expectativa vs realidad: fuera de muestra, precisión
                          # direccional, precisión de recomendaciones
@@ -376,7 +436,11 @@ instrumento.)
 
 En el entorno sandbox donde se desarrolló este MVP, la política de red del
 contenedor bloquea el acceso saliente a Yahoo Finance
-(`fc.yahoo.com` responde 403 en el proxy de egress), por lo que el motor de
-datos, indicadores, estrategias, backtester y recomendaciones se validaron
-con datos sintéticos (`tests/`). Para usar datos reales, ejecuta la app en un
-entorno con acceso a internet sin restricciones a `finance.yahoo.com`.
+(`fc.yahoo.com` responde 403 en el proxy de egress) y, por la misma política,
+también bloquea `finnhub.io`. Por eso el motor de datos, indicadores,
+estrategias, backtester y recomendaciones se validaron con datos sintéticos
+(`tests/`), y el cliente de Finnhub se probó con llamadas HTTP simuladas
+(`tests/test_finnhub_client.py`, `tests/test_earnings.py`) en vez de contra
+la API real. Para usar datos reales o el overlay de earnings, ejecuta la app
+en un entorno con acceso a internet sin restricciones a `finance.yahoo.com`
+ni a `finnhub.io` (por ejemplo, tu máquina local).
