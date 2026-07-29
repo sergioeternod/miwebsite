@@ -413,7 +413,7 @@ python -m app.cli screen --out screener.json  # sin --symbols escanea el univers
 uvicorn app.api.main:app --reload
 ```
 
-Abre `http://localhost:8000/` en el navegador. Tiene cuatro pestañas:
+Abre `http://localhost:8000/` en el navegador. Tiene cinco pestañas:
 
 - **Simulador**: símbolo, **rango de fechas** (desde/hasta), estrategia (o
   "Todas" para comparar) y el switch de posiciones cortas. Si no hay acceso a
@@ -437,6 +437,15 @@ Abre `http://localhost:8000/` en el navegador. Tiene cuatro pestañas:
   el universo de ejemplo completo, o perfiles sintéticos sin red — muestra el
   top-N (configurable) de símbolos con mayor retorno de precio en la última
   semana, mes y año, y qué símbolos no tenían datos suficientes.
+- **Recomendación**: símbolo (requiere datos reales, no tiene modo sintético)
+  con checkboxes para los overlays de earnings y noticias. Muestra la señal
+  BUY/SELL/HOLD del ensemble con su confianza, el detalle de cada una de las
+  5 estrategias, y — si están marcados y hay API key configurada en el
+  servidor — una tarjeta por overlay con su señal, cuánto ajustó la
+  confianza, si refuerza o contradice la señal técnica, y el detalle que lo
+  respalda (historial de sorpresas de EPS / artículos de noticias recientes).
+  Si falta la API key, la tarjeta lo indica sin bloquear el resto de la
+  recomendación.
 
 ## Uso — API
 

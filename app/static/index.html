@@ -205,6 +205,15 @@
   .tag { font-size: 11px; padding: 2px 8px; border-radius: 5px; font-weight: 600; }
   .tag.pos { background: color-mix(in srgb, var(--good) 16%, transparent); color: var(--good); }
   .tag.neg { background: color-mix(in srgb, var(--critical) 16%, transparent); color: var(--critical); }
+  .tag.neutral { background: color-mix(in srgb, var(--text-muted) 18%, transparent); color: var(--text-secondary); }
+
+  .action-badge { display: inline-block; font-size: 22px; font-weight: 700; padding: 6px 20px; border-radius: 10px; }
+  .action-badge.buy { background: color-mix(in srgb, var(--good) 16%, transparent); color: var(--good); }
+  .action-badge.sell { background: color-mix(in srgb, var(--critical) 16%, transparent); color: var(--critical); }
+  .action-badge.hold { background: color-mix(in srgb, var(--text-muted) 18%, transparent); color: var(--text-secondary); }
+
+  .overlay-unavailable { font-size: 13px; color: var(--text-muted); font-style: italic; }
+  table.kv td:first-child { color: var(--text-secondary); width: 45%; }
 </style>
 </head>
 <body>
@@ -221,6 +230,7 @@
     <button type="button" id="tab-btn-validate" role="tab" aria-selected="false">Validación</button>
     <button type="button" id="tab-btn-rank" role="tab" aria-selected="false">Símbolos</button>
     <button type="button" id="tab-btn-screen" role="tab" aria-selected="false">Más rentables</button>
+    <button type="button" id="tab-btn-recommend" role="tab" aria-selected="false">Recomendación</button>
   </div>
 
   <div id="panel-simulate" class="tab-panel active">
@@ -540,12 +550,103 @@
   </div>
   <!-- /#panel-screen -->
 
+  <div id="panel-recommend" class="tab-panel">
+    <div class="card">
+      <h2>Recomendación de compra/venta</h2>
+      <p class="desc">Ensemble de las 5 estrategias sobre datos recientes, opcionalmente ajustado por historial de earnings y sentimiento de noticias. Requiere un símbolo real con acceso a datos de mercado en vivo (no tiene modo sintético).</p>
+      <form class="controls-form" id="recommend-form">
+        <div class="field" style="position:relative;">
+          <label for="recommend-symbol">Símbolo</label>
+          <input id="recommend-symbol" placeholder="AAPL, BTC-USD, EURUSD=X..." autocomplete="off">
+          <span class="symbol-hint" id="recommend-symbol-hint"></span>
+          <div class="symbol-dropdown" id="recommend-symbol-dropdown"></div>
+        </div>
+        <div class="field">
+          <label for="recommend-period">Periodo</label>
+          <select id="recommend-period">
+            <option value="6mo">6 meses</option>
+            <option value="1y">1 año</option>
+            <option value="2y" selected>2 años</option>
+            <option value="5y">5 años</option>
+          </select>
+        </div>
+        <div class="field">
+          <label for="recommend-capital">Capital inicial</label>
+          <input type="number" id="recommend-capital" value="10000" min="100" step="100">
+        </div>
+        <div class="field">
+          <label for="recommend-commission">Comisión (bps)</label>
+          <input type="number" id="recommend-commission" value="5" min="0" step="1">
+        </div>
+        <div class="field checkbox">
+          <input type="checkbox" id="recommend-allow-short" checked>
+          <label for="recommend-allow-short">Permitir posiciones cortas</label>
+        </div>
+        <div class="field checkbox">
+          <input type="checkbox" id="recommend-with-earnings">
+          <label for="recommend-with-earnings">Ajustar con historial de earnings (Finnhub)</label>
+        </div>
+        <div class="field checkbox">
+          <input type="checkbox" id="recommend-with-news">
+          <label for="recommend-with-news">Ajustar con sentimiento de noticias (Alpha Vantage)</label>
+        </div>
+        <button type="submit" class="run-btn" id="recommend-run-btn">Obtener recomendación</button>
+        <div class="hint">Los overlays de earnings/noticias requieren FINNHUB_API_KEY / ALPHAVANTAGE_API_KEY configuradas en el servidor — si faltan, se muestran como no disponibles sin bloquear el resto de la recomendación.</div>
+      </form>
+    </div>
+
+    <div class="status-banner" id="recommend-status-banner"></div>
+
+    <div id="recommend-results">
+      <div class="card">
+        <div class="stat-row">
+          <div class="stat-tile">
+            <div class="label">Señal</div>
+            <div id="recommend-action-badge"></div>
+          </div>
+          <div class="stat-tile">
+            <div class="label">Confianza</div>
+            <div class="value" id="recommend-confidence"></div>
+          </div>
+          <div class="stat-tile">
+            <div class="label">Último cierre</div>
+            <div class="value" id="recommend-last-close"></div>
+          </div>
+          <div class="stat-tile">
+            <div class="label">Al</div>
+            <div class="value" id="recommend-as-of" style="font-size:15px;"></div>
+          </div>
+        </div>
+        <p class="desc" id="recommend-best-strategy"></p>
+      </div>
+
+      <div class="card">
+        <h2>Detalle por estrategia</h2>
+        <table class="metrics" id="recommend-strategy-table"></table>
+      </div>
+
+      <div class="card" id="recommend-earnings-card" style="display:none;">
+        <h2>Overlay: historial de earnings (Finnhub)</h2>
+        <div id="recommend-earnings-body"></div>
+      </div>
+
+      <div class="card" id="recommend-news-card" style="display:none;">
+        <h2>Overlay: sentimiento de noticias (Alpha Vantage)</h2>
+        <div id="recommend-news-body"></div>
+      </div>
+
+      <p class="desc" id="recommend-disclaimer" style="margin:0;"></p>
+    </div>
+  </div>
+  <!-- /#panel-recommend -->
+
   <footer>
     Trading Signals App — API en <code>/docs</code>. Los mismos parámetros están disponibles vía CLI:
     <code>python -m app.cli simulate --symbol AAPL --start-date 2023-06-01 --end-date 2023-09-30</code>
     · <code>python -m app.cli validate --symbol AAPL --period 2y</code>
     · <code>python -m app.cli rank --symbols AAPL,MSFT,BTC-USD</code>
     · <code>python -m app.cli screen --synthetic</code>
+    · <code>python -m app.cli recommend --symbol AAPL --with-earnings --with-news</code>
   </footer>
 </div>
 
@@ -868,6 +969,7 @@ function attachSymbolPicker(inputId, dropdownId, hintId) {
 
 attachSymbolPicker("symbol", "symbol-dropdown", "symbol-hint");
 attachSymbolPicker("val-symbol", "val-symbol-dropdown", "val-symbol-hint");
+attachSymbolPicker("recommend-symbol", "recommend-symbol-dropdown", "recommend-symbol-hint");
 
 document.getElementById("sim-form").addEventListener("submit", async (evt) => {
   evt.preventDefault();
@@ -922,6 +1024,7 @@ const TABS = {
   validate: { btn: document.getElementById("tab-btn-validate"), panel: document.getElementById("panel-validate") },
   rank: { btn: document.getElementById("tab-btn-rank"), panel: document.getElementById("panel-rank") },
   screen: { btn: document.getElementById("tab-btn-screen"), panel: document.getElementById("panel-screen") },
+  recommend: { btn: document.getElementById("tab-btn-recommend"), panel: document.getElementById("panel-recommend") },
 };
 
 function showTab(name) {
@@ -1368,6 +1471,165 @@ document.getElementById("screen-form").addEventListener("submit", async (evt) =>
     renderScreenReport(report);
   } catch (e) {
     setScreenStatus("error", e.message || "Ocurrió un error al buscar símbolos rentables.");
+  } finally {
+    runBtn.disabled = false;
+  }
+});
+
+// ---------- Recomendación tab ----------
+function setRecommendStatus(kind, message) {
+  const banner = document.getElementById("recommend-status-banner");
+  banner.className = "status-banner" + (kind ? " " + kind : "");
+  banner.textContent = message || "";
+}
+
+const RECOMMEND_BULLISH = new Set(["BUY", "HOLD_LONG"]);
+const RECOMMEND_BEARISH = new Set(["SELL_SHORT", "HOLD_SHORT"]);
+const RECOMMEND_SIGNAL_LABELS = {
+  BUY: "Comprar", SELL: "Vender / cerrar", SELL_SHORT: "Vender en corto", COVER: "Cubrir corto",
+  HOLD_LONG: "Mantener largo", HOLD_SHORT: "Mantener corto", HOLD_CASH: "Mantener efectivo",
+};
+function recommendSignalClass(signal) {
+  if (RECOMMEND_BULLISH.has(signal)) return "pos";
+  if (RECOMMEND_BEARISH.has(signal)) return "neg";
+  return "neutral";
+}
+function recommendSignalLabel(signal) { return RECOMMEND_SIGNAL_LABELS[signal] || signal; }
+
+function overlaySignalClass(signal) {
+  if (signal === "bullish") return "pos";
+  if (signal === "bearish") return "neg";
+  return "neutral";
+}
+const OVERLAY_SIGNAL_LABELS = { bullish: "Alcista", bearish: "Bajista", neutral: "Neutral" };
+const ALIGNMENT_LABELS = { refuerza: "Refuerza la señal técnica", contradice: "Contradice la señal técnica", neutral: "Sin ajuste" };
+
+function renderRecommendStrategyTable(report) {
+  const table = document.getElementById("recommend-strategy-table");
+  let html = "<thead><tr><th>Estrategia</th><th>Señal</th><th>Ganancia/operación histórica</th><th>Win rate histórico</th><th># Operaciones históricas</th></tr></thead><tbody>";
+  report.per_strategy.forEach(s => {
+    html += `<tr>
+      <td>${strategyLabel(s.strategy)}</td>
+      <td><span class="tag ${recommendSignalClass(s.signal)}">${recommendSignalLabel(s.signal)}</span></td>
+      <td class="ret ${s.historical_avg_profit_per_trade_pct >= 0 ? "pos" : "neg"}">${fmtPct(s.historical_avg_profit_per_trade_pct)}</td>
+      <td>${s.historical_win_rate_pct.toFixed(1)}%</td>
+      <td>${s.historical_num_trades}</td>
+    </tr>`;
+  });
+  table.innerHTML = html + "</tbody>";
+}
+
+function renderOverlayCard(cardId, bodyId, overlay, kvRows) {
+  const card = document.getElementById(cardId);
+  const body = document.getElementById(bodyId);
+  if (!overlay) { card.style.display = "none"; return; }
+  card.style.display = "block";
+
+  if (!overlay.available) {
+    body.innerHTML = `<p class="overlay-unavailable">No disponible: ${overlay.reason || "sin detalle."}</p>`;
+    return;
+  }
+
+  const signalTag = `<span class="tag ${overlaySignalClass(overlay.signal)}">${OVERLAY_SIGNAL_LABELS[overlay.signal] || overlay.signal}</span>`;
+  const adjustment = overlay.confidence_adjustment_pct;
+  const adjustmentText = adjustment > 0 ? `+${adjustment} pts` : adjustment < 0 ? `${adjustment} pts` : "sin ajuste";
+  let html = `
+    <div class="stat-row" style="margin-bottom:14px;">
+      <div class="stat-tile"><div class="label">Señal</div><div class="value">${signalTag}</div></div>
+      <div class="stat-tile"><div class="label">Ajuste de confianza</div><div class="value ${adjustment > 0 ? "pos" : adjustment < 0 ? "neg" : ""}">${adjustmentText}</div></div>
+      <div class="stat-tile"><div class="label">Alineación</div><div class="value" style="font-size:14px;">${ALIGNMENT_LABELS[overlay.alignment_with_technical_signal] || overlay.alignment_with_technical_signal}</div></div>
+    </div>
+    <p class="desc" style="margin-bottom:14px;">${overlay.rationale}</p>
+    <table class="metrics kv"><tbody>`;
+  kvRows.forEach(([label, value]) => {
+    if (value === null || value === undefined) return;
+    html += `<tr><td>${label}</td><td>${value}</td></tr>`;
+  });
+  html += "</tbody></table>";
+  body.innerHTML = html;
+}
+
+function renderEarningsCard(earnings) {
+  if (!earnings) { document.getElementById("recommend-earnings-card").style.display = "none"; return; }
+  const s = earnings.available ? earnings.summary : null;
+  const kvRows = s ? [
+    ["Reportes considerados", s.num_reports],
+    ["% que superó estimados", s.beat_rate_pct !== null ? s.beat_rate_pct.toFixed(1) + "%" : "—"],
+    ["Sorpresa promedio", s.avg_surprise_pct !== null ? fmtPct(s.avg_surprise_pct) : "—"],
+    ["Último periodo reportado", s.most_recent_period || "—"],
+    ["Sorpresa del último reporte", s.most_recent_surprise_pct !== null ? fmtPct(s.most_recent_surprise_pct) : "—"],
+    ["Próximo reporte", earnings.next_earnings_date || "sin fecha próxima conocida"],
+    ["¿Reporte dentro de la ventana?", earnings.near_earnings ? "Sí (próximos 14 días)" : "No"],
+  ] : [];
+  renderOverlayCard("recommend-earnings-card", "recommend-earnings-body", earnings, kvRows);
+}
+
+function renderNewsCard(news) {
+  if (!news) { document.getElementById("recommend-news-card").style.display = "none"; return; }
+  const s = news.available ? news.summary : null;
+  const kvRows = s ? [
+    ["Artículos relevantes considerados", s.num_articles],
+    ["Score de sentimiento promedio", s.avg_sentiment_score !== null ? s.avg_sentiment_score.toFixed(2) : "—"],
+    ["Artículos con tono positivo", s.bullish_count],
+    ["Artículos con tono negativo", s.bearish_count],
+    ["Artículos neutrales", s.neutral_count],
+    ["Titular más reciente", s.most_recent_headline || "—"],
+  ] : [];
+  renderOverlayCard("recommend-news-card", "recommend-news-body", news, kvRows);
+}
+
+function renderRecommendReport(report) {
+  document.getElementById("recommend-results").style.display = "block";
+
+  const badge = document.getElementById("recommend-action-badge");
+  const actionClass = report.overall_action === "BUY" ? "buy" : report.overall_action === "SELL" ? "sell" : "hold";
+  badge.innerHTML = `<span class="action-badge ${actionClass}">${report.overall_action}</span>`;
+
+  document.getElementById("recommend-confidence").textContent = report.confidence_pct.toFixed(1) + "%";
+  document.getElementById("recommend-last-close").textContent = fmtMoney(report.last_close);
+  document.getElementById("recommend-as-of").textContent = String(report.as_of).slice(0, 10);
+  document.getElementById("recommend-best-strategy").textContent =
+    `Mejor estrategia histórica en este símbolo: ${strategyLabel(report.best_historical_strategy.strategy)} (${fmtPct(report.best_historical_strategy.avg_profit_per_trade_pct)} por operación).`;
+  document.getElementById("recommend-disclaimer").textContent = report.disclaimer || "";
+
+  renderRecommendStrategyTable(report);
+  renderEarningsCard(report.earnings);
+  renderNewsCard(report.news);
+}
+
+document.getElementById("recommend-form").addEventListener("submit", async (evt) => {
+  evt.preventDefault();
+  const runBtn = document.getElementById("recommend-run-btn");
+  const symbol = document.getElementById("recommend-symbol").value.trim();
+
+  if (!symbol) {
+    setRecommendStatus("error", "Ingresa un símbolo.");
+    return;
+  }
+
+  const params = new URLSearchParams({
+    period: document.getElementById("recommend-period").value,
+    initial_capital: parseFloat(document.getElementById("recommend-capital").value) || 10000,
+    commission_bps: parseFloat(document.getElementById("recommend-commission").value) || 5,
+    allow_short: document.getElementById("recommend-allow-short").checked,
+    with_earnings: document.getElementById("recommend-with-earnings").checked,
+    with_news: document.getElementById("recommend-with-news").checked,
+  });
+
+  runBtn.disabled = true;
+  setRecommendStatus("loading", "Consultando…");
+  document.getElementById("recommend-results").style.display = "none";
+  try {
+    const resp = await fetch(`/recommend/${encodeURIComponent(symbol)}?${params.toString()}`);
+    if (!resp.ok) {
+      const err = await resp.json().catch(() => ({}));
+      throw new Error(err.detail || `Error ${resp.status}`);
+    }
+    const report = await resp.json();
+    setRecommendStatus(null, "");
+    renderRecommendReport(report);
+  } catch (e) {
+    setRecommendStatus("error", e.message || "Ocurrió un error al obtener la recomendación.");
   } finally {
     runBtn.disabled = false;
   }
