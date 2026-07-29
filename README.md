@@ -66,11 +66,24 @@ información histórica de mercado.
      solo datos disponibles hasta ese momento (sin lookahead) y compara contra
      el retorno real N barras después — valida qué tan confiable es la
      recomendación BUY/SELL/HOLD en la práctica.
+- **Montos en dólares**: además de porcentajes, cada operación reporta su
+  ganancia/pérdida en dólares (`pnl_amount`), y cada estrategia reporta
+  ganancia total, ganancia promedio por operación, y mejor/peor operación en
+  dólares (asumiendo que se reinvierte el 100% del capital en cada operación,
+  una a la vez). Estos montos siempre cuadran exactamente con la curva de
+  capital — ver nota técnica más abajo.
+- **Ranking símbolo × estrategia** (`app/ranking.py`): corre las 5 estrategias
+  sobre varios símbolos a la vez y responde dos preguntas — ¿con qué símbolo
+  funciona mejor cada estrategia?, y ¿qué estrategia le conviene a cada
+  símbolo? Con datos reales (varios símbolos) o con 5 perfiles de mercado
+  sintéticos (alcista, bajista, lateral, volátil, mixto) cuando no hay acceso
+  a internet.
 - **API REST (FastAPI)** y **CLI** para correr backtests, simulaciones,
-  recomendaciones y validaciones.
-- Suite de tests (`pytest`, 69 casos) sobre datos sintéticos, sin depender de
-  red — incluye cobertura de posiciones largas y cortas, rangos de fecha, y
-  las tres validaciones de expectativa vs realidad.
+  recomendaciones, validaciones y rankings.
+- Suite de tests (`pytest`, 77 casos) sobre datos sintéticos, sin depender de
+  red — incluye cobertura de posiciones largas y cortas, rangos de fecha, las
+  tres validaciones de expectativa vs realidad, montos en dólares, y el
+  ranking de símbolos.
 
 ## Comparación de las 5 estrategias
 
@@ -78,21 +91,22 @@ Sobre el mismo escenario histórico sintético (alza → corrección → lateral
 caída fuerte → recuperación), rankeadas por ganancia promedio por
 transacción:
 
-| Estrategia | Retorno total | Ganancia/operación | Win rate | Profit factor | Máx. drawdown | Operaciones |
-|---|---|---|---|---|---|---|
-| Cruce de SMA | +18.82% | **+5.89%** | 60.0% | 2.18 | -23.06% | 5 |
-| Ruptura Bollinger | +62.79% | +5.76% | 60.0% | 6.20 | -13.92% | 10 |
-| Confirmación de tendencia | +30.32% | +3.58% | 40.0% | 2.50 | -18.64% | 10 |
-| Cruce de MACD | +23.25% | +1.78% | 33.3% | 1.55 | -33.98% | 21 |
-| Reversión RSI | -50.32% | -18.29% | 33.3% | 0.02 | -53.59% | 3 |
+| Estrategia | Retorno total | Ganancia total ($) | Ganancia/operación | Win rate | Profit factor | Máx. drawdown | Operaciones |
+|---|---|---|---|---|---|---|---|
+| Ruptura Bollinger | +62.79% | **+$6,279** | **+5.28%** | 60.0% | 5.52 | -13.92% | 10 |
+| Cruce de SMA | +18.82% | +$1,882 | +4.53% | 60.0% | 1.91 | -23.06% | 5 |
+| Confirmación de tendencia | +30.32% | +$3,032 | +3.08% | 40.0% | 2.24 | -18.64% | 10 |
+| Cruce de MACD | +23.25% | +$2,325 | +1.50% | 33.3% | 1.46 | -33.98% | 21 |
+| Reversión RSI | -50.32% | -$5,032 | -18.89% | 33.3% | 0.00 | -53.59% | 3 |
 
-Ninguna estrategia es universalmente mejor: Ruptura Bollinger tiene el mayor
-retorno total, pero Cruce de SMA gana en ganancia promedio por transacción
-con muchas menos operaciones (5 vs. 10). `trend_confirmation` demuestra el
-valor de filtrar señales: comparado con el `macd_crossover` puro sobre el
-mismo escenario, reduce operaciones de 21 a 10 y casi duplica el Sharpe
-(1.14 vs 0.76), aunque paga por eso en ganancia promedio menor que las dos
-primeras. Reversión RSI es la peor en este escenario particular — no
+(Sobre $10,000 de capital inicial.) Ninguna estrategia es universalmente
+mejor: Ruptura Bollinger gana en retorno total, ganancia total en dólares y
+ganancia promedio por transacción, pero Cruce de SMA logra un desempeño
+similar con la mitad de las operaciones (5 vs. 10). `trend_confirmation`
+demuestra el valor de filtrar señales: comparado con el `macd_crossover`
+puro sobre el mismo escenario, reduce operaciones de 21 a 10 y casi duplica
+el Sharpe (1.14 vs 0.76), aunque paga por eso en ganancia promedio menor que
+las dos primeras. Reversión RSI es la peor en este escenario particular — no
 significa que sea mala en general, solo que no encaja con estos regímenes de
 mercado. Por eso existe `compare_strategies`/`simulate`/la pantalla web: para
 elegir la mejor estrategia por instrumento y periodo, no asumir una sola
@@ -110,12 +124,13 @@ o desde la pantalla web (`/`), dejando "Estrategia" en "Todas (comparar)".
 Corriendo las tres validaciones sobre el mismo escenario histórico sintético:
 
 **1. Fuera de muestra** (primera mitad = expectativa, segunda mitad = realidad,
-ganancia promedio por operación): en las 5 estrategias, el **signo**
-(rentable/no rentable) se mantuvo igual entre ambos periodos — ninguna pasó de
-ganar en la primera mitad a perder en la segunda, ni viceversa. La magnitud sí
-varía (ej. `sma_crossover` +6.82% → +5.27%, `macd_crossover` +0.03% → +3.71%),
-lo cual es normal y esperable — el punto es que ninguna estrategia se "rompió"
-al pasar a datos no vistos.
+ganancia promedio por operación): 4 de 5 estrategias mantuvieron el mismo
+**signo** de rentabilidad entre ambos periodos (ej. `sma_crossover` +5.37% →
++3.98%, `bollinger_breakout` +5.44% → +5.17%) — la magnitud varía, lo cual es
+normal, pero no se "rompieron" al pasar a datos no vistos. `macd_crossover`
+pasó de una pérdida marginal (-0.17%) a una ganancia (+3.33%): una mejora, no
+un quiebre, pero recuerda que la expectativa no es garantía exacta de la
+realidad.
 
 **2. Precisión direccional** (¿la operación acertó la dirección?): `Cruce de
 SMA` y `Ruptura Bollinger` aciertan 60% de sus operaciones (mejor que el azar);
@@ -135,6 +150,38 @@ bajistas y adverso para las alcistas.
 infalibles, y su confiabilidad depende del régimen de mercado. Por eso el
 valor real está en poder medir esto por instrumento y periodo (`validate`), no
 en confiar ciegamente en una sola señal.
+
+## ¿Con qué símbolos funciona mejor cada estrategia?
+
+Corriendo `rank` sobre 5 perfiles de mercado sintéticos (alcista, bajista,
+lateral, volátil, mixto — sustitutos de símbolos reales sin acceso de red):
+
+| Estrategia | Mejor símbolo/perfil | Ganancia/operación | Ganancia total ($) |
+|---|---|---|---|
+| Cruce de SMA | Tendencia bajista sostenida | +7.45% | +$2,815 |
+| Cruce de MACD | Mixto (5 regímenes) | +1.50% | +$2,325 |
+| Reversión RSI | Alta volatilidad / whipsaw | +4.89% | +$805 |
+| Ruptura Bollinger | Mixto (5 regímenes) | +5.28% | +$6,279 |
+| Confirmación de tendencia | Mixto (5 regímenes) | +3.08% | +$3,032 |
+
+| Símbolo/perfil | Mejor estrategia | Ganancia/operación |
+|---|---|---|
+| Tendencia alcista sostenida | Reversión RSI | +3.41% |
+| Tendencia bajista sostenida | Cruce de SMA | +7.45% |
+| Lateral / rango | Cruce de SMA | +1.14% |
+| Alta volatilidad / whipsaw | Reversión RSI | +4.89% |
+| Mixto (5 regímenes) | Ruptura Bollinger | +5.28% |
+
+Patrón claro: las estrategias de tendencia (SMA, Bollinger) ganan en mercados
+con tendencia sostenida (alcista o bajista) y en el escenario mixto; la
+reversión a la media (RSI) gana en mercados de alta volatilidad sin tendencia
+clara, donde los extremos realmente revierten. Ninguna estrategia domina en
+los 5 perfiles — exactamente por eso `rank` existe: para encontrar, dado un
+símbolo real, cuál de las 5 estrategias le conviene, en vez de aplicar la
+misma a todo. Con red disponible, corre esto sobre símbolos reales:
+```bash
+python -m app.cli rank --symbols AAPL,MSFT,TSLA,BTC-USD,ETH-USD,EURUSD=X --period 2y
+```
 
 ## Instalación
 
@@ -163,6 +210,10 @@ python -m app.cli simulate --symbol AAPL --start-date 2023-06-01 --end-date 2023
 # Validación: expectativa vs realidad (fuera de muestra + precisión direccional + recomendaciones)
 python -m app.cli validate --synthetic --out validacion.json
 python -m app.cli validate --symbol AAPL --period 2y --split-ratio 0.6 --horizon 15
+
+# Ranking: ¿con qué símbolo funciona mejor cada estrategia?
+python -m app.cli rank --synthetic --out ranking.json
+python -m app.cli rank --symbols AAPL,MSFT,BTC-USD,EURUSD=X --period 2y
 ```
 
 ## Uso — Pantalla web
@@ -171,7 +222,7 @@ python -m app.cli validate --symbol AAPL --period 2y --split-ratio 0.6 --horizon
 uvicorn app.api.main:app --reload
 ```
 
-Abre `http://localhost:8000/` en el navegador. Tiene dos pestañas:
+Abre `http://localhost:8000/` en el navegador. Tiene tres pestañas:
 
 - **Simulador**: símbolo, **rango de fechas** (desde/hasta), estrategia (o
   "Todas" para comparar) y el switch de posiciones cortas. Si no hay acceso a
@@ -179,13 +230,18 @@ Abre `http://localhost:8000/` en el navegador. Tiene dos pestañas:
   motor con el histórico generado (2023-01-01 a 2023-11-16) — el rango de
   fechas recorta dentro de esa ventana. Muestra precio con señales de
   entrada/salida, curva de capital comparada contra buy&hold, tabla de
-  métricas y bitácora de operaciones.
+  métricas (con **montos en dólares**) y bitácora de operaciones (con
+  ganancia/pérdida en $ por operación).
 - **Validación**: los mismos parámetros de símbolo/fechas/sintético, más
   opciones avanzadas (% de expectativa, horizonte, separación, calentamiento).
   Muestra las tres validaciones de expectativa vs realidad: barras de
   expectativa/realidad por estrategia (fuera de muestra), precisión
   direccional por estrategia, y el precio con cada llamada del motor de
   recomendaciones marcada como acierto (relleno) o fallo (hueco), con tooltip.
+- **Símbolos**: lista de símbolos separados por coma (o perfiles sintéticos
+  sin red) — corre las 5 estrategias sobre todos y muestra el mejor símbolo
+  por estrategia, la mejor estrategia por símbolo, y una matriz completa con
+  mapa de calor (verde/rojo) de ganancia promedio por transacción.
 
 ## Uso — API
 
@@ -201,6 +257,7 @@ uvicorn app.api.main:app --reload
 - `POST /backtest/compare` — body: `{"symbol": "BTC-USD", "period": "1y"}`
 - `POST /simulate` — body: `{"symbol": "AAPL", "start_date": "2023-06-01", "end_date": "2023-09-30"}` o `{"synthetic": true, "strategy": "sma_crossover", "start_date": "2023-04-01", "end_date": "2023-09-30"}`
 - `POST /validate` — body: `{"symbol": "AAPL", "period": "2y"}` o `{"synthetic": true, "split_ratio": 0.6, "horizon": 15}`
+- `POST /rank` — body: `{"symbols": ["AAPL", "MSFT", "BTC-USD"], "period": "2y"}` o `{"synthetic": true}`
 
 ## Estructura del proyecto
 
@@ -216,17 +273,33 @@ app/
   simulate.py            # simulador (datos reales o sintéticos, con rango de fechas)
   validation/            # expectativa vs realidad: fuera de muestra, precisión
                          # direccional, precisión de recomendaciones
+  ranking.py             # comparación estrategia × símbolo
   api/main.py            # FastAPI (sirve también la pantalla web en "/")
-  static/index.html       # pantalla web del simulador
+  static/index.html       # pantalla web (3 pestañas: Simulador/Validación/Símbolos)
   cli.py                 # interfaz de línea de comandos
 tests/
 ```
+
+## Nota técnica: montos en dólares y operaciones en corto
+
+El backtester reinvierte el 100% del capital en una posición a la vez
+(nunca fraccionado). El monto en dólares de cada operación (`pnl_amount`) se
+deriva de la curva de capital, no de un cálculo de precio aislado — esto
+importa porque una posición corta sostenida varios días bajo rebalanceo
+diario (la curva de capital) no es matemáticamente idéntica a un simple
+"entré a X, salí a Y" (el cálculo ingenuo por precio), por el efecto de
+"arrastre por rebalanceo" cuando hay volatilidad día a día. Al derivar
+`return_pct` y `pnl_amount` de la curva de capital, la suma de las ganancias
+y pérdidas de todas las operaciones siempre cuadra exactamente con el cambio
+total de capital — puedes verificarlo tú mismo sumando la columna "Ganancia/
+Pérdida ($)" de la bitácora de operaciones contra la "Ganancia total ($)" de
+la tabla de métricas.
 
 ## Posiciones cortas (shorts)
 
 Todas las estrategias soportan largo **y** corto (`allow_short=True` por
 defecto en `Strategy`, `build_strategy`, `all_strategies`, `recommend` y el
-simulador); pásale `allow_short=False` (o `--no-short` en el CLO, o
+simulador); pásale `allow_short=False` (o `--no-short` en el CLI, o
 `"allow_short": false` en la API) si el instrumento/cuenta no permite
 shortear (ej. cripto spot sin margen) o simplemente no quieres apostar a la
 baja.

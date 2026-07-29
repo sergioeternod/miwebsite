@@ -42,13 +42,27 @@ def split_backtest_periods(
     equity = result.equity_curve
     equity_a = equity.iloc[: split_idx + 1]
     equity_b_raw = equity.iloc[split_idx:]
-    equity_b = equity_b_raw / equity_b_raw.iloc[0] * initial_capital
+    rebase_factor = initial_capital / equity_b_raw.iloc[0]
+    equity_b = equity_b_raw * rebase_factor
 
     returns_a = equity_a.pct_change().fillna(0)
     returns_b = equity_b.pct_change().fillna(0)
 
+    # Trades are attributed to a period by their entry date. A trade that
+    # opened in A and closed in B is counted entirely in A — its dollar
+    # total_pnl_amount for B is therefore an approximation, not an exact
+    # reconciliation against B's own equity delta, whenever such a straddling
+    # trade exists (rare, but possible near the split date).
     trades_a = [t for t in result.trades if t["entry_date"] < split_date]
-    trades_b = [t for t in result.trades if t["entry_date"] >= split_date]
+    # Dollar pnl_amount must be rescaled by the same factor as the equity
+    # curve above — otherwise period B's dollar figures would still reflect
+    # whatever capital period A happened to end with, defeating the point of
+    # rebasing B to start fresh at initial_capital.
+    trades_b = [
+        {**t, "pnl_amount": round(t["pnl_amount"] * rebase_factor, 2)}
+        for t in result.trades
+        if t["entry_date"] >= split_date
+    ]
 
     metrics_a = compute_metrics(equity_a, trades_a, returns_a)
     metrics_b = compute_metrics(equity_b, trades_b, returns_b)

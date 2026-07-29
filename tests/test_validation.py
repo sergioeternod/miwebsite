@@ -37,6 +37,23 @@ def test_period_b_equity_is_rebased_to_initial_capital(random_walk_df):
     assert "total_return_pct" in result["period_b"]["metrics"]
 
 
+def test_period_b_dollar_pnl_present_and_rebased(random_walk_df):
+    """Period B's dollar figures must exist and be expressed against a fresh
+    $10,000 base rather than leaking whatever capital period A happened to
+    end with. An exact reconciliation against B's own equity delta isn't
+    guaranteed when a trade straddles the split (it's attributed whole to A
+    even though part of its move happened in B's date range), so this checks
+    presence/plausible scale rather than exact equality."""
+    for strategy in all_strategies():
+        result = split_backtest_periods(random_walk_df, strategy, split_ratio=0.5, initial_capital=10_000.0)
+        metrics_b = result["period_b"]["metrics"]
+        if metrics_b["num_trades"]:
+            assert isinstance(metrics_b["total_pnl_amount"], float)
+            # Sanity bound: dollar P&L on a $10,000 base shouldn't run away to
+            # some wildly different scale (a sign a rebase factor was dropped).
+            assert abs(metrics_b["total_pnl_amount"]) < 50_000
+
+
 def test_out_of_sample_comparison_runs_all_strategies(random_walk_df):
     results = out_of_sample_comparison(random_walk_df, all_strategies(), symbol="TEST")
     assert len(results) == len(STRATEGY_REGISTRY)

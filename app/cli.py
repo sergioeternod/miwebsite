@@ -17,6 +17,7 @@ import sys
 
 from app.backtest.engine import compare_strategies, run_backtest
 from app.data.providers import DataUnavailableError, get_ohlcv
+from app.ranking import rank_real_symbols, rank_synthetic_profiles
 from app.recommend.engine import recommend
 from app.simulate import simulate_symbol, simulate_synthetic
 from app.strategies import STRATEGY_REGISTRY, all_strategies, build_strategy
@@ -175,6 +176,44 @@ def cmd_validate(args: argparse.Namespace) -> None:
     _print_json(summary)
 
 
+def cmd_rank(args: argparse.Namespace) -> None:
+    if args.synthetic:
+        report = rank_synthetic_profiles(
+            seed=args.seed,
+            allow_short=not args.no_short,
+            initial_capital=args.capital,
+            commission_bps=args.commission_bps,
+        )
+    else:
+        if not args.symbols:
+            raise ValueError("--symbols es obligatorio salvo que uses --synthetic")
+        symbols = [s.strip() for s in args.symbols.split(",") if s.strip()]
+        report = rank_real_symbols(
+            symbols,
+            period=args.period,
+            interval=args.interval,
+            start_date=args.start_date,
+            end_date=args.end_date,
+            allow_short=not args.no_short,
+            initial_capital=args.capital,
+            commission_bps=args.commission_bps,
+        )
+
+    if args.out:
+        with open(args.out, "w", encoding="utf-8") as f:
+            json.dump(report, f, indent=2, ensure_ascii=False, default=str)
+
+    summary = {
+        "symbols": report["symbols"],
+        "strategies": report["strategies"],
+        "best_symbol_per_strategy": report["best_symbol_per_strategy"],
+        "best_strategy_per_symbol": report["best_strategy_per_symbol"],
+    }
+    if args.out:
+        summary["full_report_saved_to"] = args.out
+    _print_json(summary)
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="Trading signals CLI")
     subparsers = parser.add_subparsers(dest="command", required=True)
@@ -252,6 +291,22 @@ def build_parser() -> argparse.ArgumentParser:
     validate_parser.add_argument("--no-short", action="store_true", help="Desactiva las posiciones en corto")
     validate_parser.add_argument("--out", default=None, help="Ruta donde guardar el reporte completo en JSON")
     validate_parser.set_defaults(func=cmd_validate)
+
+    rank_parser = subparsers.add_parser(
+        "rank", help="Compara todas las estrategias sobre varios símbolos: ¿cuál funciona mejor con cuál?"
+    )
+    rank_parser.add_argument("--symbols", default=None, help="Lista separada por comas, ej. AAPL,MSFT,BTC-USD")
+    rank_parser.add_argument("--synthetic", action="store_true", help="Usa perfiles de mercado sintéticos (sin red)")
+    rank_parser.add_argument("--seed", type=int, default=42, help="Semilla de los perfiles sintéticos")
+    rank_parser.add_argument("--period", default="2y")
+    rank_parser.add_argument("--interval", default="1d")
+    rank_parser.add_argument("--start-date", default=None, help="ISO, ej. 2023-06-01 (prioridad sobre --period)")
+    rank_parser.add_argument("--end-date", default=None, help="ISO, ej. 2023-09-30")
+    rank_parser.add_argument("--capital", type=float, default=10_000.0)
+    rank_parser.add_argument("--commission-bps", type=float, default=5.0)
+    rank_parser.add_argument("--no-short", action="store_true", help="Desactiva las posiciones en corto")
+    rank_parser.add_argument("--out", default=None, help="Ruta donde guardar el reporte completo en JSON")
+    rank_parser.set_defaults(func=cmd_rank)
 
     return parser
 

@@ -37,6 +37,12 @@ def compute_metrics(
     gross_loss = abs(sum(t["return_pct"] for t in losses))
     profit_factor = (gross_profit / gross_loss) if gross_loss > 0 else None
 
+    has_amounts = n_trades > 0 and all("pnl_amount" in t for t in trades)
+    total_pnl_amount = round(sum(t["pnl_amount"] for t in trades), 2) if has_amounts else None
+    avg_profit_per_trade_amount = round(total_pnl_amount / n_trades, 2) if has_amounts and n_trades else None
+    best_trade_amount = round(max((t["pnl_amount"] for t in trades), default=0.0), 2) if has_amounts else None
+    worst_trade_amount = round(min((t["pnl_amount"] for t in trades), default=0.0), 2) if has_amounts else None
+
     return {
         "total_return_pct": round(total_return_pct, 2),
         "cagr_pct": round(cagr_pct, 2),
@@ -50,4 +56,8 @@ def compute_metrics(
         "avg_win_pct": round((gross_profit / len(wins)) if wins else 0.0, 2),
         "avg_loss_pct": round(-(gross_loss / len(losses)) if losses else 0.0, 2),
         "profit_factor": round(profit_factor, 2) if profit_factor is not None else None,
+        "total_pnl_amount": total_pnl_amount,
+        "avg_profit_per_trade_amount": avg_profit_per_trade_amount,
+        "best_trade_amount": best_trade_amount,
+        "worst_trade_amount": worst_trade_amount,
     }

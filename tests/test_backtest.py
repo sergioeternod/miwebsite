@@ -1,4 +1,5 @@
 import pandas as pd
+import pytest
 
 from app.backtest.engine import compare_strategies, run_backtest
 from app.backtest.metrics import compute_metrics
@@ -92,3 +93,31 @@ def test_long_only_backtest_stays_flat_on_downtrend(downtrend_df):
     result = run_backtest(downtrend_df, strategy, symbol="TEST")
     assert all(t["direction"] == "long" for t in result.trades)
     assert result.metrics["num_trades"] == 0
+
+
+def test_trade_pnl_amounts_reconcile_exactly_with_equity_curve(random_walk_df):
+    """Regression test: summing every trade's dollar pnl_amount must equal the
+    equity curve's total change, even across flips (same-bar close+reopen) and
+    short trades — both were previously a source of silent, non-trivial drift."""
+    initial_capital = 10_000.0
+    for strategy in all_strategies():
+        result = run_backtest(random_walk_df, strategy, symbol="TEST", initial_capital=initial_capital)
+        total_pnl = sum(t["pnl_amount"] for t in result.trades)
+        expected = result.equity_curve.iloc[-1] - initial_capital
+        assert total_pnl == pytest.approx(expected, abs=0.05), strategy.name
+
+
+def test_metrics_dollar_amounts_present_and_consistent(random_walk_df):
+    strategy = build_strategy("sma_crossover")
+    result = run_backtest(random_walk_df, strategy, symbol="TEST")
+    m = result.metrics
+    if m["num_trades"]:
+        assert m["total_pnl_amount"] == pytest.approx(
+            round(sum(t["pnl_amount"] for t in result.trades), 2), abs=0.01
+        )
+        assert m["avg_profit_per_trade_amount"] == pytest.approx(
+            m["total_pnl_amount"] / m["num_trades"], abs=0.01
+        )
+        assert m["best_trade_amount"] >= m["worst_trade_amount"]
+    else:
+        assert m["total_pnl_amount"] is None

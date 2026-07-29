@@ -6,10 +6,11 @@ from pathlib import Path
 from fastapi import FastAPI, HTTPException, Response
 from fastapi.staticfiles import StaticFiles
 
-from app.api.schemas import BacktestRequest, CompareRequest, SimulateRequest, ValidateRequest
+from app.api.schemas import BacktestRequest, CompareRequest, RankRequest, SimulateRequest, ValidateRequest
 from app.backtest.engine import BacktestResult, compare_strategies, run_backtest
 from app.config import EXAMPLE_SYMBOLS
 from app.data.providers import DataUnavailableError, get_ohlcv
+from app.ranking import rank_real_symbols, rank_synthetic_profiles
 from app.recommend.engine import recommend
 from app.simulate import simulate_symbol, simulate_synthetic
 from app.strategies import STRATEGY_REGISTRY, all_strategies, build_strategy
@@ -167,6 +168,32 @@ def post_validate(request: ValidateRequest) -> dict:
             raise HTTPException(status_code=400, detail="symbol es obligatorio salvo que synthetic=true")
         return validate_symbol(
             request.symbol,
+            period=request.period,
+            interval=request.interval,
+            start_date=request.start_date,
+            end_date=request.end_date,
+            **kwargs,
+        )
+    except DataUnavailableError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@app.post("/rank")
+def post_rank(request: RankRequest) -> dict:
+    kwargs = dict(
+        allow_short=request.allow_short,
+        initial_capital=request.initial_capital,
+        commission_bps=request.commission_bps,
+    )
+    try:
+        if request.synthetic:
+            return rank_synthetic_profiles(seed=request.seed, **kwargs)
+        if not request.symbols:
+            raise HTTPException(status_code=400, detail="symbols es obligatorio salvo que synthetic=true")
+        return rank_real_symbols(
+            request.symbols,
             period=request.period,
             interval=request.interval,
             start_date=request.start_date,

@@ -131,7 +131,8 @@
   .status-banner.error { display: block; background: color-mix(in srgb, var(--critical) 12%, transparent); color: var(--critical); border: 1px solid color-mix(in srgb, var(--critical) 30%, transparent); }
   .status-banner.loading { display: block; background: var(--surface-1); color: var(--text-secondary); border: 1px solid var(--border); }
 
-  #results, #val-results { display: none; }
+  #results, #val-results, #rank-results { display: none; }
+  .heat-cell { font-variant-numeric: tabular-nums; text-align: center !important; border-radius: 4px; }
 
   .stat-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 14px; margin-bottom: 20px; }
   .stat-tile {
@@ -218,6 +219,7 @@
   <div class="tab-nav" role="tablist">
     <button type="button" id="tab-btn-simulate" class="active" role="tab" aria-selected="true">Simulador</button>
     <button type="button" id="tab-btn-validate" role="tab" aria-selected="false">Validación</button>
+    <button type="button" id="tab-btn-rank" role="tab" aria-selected="false">Símbolos</button>
   </div>
 
   <div id="panel-simulate" class="tab-panel active">
@@ -419,10 +421,76 @@
   </div>
   <!-- /#panel-validate -->
 
+  <div id="panel-rank" class="tab-panel">
+    <div class="card">
+      <h2>Parámetros de la comparación</h2>
+      <p class="desc">Corre las 5 estrategias sobre varios símbolos a la vez: ¿con cuál símbolo funciona mejor cada estrategia, y cuál estrategia le conviene a cada símbolo?</p>
+      <form class="controls-form" id="rank-form">
+        <div class="field" style="grid-column: span 2;">
+          <label for="rank-symbols">Símbolos (separados por coma)</label>
+          <input id="rank-symbols" placeholder="AAPL, MSFT, BTC-USD, EURUSD=X">
+        </div>
+        <div class="field">
+          <label for="rank-period">Periodo</label>
+          <select id="rank-period">
+            <option value="6mo">6 meses</option>
+            <option value="1y">1 año</option>
+            <option value="2y" selected>2 años</option>
+            <option value="5y">5 años</option>
+          </select>
+        </div>
+        <div class="field">
+          <label for="rank-capital">Capital inicial</label>
+          <input type="number" id="rank-capital" value="10000" min="100" step="100">
+        </div>
+        <div class="field">
+          <label for="rank-commission">Comisión (bps)</label>
+          <input type="number" id="rank-commission" value="5" min="0" step="1">
+        </div>
+        <div class="field checkbox">
+          <input type="checkbox" id="rank-allow-short" checked>
+          <label for="rank-allow-short">Permitir posiciones cortas</label>
+        </div>
+        <div class="field checkbox">
+          <input type="checkbox" id="rank-synthetic">
+          <label for="rank-synthetic">Usar perfiles de mercado sintéticos (sin red)</label>
+        </div>
+        <button type="submit" class="run-btn" id="rank-run-btn">Comparar símbolos</button>
+        <div class="hint">Los perfiles sintéticos son 5 "personalidades" de mercado (alcista, bajista, lateral, volátil, mixto) que sirven de ejemplo cuando no hay acceso a datos reales.</div>
+      </form>
+    </div>
+
+    <div class="status-banner" id="rank-status-banner"></div>
+
+    <div id="rank-results">
+      <div class="card">
+        <h2>Mejor símbolo por estrategia</h2>
+        <p class="desc">Para cada estrategia, el símbolo donde tuvo mayor ganancia promedio por transacción.</p>
+        <table class="metrics" id="rank-by-strategy-table"></table>
+      </div>
+
+      <div class="card">
+        <h2>Mejor estrategia por símbolo</h2>
+        <p class="desc">Para cada símbolo, la estrategia que mejor le funcionó.</p>
+        <table class="metrics" id="rank-by-symbol-table"></table>
+      </div>
+
+      <div class="card">
+        <h2>Matriz completa</h2>
+        <p class="desc">Ganancia promedio por transacción (%) de cada estrategia en cada símbolo. Verde = rentable, rojo = no rentable.</p>
+        <div class="scroll-x">
+          <table class="metrics" id="rank-matrix-table"></table>
+        </div>
+      </div>
+    </div>
+  </div>
+  <!-- /#panel-rank -->
+
   <footer>
     Trading Signals App — API en <code>/docs</code>. Los mismos parámetros están disponibles vía CLI:
     <code>python -m app.cli simulate --symbol AAPL --start-date 2023-06-01 --end-date 2023-09-30</code>
     · <code>python -m app.cli validate --symbol AAPL --period 2y</code>
+    · <code>python -m app.cli rank --symbols AAPL,MSFT,BTC-USD</code>
   </footer>
 </div>
 
@@ -459,6 +527,11 @@ function svgEl(tag, attrs) {
 }
 function fmtPct(v) { const sign = v > 0 ? "+" : ""; return `${sign}${v.toFixed(2)}%`; }
 function fmtMoney(v) { return "$" + v.toLocaleString("en-US", { maximumFractionDigits: 0 }); }
+function fmtMoneySigned(v) {
+  if (v === null || v === undefined) return "—";
+  const sign = v > 0 ? "+" : v < 0 ? "-" : "";
+  return `${sign}$${Math.abs(v).toLocaleString("en-US", { maximumFractionDigits: 0 })}`;
+}
 
 const CHART_W = 960, CHART_H = 360;
 const MARGIN = { top: 24, right: 16, bottom: 24, left: 56 };
@@ -516,6 +589,7 @@ function renderSummary(report) {
     best.metrics.total_return_pct >= 0 ? "pos" : "neg"
   );
   tile("Ganancia/operación (mejor)", fmtPct(best.metrics.avg_profit_per_trade_pct), best.metrics.avg_profit_per_trade_pct >= 0 ? "pos" : "neg");
+  tile("Ganancia total ($, mejor)", fmtMoneySigned(best.metrics.total_pnl_amount), best.metrics.total_pnl_amount >= 0 ? "pos" : "neg");
 }
 
 function renderPriceChart(report, strategyName) {
@@ -610,7 +684,9 @@ function renderMetricsTable(report) {
   const cols = [
     ["Estrategia", r => strategyLabel(r.strategy)],
     ["Retorno total", r => fmtPct(r.metrics.total_return_pct)],
+    ["Ganancia total ($)", r => fmtMoneySigned(r.metrics.total_pnl_amount)],
     ["Ganancia/operación", r => fmtPct(r.metrics.avg_profit_per_trade_pct)],
+    ["Ganancia/op ($)", r => fmtMoneySigned(r.metrics.avg_profit_per_trade_amount)],
     ["Win rate", r => r.metrics.win_rate_pct.toFixed(1) + "%"],
     ["Profit factor", r => r.metrics.profit_factor === null ? "—" : r.metrics.profit_factor.toFixed(2)],
     ["Máx. drawdown", r => fmtPct(r.metrics.max_drawdown_pct)],
@@ -628,8 +704,8 @@ function renderTradesTable(report, strategyName) {
   const table = document.getElementById("trades-table");
   const result = report.results.find(r => r.strategy === strategyName);
   const trades = result ? result.trades : [];
-  let html = "<thead><tr><th>Entrada</th><th>Salida</th><th>Dirección</th><th>Precio entrada</th><th>Precio salida</th><th>Días</th><th>Retorno</th></tr></thead><tbody>";
-  if (trades.length === 0) html += `<tr><td colspan="7" style="text-align:center;color:var(--text-muted);">Sin operaciones en este rango</td></tr>`;
+  let html = "<thead><tr><th>Entrada</th><th>Salida</th><th>Dirección</th><th>Precio entrada</th><th>Precio salida</th><th>Días</th><th>Retorno</th><th>Ganancia/Pérdida ($)</th></tr></thead><tbody>";
+  if (trades.length === 0) html += `<tr><td colspan="8" style="text-align:center;color:var(--text-muted);">Sin operaciones en este rango</td></tr>`;
   trades.forEach(t => {
     const retClass = t.return_pct >= 0 ? "pos" : "neg";
     html += `<tr>
@@ -640,6 +716,7 @@ function renderTradesTable(report, strategyName) {
       <td>${t.exit_price.toFixed(2)}</td>
       <td>${t.bars_held}</td>
       <td class="ret ${retClass}">${fmtPct(t.return_pct)}</td>
+      <td class="ret ${retClass}">${fmtMoneySigned(t.pnl_amount)}</td>
     </tr>`;
   });
   table.innerHTML = html + "</tbody>";
@@ -785,22 +862,21 @@ document.getElementById("sim-form").addEventListener("submit", async (evt) => {
 });
 
 // ---------- Tabs ----------
-const tabBtnSimulate = document.getElementById("tab-btn-simulate");
-const tabBtnValidate = document.getElementById("tab-btn-validate");
-const panelSimulate = document.getElementById("panel-simulate");
-const panelValidate = document.getElementById("panel-validate");
+const TABS = {
+  simulate: { btn: document.getElementById("tab-btn-simulate"), panel: document.getElementById("panel-simulate") },
+  validate: { btn: document.getElementById("tab-btn-validate"), panel: document.getElementById("panel-validate") },
+  rank: { btn: document.getElementById("tab-btn-rank"), panel: document.getElementById("panel-rank") },
+};
 
 function showTab(name) {
-  const isSim = name === "simulate";
-  panelSimulate.classList.toggle("active", isSim);
-  panelValidate.classList.toggle("active", !isSim);
-  tabBtnSimulate.classList.toggle("active", isSim);
-  tabBtnValidate.classList.toggle("active", !isSim);
-  tabBtnSimulate.setAttribute("aria-selected", String(isSim));
-  tabBtnValidate.setAttribute("aria-selected", String(!isSim));
+  Object.entries(TABS).forEach(([key, { btn, panel }]) => {
+    const active = key === name;
+    btn.classList.toggle("active", active);
+    panel.classList.toggle("active", active);
+    btn.setAttribute("aria-selected", String(active));
+  });
 }
-tabBtnSimulate.addEventListener("click", () => showTab("simulate"));
-tabBtnValidate.addEventListener("click", () => showTab("validate"));
+Object.entries(TABS).forEach(([key, { btn }]) => btn.addEventListener("click", () => showTab(key)));
 
 function setValStatus(kind, message) {
   const banner = document.getElementById("val-status-banner");
@@ -1047,6 +1123,118 @@ document.getElementById("val-form").addEventListener("submit", async (evt) => {
     renderValidationReport(report);
   } catch (e) {
     setValStatus("error", e.message || "Ocurrió un error al validar.");
+  } finally {
+    runBtn.disabled = false;
+  }
+});
+
+// ---------- Símbolos (ranking) tab ----------
+function setRankStatus(kind, message) {
+  const banner = document.getElementById("rank-status-banner");
+  banner.className = "status-banner" + (kind ? " " + kind : "");
+  banner.textContent = message || "";
+}
+
+function renderRankByStrategyTable(report) {
+  const table = document.getElementById("rank-by-strategy-table");
+  let html = "<thead><tr><th>Estrategia</th><th>Mejor símbolo</th><th>Ganancia/operación</th><th>Retorno total</th><th>Ganancia ($)</th><th># Operaciones</th></tr></thead><tbody>";
+  Object.entries(report.best_symbol_per_strategy).forEach(([strategyName, info]) => {
+    html += `<tr>
+      <td>${strategyLabel(strategyName)}</td>
+      <td>${info.symbol}</td>
+      <td class="ret ${info.avg_profit_per_trade_pct >= 0 ? "pos" : "neg"}">${fmtPct(info.avg_profit_per_trade_pct)}</td>
+      <td class="ret ${info.total_return_pct >= 0 ? "pos" : "neg"}">${fmtPct(info.total_return_pct)}</td>
+      <td class="ret ${info.total_pnl_amount >= 0 ? "pos" : "neg"}">${fmtMoneySigned(info.total_pnl_amount)}</td>
+      <td>${info.num_trades}</td>
+    </tr>`;
+  });
+  table.innerHTML = html + "</tbody>";
+}
+
+function renderRankBySymbolTable(report) {
+  const table = document.getElementById("rank-by-symbol-table");
+  let html = "<thead><tr><th>Símbolo</th><th>Mejor estrategia</th><th>Ganancia/operación</th><th>Retorno total</th><th>Ganancia ($)</th><th># Operaciones</th></tr></thead><tbody>";
+  Object.entries(report.best_strategy_per_symbol).forEach(([symbol, info]) => {
+    html += `<tr>
+      <td>${symbol}</td>
+      <td>${strategyLabel(info.strategy)}</td>
+      <td class="ret ${info.avg_profit_per_trade_pct >= 0 ? "pos" : "neg"}">${fmtPct(info.avg_profit_per_trade_pct)}</td>
+      <td class="ret ${info.total_return_pct >= 0 ? "pos" : "neg"}">${fmtPct(info.total_return_pct)}</td>
+      <td class="ret ${info.total_pnl_amount >= 0 ? "pos" : "neg"}">${fmtMoneySigned(info.total_pnl_amount)}</td>
+      <td>${info.num_trades}</td>
+    </tr>`;
+  });
+  table.innerHTML = html + "</tbody>";
+}
+
+function renderRankMatrixTable(report) {
+  const table = document.getElementById("rank-matrix-table");
+  const valueByPair = {};
+  report.matrix.forEach(r => { valueByPair[`${r.symbol}||${r.strategy}`] = r.metrics.avg_profit_per_trade_pct; });
+  const maxAbs = Math.max(...report.matrix.map(r => Math.abs(r.metrics.avg_profit_per_trade_pct)), 1);
+
+  let html = "<thead><tr><th>Símbolo \\ Estrategia</th>" + report.strategies.map(s => `<th>${strategyLabel(s)}</th>`).join("") + "</tr></thead><tbody>";
+  report.symbols.forEach(symbol => {
+    html += `<tr><td>${symbol}</td>`;
+    report.strategies.forEach(strategyName => {
+      const v = valueByPair[`${symbol}||${strategyName}`];
+      const intensity = Math.min(Math.abs(v) / maxAbs, 1);
+      const color = v >= 0
+        ? `color-mix(in srgb, var(--good) ${Math.round(intensity * 45)}%, transparent)`
+        : `color-mix(in srgb, var(--critical) ${Math.round(intensity * 45)}%, transparent)`;
+      html += `<td class="heat-cell" style="background:${color};">${fmtPct(v)}</td>`;
+    });
+    html += "</tr>";
+  });
+  table.innerHTML = html + "</tbody>";
+}
+
+function renderRankReport(report) {
+  document.getElementById("rank-results").style.display = "block";
+  renderRankByStrategyTable(report);
+  renderRankBySymbolTable(report);
+  renderRankMatrixTable(report);
+}
+
+document.getElementById("rank-form").addEventListener("submit", async (evt) => {
+  evt.preventDefault();
+  const runBtn = document.getElementById("rank-run-btn");
+  const synthetic = document.getElementById("rank-synthetic").checked;
+  const symbolsRaw = document.getElementById("rank-symbols").value.trim();
+  const symbols = symbolsRaw ? symbolsRaw.split(",").map(s => s.trim()).filter(Boolean) : [];
+
+  if (!synthetic && symbols.length === 0) {
+    setRankStatus("error", "Ingresa al menos un símbolo (separados por coma) o marca \"Usar perfiles sintéticos\".");
+    return;
+  }
+
+  const payload = {
+    symbols: symbols.length ? symbols : null,
+    synthetic,
+    period: document.getElementById("rank-period").value,
+    initial_capital: parseFloat(document.getElementById("rank-capital").value) || 10000,
+    commission_bps: parseFloat(document.getElementById("rank-commission").value) || 5,
+    allow_short: document.getElementById("rank-allow-short").checked,
+  };
+
+  runBtn.disabled = true;
+  setRankStatus("loading", "Comparando…");
+  document.getElementById("rank-results").style.display = "none";
+  try {
+    const resp = await fetch("/rank", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+    if (!resp.ok) {
+      const err = await resp.json().catch(() => ({}));
+      throw new Error(err.detail || `Error ${resp.status}`);
+    }
+    const report = await resp.json();
+    setRankStatus(null, "");
+    renderRankReport(report);
+  } catch (e) {
+    setRankStatus("error", e.message || "Ocurrió un error al comparar.");
   } finally {
     runBtn.disabled = false;
   }

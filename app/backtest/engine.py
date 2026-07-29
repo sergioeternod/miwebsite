@@ -25,29 +25,60 @@ class BacktestResult:
     equity_curve: pd.Series = field(default_factory=pd.Series)
 
 
-def extract_trades(enriched: pd.DataFrame, commission_bps: float = 0.0) -> list[dict]:
+def extract_trades(
+    enriched: pd.DataFrame,
+    commission_bps: float = 0.0,
+    equity_curve: pd.Series | None = None,
+    initial_capital: float = 10_000.0,
+) -> list[dict]:
     """Turn a -1/0/1 position series into a list of closed (and one possibly
     open) trades. A direct flip (long->short or short->long on the same bar)
-    closes the old trade and opens the new one at that bar's close."""
+    closes the old trade and opens the new one at that bar's close.
+
+    If `equity_curve` is given, each trade's `return_pct` and dollar
+    `pnl_amount` are derived directly from it (equity_at_exit / equity_at_entry)
+    instead of from the raw entry/exit price ratio. This matters for short
+    trades held over multiple bars: the equity curve compounds daily
+    percent-of-equity returns (rebalanced exposure), which is not the same
+    number as a simple entry-vs-exit price ratio once there's day-to-day
+    volatility during the trade (a well-known "compounding drag" effect) —
+    deriving from the equity curve keeps every reported number (including
+    dollar P&L) exactly consistent with the equity curve everything else is
+    built on, rather than silently disagreeing with it. Each trade's entry
+    base is carried forward from the previous trade's own exit equity (not
+    read off the equity curve by index), since a flipped position closes the
+    old trade and opens the new one on the very same bar — indexing off that
+    bar directly would double back into the old trade's own return. Without
+    an `equity_curve` (e.g. a caller inspecting positions in isolation),
+    falls back to the plain price-ratio calculation and `initial_capital` as
+    the notional base."""
     position = enriched["position"]
     close = enriched["Close"]
     commission_rate = commission_bps / 10000
 
     trades: list[dict] = []
     open_trade: dict | None = None
+    equity_base = initial_capital  # this trade's starting capital = the previous trade's ending capital
 
     def _close(exit_idx: int, mark_open: bool = False) -> None:
-        nonlocal open_trade
+        nonlocal open_trade, equity_base
         direction = open_trade["direction"]
         entry_idx = open_trade["entry_idx"]
         entry_price = open_trade["entry_price"]
         exit_price = float(close.iloc[exit_idx])
 
-        gross_return = (
-            exit_price / entry_price - 1 if direction == 1 else entry_price / exit_price - 1
-        )
-        commission_legs = 1 if mark_open else 2
-        net_return_pct = (gross_return - commission_legs * commission_rate) * 100
+        if equity_curve is not None:
+            equity_at_entry = equity_base
+            equity_at_exit = float(equity_curve.iloc[exit_idx])
+            net_return_pct = (equity_at_exit / equity_at_entry - 1) * 100
+            equity_base = equity_at_exit
+        else:
+            gross_return = (
+                exit_price / entry_price - 1 if direction == 1 else entry_price / exit_price - 1
+            )
+            commission_legs = 1 if mark_open else 2
+            net_return_pct = (gross_return - commission_legs * commission_rate) * 100
+            equity_at_entry = initial_capital
 
         trade = {
             "direction": "long" if direction == 1 else "short",
@@ -57,6 +88,7 @@ def extract_trades(enriched: pd.DataFrame, commission_bps: float = 0.0) -> list[
             "exit_price": exit_price,
             "bars_held": exit_idx - entry_idx,
             "return_pct": net_return_pct,
+            "pnl_amount": round(equity_at_entry * net_return_pct / 100, 2),
         }
         if mark_open:
             trade["open"] = True
@@ -102,7 +134,7 @@ def run_backtest(
     strategy_returns = position_shifted * daily_returns - trade_changes * commission_rate
     equity_curve = initial_capital * (1 + strategy_returns).cumprod()
 
-    trades = extract_trades(enriched, commission_bps)
+    trades = extract_trades(enriched, commission_bps, equity_curve=equity_curve, initial_capital=initial_capital)
     metrics = compute_metrics(equity_curve, trades, strategy_returns)
 
     return BacktestResult(
