@@ -74,7 +74,7 @@ def get_recommendation(
     period: str = "2y",
     interval: str = "1d",
     initial_capital: float = 10_000.0,
-    commission_bps: float = 5.0,
+    commission_bps: float | None = None,
     allow_short: bool = True,
     with_earnings: bool = False,
     with_news: bool = False,

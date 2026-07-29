@@ -40,7 +40,7 @@ def build_symbol_strategy_matrix(
     strategies: list[Strategy] | None = None,
     allow_short: bool = True,
     initial_capital: float = 10_000.0,
-    commission_bps: float = 5.0,
+    commission_bps: float | None = None,
 ) -> dict:
     """Run every strategy on every {label: df} entry and rank the results
     both ways: best symbol per strategy, and best strategy per symbol."""
@@ -91,7 +91,7 @@ def rank_real_symbols(
     end_date: str | None = None,
     allow_short: bool = True,
     initial_capital: float = 10_000.0,
-    commission_bps: float = 5.0,
+    commission_bps: float | None = None,
 ) -> dict:
     """Rank real Yahoo Finance symbols by how each strategy performs on them."""
     if not symbols:
@@ -112,7 +112,7 @@ def rank_synthetic_profiles(
     seed: int = 42,
     allow_short: bool = True,
     initial_capital: float = 10_000.0,
-    commission_bps: float = 5.0,
+    commission_bps: float | None = None,
 ) -> dict:
     """Rank synthetic market-character profiles (no network required) — a
     stand-in for "which symbols work best" when real tickers aren't reachable."""

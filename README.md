@@ -35,6 +35,15 @@ información histórica de mercado.
   `compare_strategies` rankea las estrategias por ganancia promedio por
   transacción para identificar cuál tiene mayor capacidad de ganancia en un
   instrumento dado.
+- **Comisión realista por tipo de instrumento** (`app/config.py`): si no se
+  especifica `commission_bps`, la app ya no asume un 0.05% (5 bps) plano para
+  todo — infiere el tipo de instrumento del símbolo y usa un costo "todo
+  incluido" (comisión + spread típico) grounded en las plataformas más
+  usadas: acciones/índices ~2 bps, forex ~1.5 bps, commodities ~3 bps, cripto
+  ~25 bps (los exchanges cripto cobran bastante más que un bróker de
+  acciones sin comisión). Ver "Comisión realista por tipo de instrumento" más
+  abajo para el detalle y las fuentes. Cualquier llamada puede seguir
+  pasando un `commission_bps` explícito para anular el valor automático.
 - **Simulador** (`app/simulate.py`): corre una estrategia (o todas) sobre
   datos históricos reales o sobre un escenario sintético multi-régimen
   (`app/data/synthetic.py`, con tramos alcistas/correctivos/laterales/bajistas)
@@ -125,12 +134,13 @@ información histórica de mercado.
 - **API REST (FastAPI)** y **CLI** para correr backtests, simulaciones,
   recomendaciones, validaciones, rankings, el screener, el escáner de
   oportunidades, el simulador de portafolio y los overlays de earnings/noticias.
-- Suite de tests (`pytest`, 146 casos) sobre datos sintéticos y llamadas HTTP
+- Suite de tests (`pytest`, 169 casos) sobre datos sintéticos y llamadas HTTP
   simuladas, sin depender de red real — incluye cobertura de posiciones
   largas y cortas, rangos de fecha, las tres validaciones de expectativa vs
   realidad, montos en dólares, el ranking de símbolos, el screener, el
-  escáner de oportunidades, el simulador de portafolio y los overlays de
-  earnings/noticias (con los clientes Finnhub/Alpha Vantage mockeados).
+  escáner de oportunidades, el simulador de portafolio, la comisión
+  automática por tipo de instrumento, y los overlays de earnings/noticias
+  (con los clientes Finnhub/Alpha Vantage mockeados).
 
 ## Comparación de las 5 estrategias
 
@@ -559,7 +569,7 @@ uvicorn app.api.main:app --reload
 
 ```
 app/
-  config.py            # clases de activos, símbolos de ejemplo
+  config.py            # clases de activos, símbolos de ejemplo, comisión realista por tipo de instrumento
   data/providers.py     # obtención de OHLCV (Yahoo Finance)
   data/synthetic.py      # generador de escenarios históricos sintéticos
   data/finnhub_client.py  # cliente HTTP de earnings surprises/calendario (Finnhub)
@@ -581,6 +591,39 @@ app/
   static/index.html       # pantalla web (5 pestañas: Simulador/Validación/Símbolos/Más rentables/Recomendación)
   cli.py                 # interfaz de línea de comandos
 tests/
+```
+
+## Comisión realista por tipo de instrumento
+
+Antes, todo backtest/simulación que no especificara `commission_bps` asumía
+un 0.05% (5 bps) plano — sin importar si era una acción, un cripto o un par
+de forex. Eso no refleja cómo cobran realmente las plataformas principales,
+así que ahora el default depende del tipo de instrumento (`app/config.py`,
+`DEFAULT_COMMISSION_BPS` / `infer_asset_class`):
+
+| Tipo de instrumento | Comisión "todo incluido" (ida, bps) | Por qué |
+|---|---|---|
+| Acciones / índices | 2 | La mayoría de brokers grandes (Schwab, Fidelity, Robinhood, E\*TRADE) cobran $0 de comisión, pero el spread/slippage de una acción líquida sigue costando un par de bps; el pricing por acción de IBKR cae en el mismo rango. |
+| Forex | 1.5 | Brokers ECN/spread crudo (Interactive Brokers, Pepperstone) rondan 0.4-0.8 pips todo incluido en EUR/USD; brokers "sin comisión" (eToro, Plus500) compensan con spread más ancho, así que el promedio ponderado entre plataformas queda algo más alto que el ECN puro. |
+| Commodities (futuros) | 3 | Comisiones por contrato (ej. brokers tipo NinjaTrader/AMP) equivalen a este rango del nocional para un contrato líquido. |
+| Cripto | 25 | Los exchanges centralizados cobran bastante más: Binance/Kraken rondan 10-25 bps taker, y el maker/taker retail de Coinbase (0.4%/0.6%) es aún más alto — el promedio entre plataformas grandes queda muy por encima del costo casi nulo de acciones/forex. |
+
+**Cómo se infiere el tipo de instrumento**: primero busca el símbolo exacto
+en el universo de ejemplo (`app/config.py`); si no está ahí, usa la
+convención de sufijo de Yahoo Finance — `=X` → forex, `=F` → commodity, `^`
+al inicio → índice, `XXX-USD`/`XXX-USDT`/etc. → cripto — y si nada coincide,
+asume acción (el default menos agresivo). Esto aplica automáticamente en
+CLI, API y pantalla web: si dejas el campo de comisión vacío (o no pasas
+`--commission-bps` / `commission_bps` en el body), se usa este valor; si
+pones un número explícito, ese número manda siempre.
+
+```bash
+# Sin --commission-bps: AAPL usa ~2 bps, BTC-USD usa ~25 bps automáticamente
+python -m app.cli simulate --synthetic --symbol AAPL --strategy sma_crossover
+python -m app.cli simulate --synthetic --symbol BTC-USD --strategy sma_crossover
+
+# Forzar un valor específico en cualquier comando (anula el automático)
+python -m app.cli backtest --symbol BTC-USD --strategy sma_crossover --commission-bps 15
 ```
 
 ## Nota técnica: montos en dólares y operaciones en corto

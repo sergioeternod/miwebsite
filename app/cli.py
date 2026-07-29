@@ -341,7 +341,9 @@ def build_parser() -> argparse.ArgumentParser:
     backtest_parser.add_argument("--period", default="2y")
     backtest_parser.add_argument("--interval", default="1d")
     backtest_parser.add_argument("--capital", type=float, default=10_000.0)
-    backtest_parser.add_argument("--commission-bps", type=float, default=5.0)
+    backtest_parser.add_argument("--commission-bps", type=float, default=None,
+        help="Basis points por operación; si se omite usa un promedio realista según el tipo de instrumento (acciones, cripto, forex, etc.)",
+    )
     backtest_parser.add_argument("--no-short", action="store_true", help="Desactiva las posiciones en corto")
     backtest_parser.set_defaults(func=cmd_backtest)
 
@@ -350,7 +352,9 @@ def build_parser() -> argparse.ArgumentParser:
     compare_parser.add_argument("--period", default="2y")
     compare_parser.add_argument("--interval", default="1d")
     compare_parser.add_argument("--capital", type=float, default=10_000.0)
-    compare_parser.add_argument("--commission-bps", type=float, default=5.0)
+    compare_parser.add_argument("--commission-bps", type=float, default=None,
+        help="Basis points por operación; si se omite usa un promedio realista según el tipo de instrumento (acciones, cripto, forex, etc.)",
+    )
     compare_parser.add_argument("--no-short", action="store_true", help="Desactiva las posiciones en corto")
     compare_parser.set_defaults(func=cmd_compare)
 
@@ -359,7 +363,9 @@ def build_parser() -> argparse.ArgumentParser:
     recommend_parser.add_argument("--period", default="2y")
     recommend_parser.add_argument("--interval", default="1d")
     recommend_parser.add_argument("--capital", type=float, default=10_000.0)
-    recommend_parser.add_argument("--commission-bps", type=float, default=5.0)
+    recommend_parser.add_argument("--commission-bps", type=float, default=None,
+        help="Basis points por operación; si se omite usa un promedio realista según el tipo de instrumento (acciones, cripto, forex, etc.)",
+    )
     recommend_parser.add_argument("--no-short", action="store_true", help="Desactiva las posiciones en corto")
     recommend_parser.add_argument(
         "--with-earnings", action="store_true", help="Ajusta la confianza con el historial de sorpresas de earnings (Finnhub)"
@@ -407,7 +413,9 @@ def build_parser() -> argparse.ArgumentParser:
     simulate_parser.add_argument("--start-date", default=None, help="ISO, ej. 2023-06-01 (prioridad sobre --period)")
     simulate_parser.add_argument("--end-date", default=None, help="ISO, ej. 2023-09-30")
     simulate_parser.add_argument("--capital", type=float, default=10_000.0)
-    simulate_parser.add_argument("--commission-bps", type=float, default=5.0)
+    simulate_parser.add_argument("--commission-bps", type=float, default=None,
+        help="Basis points por operación; si se omite usa un promedio realista según el tipo de instrumento (acciones, cripto, forex, etc.)",
+    )
     simulate_parser.add_argument("--no-short", action="store_true", help="Desactiva las posiciones en corto")
     simulate_parser.add_argument("--out", default=None, help="Ruta donde guardar el reporte completo en JSON")
     simulate_parser.set_defaults(func=cmd_simulate)
@@ -432,7 +440,9 @@ def build_parser() -> argparse.ArgumentParser:
     validate_parser.add_argument("--step", type=int, default=10, help="Separación en barras entre evaluaciones")
     validate_parser.add_argument("--warmup", type=int, default=110, help="Barras iniciales antes de empezar a evaluar")
     validate_parser.add_argument("--capital", type=float, default=10_000.0)
-    validate_parser.add_argument("--commission-bps", type=float, default=5.0)
+    validate_parser.add_argument("--commission-bps", type=float, default=None,
+        help="Basis points por operación; si se omite usa un promedio realista según el tipo de instrumento (acciones, cripto, forex, etc.)",
+    )
     validate_parser.add_argument("--no-short", action="store_true", help="Desactiva las posiciones en corto")
     validate_parser.add_argument("--out", default=None, help="Ruta donde guardar el reporte completo en JSON")
     validate_parser.set_defaults(func=cmd_validate)
@@ -448,7 +458,9 @@ def build_parser() -> argparse.ArgumentParser:
     rank_parser.add_argument("--start-date", default=None, help="ISO, ej. 2023-06-01 (prioridad sobre --period)")
     rank_parser.add_argument("--end-date", default=None, help="ISO, ej. 2023-09-30")
     rank_parser.add_argument("--capital", type=float, default=10_000.0)
-    rank_parser.add_argument("--commission-bps", type=float, default=5.0)
+    rank_parser.add_argument("--commission-bps", type=float, default=None,
+        help="Basis points por operación; si se omite usa un promedio realista según el tipo de instrumento (acciones, cripto, forex, etc.)",
+    )
     rank_parser.add_argument("--no-short", action="store_true", help="Desactiva las posiciones en corto")
     rank_parser.add_argument("--out", default=None, help="Ruta donde guardar el reporte completo en JSON")
     rank_parser.set_defaults(func=cmd_rank)
@@ -479,7 +491,9 @@ def build_parser() -> argparse.ArgumentParser:
     opportunities_parser.add_argument("--period", default="2y")
     opportunities_parser.add_argument("--interval", default="1d")
     opportunities_parser.add_argument("--capital", type=float, default=10_000.0)
-    opportunities_parser.add_argument("--commission-bps", type=float, default=5.0)
+    opportunities_parser.add_argument("--commission-bps", type=float, default=None,
+        help="Basis points por operación; si se omite usa un promedio realista según el tipo de instrumento (acciones, cripto, forex, etc.)",
+    )
     opportunities_parser.add_argument("--no-short", action="store_true", help="Desactiva las posiciones en corto")
     opportunities_parser.add_argument(
         "--with-earnings", action="store_true", help="Ajusta cada símbolo con el historial de earnings (Finnhub)"
@@ -506,7 +520,9 @@ def build_parser() -> argparse.ArgumentParser:
     portfolio_sim_parser.add_argument("--period", default="3y", help="Historial a traer por símbolo real (necesita cubrir --start-date + calentamiento)")
     portfolio_sim_parser.add_argument("--interval", default="1d")
     portfolio_sim_parser.add_argument("--capital", type=float, default=10_000.0)
-    portfolio_sim_parser.add_argument("--commission-bps", type=float, default=5.0)
+    portfolio_sim_parser.add_argument("--commission-bps", type=float, default=None,
+        help="Basis points por operación; si se omite usa un promedio realista según el tipo de instrumento (acciones, cripto, forex, etc.)",
+    )
     portfolio_sim_parser.add_argument("--no-short", action="store_true", help="Desactiva las posiciones en corto")
     portfolio_sim_parser.add_argument(
         "--step", type=int, default=1, help="Cada cuántos días se recalcula la señal (1 = todos los días; más alto = más rápido)"

@@ -13,6 +13,7 @@ from dataclasses import dataclass, field
 import pandas as pd
 
 from app.backtest.metrics import compute_metrics
+from app.config import default_commission_bps
 from app.strategies.base import Strategy
 
 
@@ -118,11 +119,17 @@ def run_backtest(
     strategy: Strategy,
     symbol: str = "",
     initial_capital: float = 10_000.0,
-    commission_bps: float = 5.0,
+    commission_bps: float | None = None,
 ) -> BacktestResult:
-    """Run `strategy` over historical OHLCV `df` and report performance."""
+    """Run `strategy` over historical OHLCV `df` and report performance.
+
+    `commission_bps=None` (the default) resolves to a realistic one-way cost
+    for `symbol`'s instrument type (see `app.config.DEFAULT_COMMISSION_BPS`)
+    instead of one flat guess for every asset class."""
     if len(df) < 5:
         raise ValueError("Se necesitan al menos 5 barras de datos históricos para backtestear.")
+    if commission_bps is None:
+        commission_bps = default_commission_bps(symbol)
 
     enriched = strategy.run(df)
 
@@ -151,7 +158,7 @@ def compare_strategies(
     strategies: list[Strategy],
     symbol: str = "",
     initial_capital: float = 10_000.0,
-    commission_bps: float = 5.0,
+    commission_bps: float | None = None,
 ) -> list[BacktestResult]:
     """Run every strategy and rank by average profit per trade (descending) —
     the metric that best answers "mayor capacidad de ganancia por transacción"."""

@@ -20,7 +20,7 @@ def walk_forward_recommendation_accuracy(
     warmup: int = 110,
     allow_short: bool = True,
     initial_capital: float = 10_000.0,
-    commission_bps: float = 5.0,
+    commission_bps: float | None = None,
 ) -> dict:
     if horizon < 1 or step < 1:
         raise ValueError("horizon y step deben ser >= 1")

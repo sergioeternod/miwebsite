@@ -11,7 +11,9 @@ class BacktestRequest(BaseModel):
     period: str = "2y"
     interval: str = "1d"
     initial_capital: float = 10_000.0
-    commission_bps: float = 5.0
+    commission_bps: float | None = Field(
+        None, description="Basis points por operación; si se omite usa un promedio realista según el tipo de instrumento (acciones, cripto, forex, etc.)"
+    )
     allow_short: bool = True
 
 
@@ -20,7 +22,9 @@ class CompareRequest(BaseModel):
     period: str = "2y"
     interval: str = "1d"
     initial_capital: float = 10_000.0
-    commission_bps: float = 5.0
+    commission_bps: float | None = Field(
+        None, description="Basis points por operación; si se omite usa un promedio realista según el tipo de instrumento (acciones, cripto, forex, etc.)"
+    )
     allow_short: bool = True
 
 
@@ -34,7 +38,9 @@ class SimulateRequest(BaseModel):
     start_date: str | None = Field(None, description="ISO, ej. 2023-06-01. Tiene prioridad sobre 'period'")
     end_date: str | None = Field(None, description="ISO, ej. 2023-09-30")
     initial_capital: float = 10_000.0
-    commission_bps: float = 5.0
+    commission_bps: float | None = Field(
+        None, description="Basis points por operación; si se omite usa un promedio realista según el tipo de instrumento (acciones, cripto, forex, etc.)"
+    )
     allow_short: bool = True
 
 
@@ -47,7 +53,9 @@ class RankRequest(BaseModel):
     start_date: str | None = Field(None, description="ISO, ej. 2023-06-01. Tiene prioridad sobre 'period'")
     end_date: str | None = Field(None, description="ISO, ej. 2023-09-30")
     initial_capital: float = 10_000.0
-    commission_bps: float = 5.0
+    commission_bps: float | None = Field(
+        None, description="Basis points por operación; si se omite usa un promedio realista según el tipo de instrumento (acciones, cripto, forex, etc.)"
+    )
     allow_short: bool = True
 
 
@@ -71,7 +79,9 @@ class OpportunitiesRequest(BaseModel):
     period: str = "2y"
     interval: str = "1d"
     initial_capital: float = 10_000.0
-    commission_bps: float = 5.0
+    commission_bps: float | None = Field(
+        None, description="Basis points por operación; si se omite usa un promedio realista según el tipo de instrumento (acciones, cripto, forex, etc.)"
+    )
     allow_short: bool = True
     with_earnings: bool = Field(False, description="Ajusta cada símbolo con el historial de earnings (Finnhub)")
     with_news: bool = Field(False, description="Ajusta cada símbolo con el sentimiento de noticias (Alpha Vantage)")
@@ -90,7 +100,9 @@ class PortfolioSimulateRequest(BaseModel):
     period: str = "3y"
     interval: str = "1d"
     initial_capital: float = 10_000.0
-    commission_bps: float = 5.0
+    commission_bps: float | None = Field(
+        None, description="Basis points por operación; si se omite usa un promedio realista según el tipo de instrumento (acciones, cripto, forex, etc.)"
+    )
     allow_short: bool = True
     step: int = Field(1, description="Cada cuántos días se recalcula la señal (1 = todos los días)")
 
@@ -108,5 +120,7 @@ class ValidateRequest(BaseModel):
     step: int = Field(10, description="Separación en barras entre evaluaciones del motor de recomendaciones")
     warmup: int = Field(110, description="Barras iniciales antes de empezar a evaluar recomendaciones")
     initial_capital: float = 10_000.0
-    commission_bps: float = 5.0
+    commission_bps: float | None = Field(
+        None, description="Basis points por operación; si se omite usa un promedio realista según el tipo de instrumento (acciones, cripto, forex, etc.)"
+    )
     allow_short: bool = True

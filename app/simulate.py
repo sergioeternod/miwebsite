@@ -9,6 +9,7 @@ from __future__ import annotations
 import pandas as pd
 
 from app.backtest.engine import compare_strategies, run_backtest
+from app.config import default_commission_bps
 from app.data.providers import get_ohlcv, filter_date_range
 from app.data.synthetic import generate_ohlcv, regimes_for_range
 from app.strategies import all_strategies, build_strategy
@@ -19,18 +20,24 @@ def simulate(
     strategy_name: str | None = None,
     symbol: str = "",
     initial_capital: float = 10_000.0,
-    commission_bps: float = 5.0,
+    commission_bps: float | None = None,
     allow_short: bool = True,
     regime_dates: list[tuple[str, str, str]] | None = None,
 ) -> dict:
     """Run one strategy (`strategy_name`) or all of them (None, ranked by
     average profit per trade) over historical `df` and return a full report.
 
+    `commission_bps=None` resolves to a realistic default for `symbol`'s
+    instrument type (see `app.config.DEFAULT_COMMISSION_BPS`); the resolved
+    value is echoed back in the report so it's clear what was actually used.
+
     `regime_dates` (from a synthetic scenario) are date-based, so they are
     remapped to `df`'s actual positions here — this works whether `df` is
     the full generated series or a date-sliced window of it."""
     if len(df) < 5:
         raise ValueError("Se necesitan al menos 5 barras de datos en el rango seleccionado.")
+    if commission_bps is None:
+        commission_bps = default_commission_bps(symbol)
 
     if strategy_name:
         strategies = [build_strategy(strategy_name, allow_short=allow_short)]
@@ -88,7 +95,7 @@ def simulate_symbol(
     start_date: str | None = None,
     end_date: str | None = None,
     initial_capital: float = 10_000.0,
-    commission_bps: float = 5.0,
+    commission_bps: float | None = None,
     allow_short: bool = True,
 ) -> dict:
     """Simulate on real historical data for `symbol` (any Yahoo Finance
@@ -113,7 +120,7 @@ def simulate_synthetic(
     start_date: str | None = None,
     end_date: str | None = None,
     initial_capital: float = 10_000.0,
-    commission_bps: float = 5.0,
+    commission_bps: float | None = None,
     allow_short: bool = True,
 ) -> dict:
     """Simulate on a generated synthetic scenario — no network required.

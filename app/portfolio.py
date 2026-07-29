@@ -20,7 +20,7 @@ import pandas as pd
 
 from app.backtest.engine import extract_trades
 from app.backtest.metrics import compute_metrics
-from app.config import EXAMPLE_SYMBOLS
+from app.config import EXAMPLE_SYMBOLS, default_commission_bps
 from app.data.providers import get_ohlcv
 from app.data.synthetic import generate_ohlcv
 from app.recommend.engine import recommend
@@ -93,7 +93,7 @@ def _select_portfolio(
     portfolio_size: int,
     allow_short: bool,
     initial_capital: float,
-    commission_bps: float,
+    commission_bps: float | None,
 ) -> list[dict]:
     """Ranks symbols by ensemble confidence using only data strictly before
     the simulation's start index (no lookahead), and returns the top
@@ -124,13 +124,21 @@ def _walk_forward_result(
     symbol: str,
     allow_short: bool,
     capital: float,
-    commission_bps: float,
+    commission_bps: float | None,
     step: int,
 ) -> dict:
     """Recomputes the ensemble recommendation every `step` bars from
     `start_idx` onward (using only df.iloc[:t+1] each time — never later
     data), converts each decision into a target position, and evaluates the
-    resulting equity curve with the same math as `app.backtest.engine`."""
+    resulting equity curve with the same math as `app.backtest.engine`.
+
+    `commission_bps=None` resolves once to a realistic default for `symbol`'s
+    instrument type — resolved here (not left to `recommend()`/`run_backtest`
+    to resolve internally) because this function also uses it directly for
+    its own equity-curve math below."""
+    if commission_bps is None:
+        commission_bps = default_commission_bps(symbol)
+
     positions = [0] * len(df)
     current = 0
     for t in range(start_idx, len(df)):
@@ -180,7 +188,7 @@ def _run_simulation(
     end_date: str | None,
     portfolio_size: int,
     initial_capital: float,
-    commission_bps: float,
+    commission_bps: float | None,
     allow_short: bool,
     step: int,
     errors: dict[str, str],
@@ -260,7 +268,7 @@ def simulate_portfolio_real(
     period: str = "3y",
     interval: str = "1d",
     initial_capital: float = 10_000.0,
-    commission_bps: float = 5.0,
+    commission_bps: float | None = None,
     allow_short: bool = True,
     step: int = 1,
 ) -> dict:
@@ -288,7 +296,7 @@ def simulate_portfolio_synthetic(
     portfolio_size: int = 5,
     seed: int = 42,
     initial_capital: float = 10_000.0,
-    commission_bps: float = 5.0,
+    commission_bps: float | None = None,
     allow_short: bool = True,
     step: int = 1,
 ) -> dict:

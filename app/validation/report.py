@@ -25,7 +25,7 @@ def build_validation_report(
     warmup: int = 110,
     allow_short: bool = True,
     initial_capital: float = 10_000.0,
-    commission_bps: float = 5.0,
+    commission_bps: float | None = None,
     regime_dates: list[tuple[str, str, str]] | None = None,
 ) -> dict:
     if len(df) < warmup + horizon + 1:

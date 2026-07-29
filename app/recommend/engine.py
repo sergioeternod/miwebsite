@@ -42,7 +42,7 @@ def recommend(
     symbol: str = "",
     strategies: list[Strategy] | None = None,
     initial_capital: float = 10_000.0,
-    commission_bps: float = 5.0,
+    commission_bps: float | None = None,
     allow_short: bool = True,
 ) -> dict:
     strategies = strategies or all_strategies(allow_short=allow_short)
@@ -108,7 +108,7 @@ def recommend_for_symbol(
     interval: str = "1d",
     strategies: list[Strategy] | None = None,
     initial_capital: float = 10_000.0,
-    commission_bps: float = 5.0,
+    commission_bps: float | None = None,
     allow_short: bool = True,
     include_earnings: bool = False,
     finnhub_api_key: str | None = None,

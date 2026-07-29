@@ -265,7 +265,7 @@
       </div>
       <div class="field">
         <label for="commission">Comisión (bps)</label>
-        <input type="number" id="commission" name="commission" value="5" min="0" step="1">
+        <input type="number" id="commission" name="commission" placeholder="auto" min="0" step="0.1">
       </div>
       <div class="field checkbox">
         <input type="checkbox" id="allow_short" name="allow_short" checked>
@@ -357,7 +357,7 @@
         </div>
         <div class="field">
           <label for="val-commission">Comisión (bps)</label>
-          <input type="number" id="val-commission" name="commission" value="5" min="0" step="1">
+          <input type="number" id="val-commission" name="commission" placeholder="auto" min="0" step="0.1">
         </div>
         <div class="field checkbox">
           <input type="checkbox" id="val-allow-short" name="allow_short" checked>
@@ -456,7 +456,7 @@
         </div>
         <div class="field">
           <label for="rank-commission">Comisión (bps)</label>
-          <input type="number" id="rank-commission" value="5" min="0" step="1">
+          <input type="number" id="rank-commission" placeholder="auto" min="0" step="0.1">
         </div>
         <div class="field checkbox">
           <input type="checkbox" id="rank-allow-short" checked>
@@ -638,7 +638,7 @@
         </div>
         <div class="field">
           <label for="recommend-commission">Comisión (bps)</label>
-          <input type="number" id="recommend-commission" value="5" min="0" step="1">
+          <input type="number" id="recommend-commission" placeholder="auto" min="0" step="0.1">
         </div>
         <div class="field checkbox">
           <input type="checkbox" id="recommend-allow-short" checked>
@@ -749,6 +749,12 @@ function fmtMoneySigned(v) {
   if (v === null || v === undefined) return "—";
   const sign = v > 0 ? "+" : v < 0 ? "-" : "";
   return `${sign}$${Math.abs(v).toLocaleString("en-US", { maximumFractionDigits: 0 })}`;
+}
+// Empty commission field -> null, so the backend resolves a realistic
+// per-instrument default (stocks/forex/crypto/etc.) instead of one flat guess.
+function commissionBpsOrNull(inputId) {
+  const raw = document.getElementById(inputId).value.trim();
+  return raw ? parseFloat(raw) : null;
 }
 
 const CHART_W = 960, CHART_H = 360;
@@ -1053,7 +1059,7 @@ document.getElementById("sim-form").addEventListener("submit", async (evt) => {
     start_date: startDate,
     end_date: endDate,
     initial_capital: parseFloat(document.getElementById("capital").value) || 10000,
-    commission_bps: parseFloat(document.getElementById("commission").value) || 5,
+    commission_bps: commissionBpsOrNull("commission"),
     allow_short: document.getElementById("allow_short").checked,
   };
 
@@ -1318,7 +1324,7 @@ document.getElementById("val-form").addEventListener("submit", async (evt) => {
     start_date: startDate,
     end_date: endDate,
     initial_capital: parseFloat(document.getElementById("val-capital").value) || 10000,
-    commission_bps: parseFloat(document.getElementById("val-commission").value) || 5,
+    commission_bps: commissionBpsOrNull("val-commission"),
     allow_short: document.getElementById("val-allow-short").checked,
     split_ratio: (parseFloat(document.getElementById("val-split-ratio").value) || 50) / 100,
     horizon: parseInt(document.getElementById("val-horizon").value, 10) || 10,
@@ -1434,7 +1440,7 @@ document.getElementById("rank-form").addEventListener("submit", async (evt) => {
     synthetic,
     period: document.getElementById("rank-period").value,
     initial_capital: parseFloat(document.getElementById("rank-capital").value) || 10000,
-    commission_bps: parseFloat(document.getElementById("rank-commission").value) || 5,
+    commission_bps: commissionBpsOrNull("rank-commission"),
     allow_short: document.getElementById("rank-allow-short").checked,
   };
 
@@ -1671,11 +1677,12 @@ async function runSingleSymbolRecommendation() {
   const params = new URLSearchParams({
     period: document.getElementById("recommend-period").value,
     initial_capital: parseFloat(document.getElementById("recommend-capital").value) || 10000,
-    commission_bps: parseFloat(document.getElementById("recommend-commission").value) || 5,
     allow_short: document.getElementById("recommend-allow-short").checked,
     with_earnings: document.getElementById("recommend-with-earnings").checked,
     with_news: document.getElementById("recommend-with-news").checked,
   });
+  const commissionBps = commissionBpsOrNull("recommend-commission");
+  if (commissionBps !== null) params.set("commission_bps", commissionBps);
 
   runBtn.disabled = true;
   setRecommendStatus("loading", "Consultando…");

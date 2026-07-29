@@ -46,7 +46,7 @@ def strategy_directional_accuracy(
     strategy: Strategy,
     symbol: str = "",
     initial_capital: float = 10_000.0,
-    commission_bps: float = 5.0,
+    commission_bps: float | None = None,
 ) -> dict:
     result = run_backtest(
         df, strategy, symbol=symbol, initial_capital=initial_capital, commission_bps=commission_bps
@@ -63,7 +63,7 @@ def compare_directional_accuracy(
     strategies: list[Strategy],
     symbol: str = "",
     initial_capital: float = 10_000.0,
-    commission_bps: float = 5.0,
+    commission_bps: float | None = None,
 ) -> list[dict]:
     return [
         strategy_directional_accuracy(

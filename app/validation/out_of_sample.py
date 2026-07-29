@@ -25,7 +25,7 @@ def split_backtest_periods(
     split_ratio: float = 0.5,
     symbol: str = "",
     initial_capital: float = 10_000.0,
-    commission_bps: float = 5.0,
+    commission_bps: float | None = None,
 ) -> dict:
     if not 0 < split_ratio < 1:
         raise ValueError("split_ratio debe estar entre 0 y 1")
@@ -99,7 +99,7 @@ def out_of_sample_comparison(
     split_ratio: float = 0.5,
     symbol: str = "",
     initial_capital: float = 10_000.0,
-    commission_bps: float = 5.0,
+    commission_bps: float | None = None,
 ) -> list[dict]:
     """Run `split_backtest_periods` for every strategy."""
     return [

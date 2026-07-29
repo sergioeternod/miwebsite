@@ -1,3 +1,4 @@
+import re
 from enum import Enum
 
 
@@ -54,3 +55,61 @@ EXAMPLE_SYMBOLS = {
 
 DEFAULT_INTERVAL = "1d"
 DEFAULT_PERIOD = "2y"
+
+# Rough "all-in" round-trip trading cost (commission + typical spread/slippage
+# for a liquid instrument) at major retail platforms, expressed one-way in
+# basis points — this is what a single entry or exit costs, matching how
+# commission_bps is applied per position change throughout this app. Grounded
+# in real fee structures rather than one flat guess for every instrument:
+# - Stocks/index ETFs: most major US brokers (Schwab, Fidelity, Robinhood,
+#   E*TRADE) charge $0 commission, but liquid-stock spread/slippage still
+#   costs a couple of bps; IBKR-style per-share pricing lands in the same
+#   range. ~2 bps.
+# - Forex: ECN/raw-spread brokers (Interactive Brokers, Pepperstone) run
+#   ~0.4-0.8 pips all-in round-turn on EUR/USD (~0.2-0.4 bps one-way);
+#   "commission-free" retail brokers (eToro, Plus500) embed a wider spread
+#   instead, so a blended average across major platforms lands higher. ~1.5 bps.
+# - Commodities (futures): per-contract fees (e.g. ~$2-5/contract at
+#   NinjaTrader/AMP) translate to roughly this share of notional for a
+#   liquid contract. ~3 bps.
+# - Crypto: centralized exchanges range widely — Binance/Kraken run
+#   ~10-25 bps taker, Coinbase's retail maker/taker (0.4%/0.6%) is much
+#   higher — a blended average across major platforms is well above the
+#   near-zero cost of stocks/forex. ~25 bps.
+DEFAULT_COMMISSION_BPS = {
+    AssetClass.STOCK: 2.0,
+    AssetClass.INDEX: 2.0,
+    AssetClass.COMMODITY: 3.0,
+    AssetClass.FOREX: 1.5,
+    AssetClass.CRYPTO: 25.0,
+}
+
+_SYMBOL_ASSET_CLASS = {
+    entry["symbol"]: asset_class for asset_class, entries in EXAMPLE_SYMBOLS.items() for entry in entries
+}
+_CRYPTO_PAIR_RE = re.compile(r"^[A-Z0-9]+-(USD|USDT|USDC|EUR|GBP|BTC|ETH)$")
+
+
+def infer_asset_class(symbol: str) -> AssetClass:
+    """Best-effort guess at a symbol's asset class from its Yahoo-Finance-style
+    ticker convention, falling back to the example-symbol list for anything
+    that matches it exactly. Defaults to STOCK when nothing else matches —
+    the most common case and the least aggressive default commission."""
+    if symbol in _SYMBOL_ASSET_CLASS:
+        return _SYMBOL_ASSET_CLASS[symbol]
+    upper = symbol.upper()
+    if upper.endswith("=X"):
+        return AssetClass.FOREX
+    if upper.endswith("=F"):
+        return AssetClass.COMMODITY
+    if upper.startswith("^"):
+        return AssetClass.INDEX
+    if _CRYPTO_PAIR_RE.match(upper):
+        return AssetClass.CRYPTO
+    return AssetClass.STOCK
+
+
+def default_commission_bps(symbol: str) -> float:
+    """The realistic one-way commission/cost assumption for `symbol`, used
+    whenever a caller doesn't explicitly specify one (see DEFAULT_COMMISSION_BPS)."""
+    return DEFAULT_COMMISSION_BPS[infer_asset_class(symbol)]
