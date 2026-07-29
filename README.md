@@ -36,7 +36,13 @@ información histórica de mercado.
   (`app/data/synthetic.py`, con tramos alcistas/correctivos/laterales/bajistas)
   y devuelve un reporte completo (métricas, bitácora de operaciones, curva de
   capital, serie de precios) — útil para validar el motor sin depender de
-  acceso a internet.
+  acceso a internet. Acepta `start_date`/`end_date` para simular sobre un
+  rango de fechas exacto en vez de un periodo relativo.
+- **Pantalla web del simulador** (`app/static/index.html`, servida en `/` por
+  la API): formulario para elegir símbolo (o escenario sintético), rango de
+  fechas, estrategia y shorts, con gráfico de precio + señales, curva de
+  capital comparada contra buy&hold, tabla de métricas y bitácora de
+  operaciones — todo interactivo (hover con tooltip, selector de estrategia).
 - **Motor de recomendaciones**: ejecuta todas las estrategias sobre los datos
   más recientes y combina sus señales (BUY/SELL_SHORT/HOLD) ponderadas por el
   desempeño histórico de cada estrategia en ese instrumento específico,
@@ -44,8 +50,8 @@ información histórica de mercado.
   técnico detrás.
 - **API REST (FastAPI)** y **CLI** para correr backtests, simulaciones y
   recomendaciones.
-- Suite de tests (`pytest`, 38 casos) sobre datos sintéticos, sin depender de
-  red — incluye cobertura de posiciones largas y cortas.
+- Suite de tests (`pytest`, 47 casos) sobre datos sintéticos, sin depender de
+  red — incluye cobertura de posiciones largas y cortas, y de rangos de fecha.
 
 ## Instalación
 
@@ -67,7 +73,24 @@ python -m app.cli simulate --synthetic --out reporte.json
 
 # Cualquier comando acepta --no-short para restringir a solo posiciones largas
 python -m app.cli backtest --symbol BTC-USD --strategy sma_crossover --no-short
+
+# Simulador con rango de fechas explícito
+python -m app.cli simulate --symbol AAPL --start-date 2023-06-01 --end-date 2023-09-30
 ```
+
+## Uso — Pantalla web (simulador)
+
+```bash
+uvicorn app.api.main:app --reload
+```
+
+Abre `http://localhost:8000/` en el navegador: formulario con símbolo,
+**rango de fechas** (desde/hasta), estrategia (o "Todas" para comparar) y el
+switch de posiciones cortas. Si no hay acceso a datos de mercado en vivo,
+marca "Usar escenario sintético" para probar el motor con el histórico
+generado (2023-01-01 a 2023-11-16) — el rango de fechas recorta dentro de esa
+ventana. Muestra precio con señales de entrada/salida, curva de capital
+comparada contra buy&hold, tabla de métricas y bitácora de operaciones.
 
 ## Uso — API
 
@@ -81,7 +104,7 @@ uvicorn app.api.main:app --reload
 - `GET /recommend/{symbol}?period=2y&interval=1d`
 - `POST /backtest` — body: `{"symbol": "AAPL", "strategy": "sma_crossover", "period": "2y", "allow_short": true}`
 - `POST /backtest/compare` — body: `{"symbol": "BTC-USD", "period": "1y"}`
-- `POST /simulate` — body: `{"symbol": "AAPL", "period": "2y"}` o `{"synthetic": true, "strategy": "sma_crossover"}`
+- `POST /simulate` — body: `{"symbol": "AAPL", "start_date": "2023-06-01", "end_date": "2023-09-30"}` o `{"synthetic": true, "strategy": "sma_crossover", "start_date": "2023-04-01", "end_date": "2023-09-30"}`
 
 ## Estructura del proyecto
 
@@ -94,8 +117,9 @@ app/
   strategies/           # framework base (long/short) + 4 estrategias concretas
   backtest/             # motor de backtesting + métricas
   recommend/engine.py    # ensemble de recomendaciones
-  simulate.py            # simulador (datos reales o sintéticos)
-  api/main.py            # FastAPI
+  simulate.py            # simulador (datos reales o sintéticos, con rango de fechas)
+  api/main.py            # FastAPI (sirve también la pantalla web en "/")
+  static/index.html       # pantalla web del simulador
   cli.py                 # interfaz de línea de comandos
 tests/
 ```

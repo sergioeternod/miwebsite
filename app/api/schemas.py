@@ -29,6 +29,8 @@ class SimulateRequest(BaseModel):
     seed: int = 42
     period: str = "2y"
     interval: str = "1d"
+    start_date: str | None = Field(None, description="ISO, ej. 2023-06-01. Tiene prioridad sobre 'period'")
+    end_date: str | None = Field(None, description="ISO, ej. 2023-09-30")
     initial_capital: float = 10_000.0
     commission_bps: float = 5.0
     allow_short: bool = True

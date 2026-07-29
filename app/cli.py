@@ -79,6 +79,8 @@ def cmd_simulate(args: argparse.Namespace) -> None:
             strategy_name=args.strategy,
             symbol=args.symbol or "SYNTH",
             seed=args.seed,
+            start_date=args.start_date,
+            end_date=args.end_date,
             initial_capital=args.capital,
             commission_bps=args.commission_bps,
             allow_short=not args.no_short,
@@ -91,6 +93,8 @@ def cmd_simulate(args: argparse.Namespace) -> None:
             strategy_name=args.strategy,
             period=args.period,
             interval=args.interval,
+            start_date=args.start_date,
+            end_date=args.end_date,
             initial_capital=args.capital,
             commission_bps=args.commission_bps,
             allow_short=not args.no_short,
@@ -159,6 +163,8 @@ def build_parser() -> argparse.ArgumentParser:
     simulate_parser.add_argument("--seed", type=int, default=42, help="Semilla del escenario sintético")
     simulate_parser.add_argument("--period", default="2y")
     simulate_parser.add_argument("--interval", default="1d")
+    simulate_parser.add_argument("--start-date", default=None, help="ISO, ej. 2023-06-01 (prioridad sobre --period)")
+    simulate_parser.add_argument("--end-date", default=None, help="ISO, ej. 2023-09-30")
     simulate_parser.add_argument("--capital", type=float, default=10_000.0)
     simulate_parser.add_argument("--commission-bps", type=float, default=5.0)
     simulate_parser.add_argument("--no-short", action="store_true", help="Desactiva las posiciones en corto")

@@ -1,15 +1,17 @@
 from __future__ import annotations
 
 from dataclasses import asdict
+from pathlib import Path
 
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Response
+from fastapi.staticfiles import StaticFiles
 
 from app.api.schemas import BacktestRequest, CompareRequest, SimulateRequest
 from app.backtest.engine import BacktestResult, compare_strategies, run_backtest
 from app.config import EXAMPLE_SYMBOLS
 from app.data.providers import DataUnavailableError, get_ohlcv
 from app.recommend.engine import recommend
-from app.simulate import simulate, simulate_synthetic
+from app.simulate import simulate_symbol, simulate_synthetic
 from app.strategies import STRATEGY_REGISTRY, all_strategies, build_strategy
 
 app = FastAPI(
@@ -115,17 +117,21 @@ def post_simulate(request: SimulateRequest) -> dict:
                 strategy_name=request.strategy,
                 symbol=request.symbol or "SYNTH",
                 seed=request.seed,
+                start_date=request.start_date,
+                end_date=request.end_date,
                 initial_capital=request.initial_capital,
                 commission_bps=request.commission_bps,
                 allow_short=request.allow_short,
             )
         if not request.symbol:
             raise HTTPException(status_code=400, detail="symbol es obligatorio salvo que synthetic=true")
-        df = get_ohlcv(request.symbol, period=request.period, interval=request.interval)
-        return simulate(
-            df,
+        return simulate_symbol(
+            request.symbol,
             strategy_name=request.strategy,
-            symbol=request.symbol,
+            period=request.period,
+            interval=request.interval,
+            start_date=request.start_date,
+            end_date=request.end_date,
             initial_capital=request.initial_capital,
             commission_bps=request.commission_bps,
             allow_short=request.allow_short,
@@ -134,3 +140,14 @@ def post_simulate(request: SimulateRequest) -> dict:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@app.get("/favicon.ico", include_in_schema=False)
+def favicon() -> Response:
+    return Response(status_code=204)
+
+
+# Serves app/static/index.html (the simulator screen) at "/". Mounted last so
+# it never shadows the API routes declared above.
+_STATIC_DIR = Path(__file__).resolve().parent.parent / "static"
+app.mount("/", StaticFiles(directory=_STATIC_DIR, html=True), name="static")

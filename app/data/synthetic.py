@@ -69,5 +69,30 @@ def generate_ohlcv(
     )
     df.index = pd.date_range(start_date, periods=n, freq="D")
     df.index.name = "Date"
-    df.attrs["regimes"] = regime_bounds
+    # Store regime boundaries as dates (not integer positions): positions only
+    # make sense against this exact df, and become wrong the moment the
+    # caller slices it down to a date range. `regimes_for_range` recomputes
+    # positions against whatever (possibly sliced) df is actually plotted.
+    df.attrs["regimes"] = [
+        (name, str(df.index[min(start_idx, n - 1)].date()), str(df.index[min(end_idx, n - 1)].date()))
+        for name, start_idx, end_idx in regime_bounds
+    ]
     return df
+
+
+def regimes_for_range(
+    df: pd.DataFrame, regime_dates: list[tuple[str, str, str]]
+) -> list[tuple[str, int, int]]:
+    """Recompute integer (start_idx, end_idx) bounds for `regime_dates`
+    against `df`'s actual index — which may be a date-sliced subset of the
+    df the regimes were originally generated on. Regimes fully outside the
+    window are dropped; partially-overlapping ones are clipped."""
+    idx = df.index
+    result = []
+    for name, start_d, end_d in regime_dates:
+        mask = (idx >= pd.Timestamp(start_d)) & (idx <= pd.Timestamp(end_d))
+        positions = np.flatnonzero(mask)
+        if len(positions) == 0:
+            continue
+        result.append((name, int(positions[0]), int(positions[-1])))
+    return result

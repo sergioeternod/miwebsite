@@ -1,0 +1,593 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Trading Signals — Simulador</title>
+<style>
+  :root {
+    color-scheme: light;
+    --surface-1:      #fcfcfb;
+    --page:           #f9f9f7;
+    --text-primary:   #0b0b0b;
+    --text-secondary: #52514e;
+    --text-muted:     #898781;
+    --grid:           #e1e0d9;
+    --baseline:       #c3c2b7;
+    --border:         rgba(11,11,11,0.10);
+    --good:           #0ca30c;
+    --critical:       #d03b3b;
+    --series-1:       #2a78d6;
+    --series-2:       #eb6834;
+    --series-3:       #1baf7a;
+    --series-4:       #eda100;
+    --accent:         #2a78d6;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:where(:not([data-theme="light"])) {
+      color-scheme: dark;
+      --surface-1:      #1a1a19;
+      --page:           #0d0d0d;
+      --text-primary:   #ffffff;
+      --text-secondary: #c3c2b7;
+      --text-muted:     #898781;
+      --grid:           #2c2c2a;
+      --baseline:       #383835;
+      --border:         rgba(255,255,255,0.10);
+      --good:           #0ca30c;
+      --critical:       #e66767;
+      --series-1:       #3987e5;
+      --series-2:       #d95926;
+      --series-3:       #199e70;
+      --series-4:       #c98500;
+      --accent:         #3987e5;
+    }
+  }
+  :root[data-theme="dark"] {
+    color-scheme: dark;
+    --surface-1:      #1a1a19;
+    --page:           #0d0d0d;
+    --text-primary:   #ffffff;
+    --text-secondary: #c3c2b7;
+    --text-muted:     #898781;
+    --grid:           #2c2c2a;
+    --baseline:       #383835;
+    --border:         rgba(255,255,255,0.10);
+    --good:           #0ca30c;
+    --critical:       #e66767;
+    --series-1:       #3987e5;
+    --series-2:       #d95926;
+    --series-3:       #199e70;
+    --series-4:       #c98500;
+    --accent:         #3987e5;
+  }
+
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--page); color: var(--text-primary);
+    font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+  }
+  .wrap { max-width: 1040px; margin: 0 auto; padding: 28px 20px 64px; }
+  h1 { font-size: 22px; margin: 0 0 4px; }
+  .subtitle { color: var(--text-secondary); font-size: 14px; margin: 0 0 20px; }
+
+  .disclaimer {
+    display: flex; gap: 10px; align-items: flex-start;
+    background: var(--surface-1); border: 1px solid var(--border);
+    border-radius: 10px; padding: 12px 14px; margin-bottom: 20px;
+    font-size: 13px; color: var(--text-secondary);
+  }
+
+  .card {
+    background: var(--surface-1); border: 1px solid var(--border);
+    border-radius: 12px; padding: 18px 20px; margin-bottom: 20px;
+  }
+  .card h2 { font-size: 15px; margin: 0 0 2px; }
+  .card .desc { font-size: 13px; color: var(--text-secondary); margin: 0 0 14px; }
+
+  form.controls-form {
+    display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 12px 14px; align-items: end;
+  }
+  .field { display: flex; flex-direction: column; gap: 4px; }
+  .field label { font-size: 12px; color: var(--text-secondary); }
+  .field.checkbox { flex-direction: row; align-items: center; gap: 6px; }
+  .field.checkbox label { font-size: 13px; color: var(--text-primary); }
+  input, select {
+    font: inherit; font-size: 13px; padding: 7px 10px; border-radius: 8px;
+    border: 1px solid var(--border); background: var(--surface-1); color: var(--text-primary);
+    width: 100%;
+  }
+  input[type="checkbox"] { width: auto; }
+  button.run-btn {
+    grid-column: 1 / -1; justify-self: start;
+    font: inherit; font-size: 14px; font-weight: 600; padding: 10px 22px;
+    border-radius: 9px; border: none; background: var(--accent); color: #fff; cursor: pointer;
+  }
+  button.run-btn:disabled { opacity: 0.6; cursor: default; }
+  .hint { font-size: 12px; color: var(--text-muted); grid-column: 1 / -1; margin-top: -4px; }
+
+  .status-banner {
+    display: none; padding: 12px 14px; border-radius: 10px; font-size: 13px; margin-bottom: 20px;
+  }
+  .status-banner.error { display: block; background: color-mix(in srgb, var(--critical) 12%, transparent); color: var(--critical); border: 1px solid color-mix(in srgb, var(--critical) 30%, transparent); }
+  .status-banner.loading { display: block; background: var(--surface-1); color: var(--text-secondary); border: 1px solid var(--border); }
+
+  #results { display: none; }
+
+  .stat-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 14px; margin-bottom: 20px; }
+  .stat-tile {
+    background: var(--surface-1); border: 1px solid var(--border); border-radius: 12px;
+    padding: 14px 16px;
+  }
+  .stat-tile .label { font-size: 12px; color: var(--text-secondary); margin-bottom: 6px; }
+  .stat-tile .value { font-size: 22px; font-weight: 600; }
+  .stat-tile .value.pos { color: var(--good); }
+  .stat-tile .value.neg { color: var(--critical); }
+
+  .controls { display: flex; align-items: center; gap: 10px; margin-bottom: 12px; flex-wrap: wrap; }
+  .legend { display: flex; gap: 16px; flex-wrap: wrap; font-size: 12px; color: var(--text-secondary); margin-top: 8px; }
+  .legend .item { display: flex; align-items: center; gap: 6px; }
+  .legend .swatch { width: 10px; height: 10px; border-radius: 50%; display: inline-block; }
+  .legend .line-swatch { width: 14px; height: 2px; border-radius: 2px; display: inline-block; }
+
+  svg.chart { width: 100%; height: auto; display: block; overflow: visible; }
+  .axis-text { fill: var(--text-muted); font-size: 10px; }
+  .gridline { stroke: var(--grid); stroke-width: 1; }
+  .regime-band-label { fill: var(--text-muted); font-size: 10px; }
+
+  .tooltip {
+    position: absolute; pointer-events: none; background: var(--surface-1);
+    border: 1px solid var(--border); border-radius: 8px; padding: 8px 10px;
+    font-size: 12px; color: var(--text-primary); box-shadow: 0 4px 16px rgba(0,0,0,0.12);
+    display: none; white-space: nowrap; z-index: 10;
+  }
+  .tooltip .row { display: flex; justify-content: space-between; gap: 12px; }
+  .tooltip .row .k { color: var(--text-secondary); display: flex; align-items: center; gap: 6px; }
+  .chart-container { position: relative; }
+
+  table.metrics, table.trades { width: 100%; border-collapse: collapse; font-size: 13px; }
+  table.metrics th, table.metrics td, table.trades th, table.trades td {
+    text-align: right; padding: 8px 10px; border-bottom: 1px solid var(--grid);
+    font-variant-numeric: tabular-nums;
+  }
+  table.metrics th:first-child, table.metrics td:first-child,
+  table.trades th:first-child, table.trades td:first-child { text-align: left; font-variant-numeric: normal; }
+  table.metrics th, table.trades th { color: var(--text-secondary); font-weight: 500; font-size: 12px; }
+  table.metrics tr.best td { font-weight: 600; }
+  table.metrics tr.best td:first-child::after { content: " \2605"; color: var(--good); }
+  .scroll-x { overflow-x: auto; }
+  table.trades { min-width: 640px; }
+  .dir-tag { font-size: 11px; padding: 2px 6px; border-radius: 5px; }
+  .dir-tag.long { background: color-mix(in srgb, var(--good) 16%, transparent); color: var(--good); }
+  .dir-tag.short { background: color-mix(in srgb, var(--critical) 16%, transparent); color: var(--critical); }
+  .ret.pos { color: var(--good); }
+  .ret.neg { color: var(--critical); }
+
+  footer { margin-top: 28px; font-size: 12px; color: var(--text-muted); line-height: 1.6; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>Simulador de trading</h1>
+  <p class="subtitle">Elige un símbolo (o un escenario sintético), un rango de fechas y una estrategia, y corre la simulación sobre datos históricos.</p>
+
+  <div class="disclaimer">
+    ⚠️ <strong>No es asesoría financiera.</strong> Resultados basados en indicadores técnicos y backtests históricos; el desempeño pasado no garantiza resultados futuros.
+  </div>
+
+  <div class="card">
+    <h2>Parámetros de la simulación</h2>
+    <p class="desc">Si el entorno no tiene acceso a datos de mercado en vivo, marca "Usar escenario sintético" para probar el motor con un histórico generado.</p>
+    <form class="controls-form" id="sim-form">
+      <div class="field">
+        <label for="symbol">Símbolo</label>
+        <input id="symbol" name="symbol" placeholder="AAPL, BTC-USD, EURUSD=X..." list="symbol-examples">
+        <datalist id="symbol-examples"></datalist>
+      </div>
+      <div class="field">
+        <label for="start_date">Desde</label>
+        <input type="date" id="start_date" name="start_date">
+      </div>
+      <div class="field">
+        <label for="end_date">Hasta</label>
+        <input type="date" id="end_date" name="end_date">
+      </div>
+      <div class="field">
+        <label for="strategy">Estrategia</label>
+        <select id="strategy" name="strategy">
+          <option value="">Todas (comparar)</option>
+        </select>
+      </div>
+      <div class="field">
+        <label for="capital">Capital inicial</label>
+        <input type="number" id="capital" name="capital" value="10000" min="100" step="100">
+      </div>
+      <div class="field">
+        <label for="commission">Comisión (bps)</label>
+        <input type="number" id="commission" name="commission" value="5" min="0" step="1">
+      </div>
+      <div class="field checkbox">
+        <input type="checkbox" id="allow_short" name="allow_short" checked>
+        <label for="allow_short">Permitir posiciones cortas</label>
+      </div>
+      <div class="field checkbox">
+        <input type="checkbox" id="synthetic" name="synthetic">
+        <label for="synthetic">Usar escenario sintético (sin red)</label>
+      </div>
+      <button type="submit" class="run-btn" id="run-btn">Simular</button>
+      <div class="hint">El escenario sintético cubre 2023-01-01 a 2023-11-16 (alza, corrección, lateral, caída fuerte, recuperación) — el rango de fechas recorta dentro de esa ventana.</div>
+    </form>
+  </div>
+
+  <div class="status-banner" id="status-banner"></div>
+
+  <div id="results">
+    <div class="card">
+      <h2>Resumen</h2>
+      <div class="stat-row" id="summary-tiles"></div>
+    </div>
+
+    <div class="card">
+      <h2>Precio y señales</h2>
+      <p class="desc">Tramos de mercado sombreados (solo escenario sintético); marcadores llenos = apertura, huecos = cierre.</p>
+      <div class="controls">
+        <label for="marker-select" style="font-size:13px;color:var(--text-secondary);">Mostrar operaciones de:</label>
+        <select id="marker-select"></select>
+      </div>
+      <div class="chart-container">
+        <svg class="chart" id="price-chart" viewBox="0 0 960 360" preserveAspectRatio="xMidYMid meet"></svg>
+        <div class="tooltip" id="price-tooltip"></div>
+      </div>
+      <div class="legend">
+        <span class="item"><span class="swatch" style="background:var(--good)"></span>Compra / cubrir corto</span>
+        <span class="item"><span class="swatch" style="background:var(--critical)"></span>Venta en corto</span>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2>Curva de capital</h2>
+      <p class="desc">Incluye referencia de comprar-y-mantener (buy &amp; hold).</p>
+      <div class="chart-container">
+        <svg class="chart" id="equity-chart" viewBox="0 0 960 360" preserveAspectRatio="xMidYMid meet"></svg>
+        <div class="tooltip" id="equity-tooltip"></div>
+      </div>
+      <div class="legend" id="equity-legend"></div>
+    </div>
+
+    <div class="card">
+      <h2>Métricas</h2>
+      <p class="desc">Ordenadas por ganancia promedio por transacción cuando se comparan todas las estrategias.</p>
+      <table class="metrics" id="metrics-table"></table>
+    </div>
+
+    <div class="card">
+      <h2>Bitácora de operaciones</h2>
+      <div class="scroll-x">
+        <table class="trades" id="trades-table"></table>
+      </div>
+    </div>
+  </div>
+
+  <footer>
+    Trading Signals App — API en <code>/docs</code>. Los mismos parámetros están disponibles vía CLI:
+    <code>python -m app.cli simulate --symbol AAPL --start-date 2023-06-01 --end-date 2023-09-30</code>
+  </footer>
+</div>
+
+<script>
+const STRATEGY_COLORS = {
+  "sma_crossover": "var(--series-1)",
+  "macd_crossover": "var(--series-2)",
+  "rsi_reversion": "var(--series-3)",
+  "bollinger_breakout": "var(--series-4)",
+};
+const STRATEGY_LABELS = {
+  "sma_crossover": "Cruce de SMA",
+  "macd_crossover": "Cruce de MACD",
+  "rsi_reversion": "Reversión RSI",
+  "bollinger_breakout": "Ruptura Bollinger",
+};
+function strategyFamily(name) {
+  for (const key of Object.keys(STRATEGY_COLORS)) if (name.startsWith(key)) return key;
+  return name;
+}
+function strategyLabel(name) {
+  return STRATEGY_LABELS[strategyFamily(name)] || name;
+}
+function strategyColor(name) {
+  return STRATEGY_COLORS[strategyFamily(name)] || "var(--text-muted)";
+}
+
+function svgEl(tag, attrs) {
+  const el = document.createElementNS("http://www.w3.org/2000/svg", tag);
+  for (const [k, v] of Object.entries(attrs || {})) el.setAttribute(k, v);
+  return el;
+}
+function fmtPct(v) { const sign = v > 0 ? "+" : ""; return `${sign}${v.toFixed(2)}%`; }
+function fmtMoney(v) { return "$" + v.toLocaleString("en-US", { maximumFractionDigits: 0 }); }
+
+const CHART_W = 960, CHART_H = 360;
+const MARGIN = { top: 24, right: 16, bottom: 24, left: 56 };
+const PLOT_W = CHART_W - MARGIN.left - MARGIN.right;
+const PLOT_H = CHART_H - MARGIN.top - MARGIN.bottom;
+function xScale(i, n) { return MARGIN.left + (i / Math.max(n - 1, 1)) * PLOT_W; }
+function yScale(v, min, max) { return MARGIN.top + PLOT_H - ((v - min) / (max - min || 1)) * PLOT_H; }
+function niceTicks(min, max, count) {
+  const range = max - min || 1, step = range / count, ticks = [];
+  for (let i = 0; i <= count; i++) ticks.push(min + step * i);
+  return ticks;
+}
+
+function attachHover(svg, tooltipId, n, contentFn, xFn) {
+  const tooltip = document.getElementById(tooltipId);
+  const overlay = svgEl("rect", { x: MARGIN.left, y: MARGIN.top, width: PLOT_W, height: PLOT_H, fill: "transparent", "pointer-events": "all" });
+  const crosshair = svgEl("line", { y1: MARGIN.top, y2: MARGIN.top + PLOT_H, stroke: "var(--baseline)", "stroke-width": 1, "stroke-dasharray": "3,3", opacity: 0 });
+  svg.appendChild(crosshair);
+  svg.appendChild(overlay);
+  overlay.addEventListener("mousemove", (evt) => {
+    const rect = svg.getBoundingClientRect();
+    const scaleX = CHART_W / rect.width;
+    const mouseX = (evt.clientX - rect.left) * scaleX;
+    const frac = Math.min(Math.max((mouseX - MARGIN.left) / PLOT_W, 0), 1);
+    const i = Math.round(frac * (n - 1));
+    const x = xFn(i);
+    crosshair.setAttribute("x1", x); crosshair.setAttribute("x2", x); crosshair.setAttribute("opacity", 1);
+    tooltip.style.display = "block";
+    tooltip.innerHTML = contentFn(i);
+    const containerRect = svg.parentElement.getBoundingClientRect();
+    const left = (x / CHART_W) * containerRect.width;
+    tooltip.style.left = Math.min(left + 12, containerRect.width - 170) + "px";
+    tooltip.style.top = "8px";
+  });
+  overlay.addEventListener("mouseleave", () => { tooltip.style.display = "none"; crosshair.setAttribute("opacity", 0); });
+}
+
+let currentReport = null;
+
+function renderSummary(report) {
+  const container = document.getElementById("summary-tiles");
+  container.innerHTML = "";
+  const tile = (label, value, cls) => {
+    const div = document.createElement("div");
+    div.className = "stat-tile";
+    div.innerHTML = `<div class="label">${label}</div><div class="value ${cls || ""}">${value}</div>`;
+    container.appendChild(div);
+  };
+  tile("Periodo", `${report.period_start.slice(0,10)} → ${report.period_end.slice(0,10)}`);
+  tile("Barras", report.num_bars);
+  const best = report.results[0];
+  tile(
+    report.results.length > 1 ? `Mejor: ${strategyLabel(best.strategy)}` : strategyLabel(best.strategy),
+    fmtPct(best.metrics.total_return_pct),
+    best.metrics.total_return_pct >= 0 ? "pos" : "neg"
+  );
+  tile("Ganancia/operación (mejor)", fmtPct(best.metrics.avg_profit_per_trade_pct), best.metrics.avg_profit_per_trade_pct >= 0 ? "pos" : "neg");
+}
+
+function renderPriceChart(report, strategyName) {
+  const svg = document.getElementById("price-chart");
+  svg.innerHTML = "";
+  const prices = report.price_series.map(p => p.close);
+  const n = prices.length;
+  const min = Math.min(...prices), max = Math.max(...prices);
+  const pad = (max - min) * 0.08 || 1;
+  const yMin = min - pad, yMax = max + pad;
+
+  (report.regimes || []).forEach(([name, start, end], idx) => {
+    const x0 = xScale(start, n), x1 = xScale(Math.min(end, n - 1), n);
+    svg.appendChild(svgEl("rect", { x: x0, y: MARGIN.top, width: Math.max(x1 - x0, 0), height: PLOT_H, fill: idx % 2 === 0 ? "var(--grid)" : "transparent", opacity: 0.35 }));
+    const label = svgEl("text", { x: (x0 + x1) / 2, y: MARGIN.top - 8, "text-anchor": "middle", class: "regime-band-label" });
+    label.textContent = name;
+    svg.appendChild(label);
+  });
+
+  niceTicks(yMin, yMax, 4).forEach(t => {
+    const y = yScale(t, yMin, yMax);
+    svg.appendChild(svgEl("line", { x1: MARGIN.left, x2: CHART_W - MARGIN.right, y1: y, y2: y, class: "gridline" }));
+    const label = svgEl("text", { x: MARGIN.left - 8, y: y + 3, "text-anchor": "end", class: "axis-text" });
+    label.textContent = t.toFixed(2);
+    svg.appendChild(label);
+  });
+
+  let d = "";
+  prices.forEach((p, i) => { const x = xScale(i, n), y = yScale(p, yMin, yMax); d += (i === 0 ? "M" : "L") + x.toFixed(2) + "," + y.toFixed(2) + " "; });
+  svg.appendChild(svgEl("path", { d, fill: "none", stroke: "var(--series-1)", "stroke-width": 2, "stroke-linejoin": "round", "stroke-linecap": "round" }));
+
+  const result = report.results.find(r => r.strategy === strategyName);
+  const dateIndex = new Map(report.price_series.map((p, i) => [p.date, i]));
+  (result ? result.trades : []).forEach(trade => {
+    const entryI = dateIndex.get(trade.entry_date);
+    const exitI = dateIndex.get(trade.exit_date);
+    const color = trade.direction === "long" ? "var(--good)" : "var(--critical)";
+    if (entryI !== undefined) svg.appendChild(svgEl("circle", { cx: xScale(entryI, n), cy: yScale(prices[entryI], yMin, yMax), r: 5, fill: color, stroke: "var(--surface-1)", "stroke-width": 2 }));
+    if (exitI !== undefined && exitI !== entryI) svg.appendChild(svgEl("circle", { cx: xScale(exitI, n), cy: yScale(prices[exitI], yMin, yMax), r: 5, fill: "var(--surface-1)", stroke: color, "stroke-width": 2 }));
+  });
+
+  attachHover(svg, "price-tooltip", n, (i) => `<div class="row"><span class="k">${report.price_series[i].date.slice(0,10)}</span><span>${prices[i].toFixed(2)}</span></div>`, (i) => xScale(i, n));
+}
+
+function renderEquityChart(report) {
+  const svg = document.getElementById("equity-chart");
+  svg.innerHTML = "";
+  const n = report.price_series.length;
+  const prices = report.price_series.map(p => p.close);
+  const buyHold = prices.map(p => report.initial_capital * (p / prices[0]));
+
+  const curves = report.results.map(r => ({ label: strategyLabel(r.strategy), color: strategyColor(r.strategy), values: r.equity_curve }));
+  curves.push({ label: "Comprar y mantener", color: "var(--text-muted)", values: buyHold, dashed: true });
+
+  const allValues = curves.flatMap(c => c.values);
+  const min = Math.min(...allValues), max = Math.max(...allValues);
+  const pad = (max - min) * 0.08 || 1;
+  const yMin = min - pad, yMax = max + pad;
+
+  niceTicks(yMin, yMax, 4).forEach(t => {
+    const y = yScale(t, yMin, yMax);
+    svg.appendChild(svgEl("line", { x1: MARGIN.left, x2: CHART_W - MARGIN.right, y1: y, y2: y, class: "gridline" }));
+    const label = svgEl("text", { x: MARGIN.left - 8, y: y + 3, "text-anchor": "end", class: "axis-text" });
+    label.textContent = "$" + Math.round(t).toLocaleString("en-US");
+    svg.appendChild(label);
+  });
+
+  curves.forEach(curve => {
+    let d = "";
+    curve.values.forEach((v, i) => { const x = xScale(i, n), y = yScale(v, yMin, yMax); d += (i === 0 ? "M" : "L") + x.toFixed(2) + "," + y.toFixed(2) + " "; });
+    svg.appendChild(svgEl("path", { d, fill: "none", stroke: curve.color, "stroke-width": 2, "stroke-linejoin": "round", "stroke-linecap": "round", "stroke-dasharray": curve.dashed ? "5,4" : "none" }));
+  });
+
+  const legend = document.getElementById("equity-legend");
+  legend.innerHTML = "";
+  curves.forEach(curve => {
+    const item = document.createElement("span");
+    item.className = "item";
+    item.innerHTML = `<span class="line-swatch" style="background:${curve.color}${curve.dashed ? ";opacity:.6" : ""}"></span>${curve.label}`;
+    legend.appendChild(item);
+  });
+
+  attachHover(svg, "equity-tooltip", n, (i) => {
+    let rows = `<div class="row"><span class="k">${report.price_series[i].date.slice(0,10)}</span><span></span></div>`;
+    curves.forEach(c => { rows += `<div class="row"><span class="k"><span class="swatch" style="width:8px;height:8px;background:${c.color}"></span>${c.label}</span><span>${fmtMoney(c.values[i])}</span></div>`; });
+    return rows;
+  }, (i) => xScale(i, n));
+}
+
+function renderMetricsTable(report) {
+  const table = document.getElementById("metrics-table");
+  const cols = [
+    ["Estrategia", r => strategyLabel(r.strategy)],
+    ["Retorno total", r => fmtPct(r.metrics.total_return_pct)],
+    ["Ganancia/operación", r => fmtPct(r.metrics.avg_profit_per_trade_pct)],
+    ["Win rate", r => r.metrics.win_rate_pct.toFixed(1) + "%"],
+    ["Profit factor", r => r.metrics.profit_factor === null ? "—" : r.metrics.profit_factor.toFixed(2)],
+    ["Máx. drawdown", r => fmtPct(r.metrics.max_drawdown_pct)],
+    ["Sharpe", r => r.metrics.sharpe_ratio.toFixed(2)],
+    ["# Operaciones", r => r.metrics.num_trades],
+  ];
+  let html = "<thead><tr>" + cols.map(c => `<th>${c[0]}</th>`).join("") + "</tr></thead><tbody>";
+  report.results.forEach((r, idx) => {
+    html += `<tr class="${idx === 0 && report.results.length > 1 ? "best" : ""}">` + cols.map(c => `<td>${c[1](r)}</td>`).join("") + "</tr>";
+  });
+  table.innerHTML = html + "</tbody>";
+}
+
+function renderTradesTable(report, strategyName) {
+  const table = document.getElementById("trades-table");
+  const result = report.results.find(r => r.strategy === strategyName);
+  const trades = result ? result.trades : [];
+  let html = "<thead><tr><th>Entrada</th><th>Salida</th><th>Dirección</th><th>Precio entrada</th><th>Precio salida</th><th>Días</th><th>Retorno</th></tr></thead><tbody>";
+  if (trades.length === 0) html += `<tr><td colspan="7" style="text-align:center;color:var(--text-muted);">Sin operaciones en este rango</td></tr>`;
+  trades.forEach(t => {
+    const retClass = t.return_pct >= 0 ? "pos" : "neg";
+    html += `<tr>
+      <td>${t.entry_date.slice(0,10)}</td>
+      <td>${t.exit_date.slice(0,10)}${t.open ? " (abierta)" : ""}</td>
+      <td><span class="dir-tag ${t.direction}">${t.direction === "long" ? "Compra" : "Corto"}</span></td>
+      <td>${t.entry_price.toFixed(2)}</td>
+      <td>${t.exit_price.toFixed(2)}</td>
+      <td>${t.bars_held}</td>
+      <td class="ret ${retClass}">${fmtPct(t.return_pct)}</td>
+    </tr>`;
+  });
+  table.innerHTML = html + "</tbody>";
+}
+
+function renderReport(report) {
+  currentReport = report;
+  document.getElementById("results").style.display = "block";
+  renderSummary(report);
+  renderMetricsTable(report);
+  renderEquityChart(report);
+
+  const select = document.getElementById("marker-select");
+  select.innerHTML = "";
+  report.results.forEach(r => {
+    const opt = document.createElement("option");
+    opt.value = r.strategy;
+    opt.textContent = strategyLabel(r.strategy);
+    select.appendChild(opt);
+  });
+  select.onchange = () => { renderPriceChart(report, select.value); renderTradesTable(report, select.value); };
+  select.value = report.results[0].strategy;
+  renderPriceChart(report, select.value);
+  renderTradesTable(report, select.value);
+}
+
+function setStatus(kind, message) {
+  const banner = document.getElementById("status-banner");
+  banner.className = "status-banner" + (kind ? " " + kind : "");
+  banner.textContent = message || "";
+}
+
+async function loadOptions() {
+  try {
+    const [strategiesRes, symbolsRes] = await Promise.all([fetch("/strategies"), fetch("/symbols/examples")]);
+    const strategies = await strategiesRes.json();
+    const strategySelect = document.getElementById("strategy");
+    strategies.strategies.forEach(name => {
+      const opt = document.createElement("option");
+      opt.value = name; opt.textContent = strategyLabel(name);
+      strategySelect.appendChild(opt);
+    });
+    const symbols = await symbolsRes.json();
+    const datalist = document.getElementById("symbol-examples");
+    Object.values(symbols).flat().forEach(sym => {
+      const opt = document.createElement("option");
+      opt.value = sym;
+      datalist.appendChild(opt);
+    });
+  } catch (e) {
+    // Options are a nice-to-have; the form still works without them.
+  }
+}
+
+document.getElementById("sim-form").addEventListener("submit", async (evt) => {
+  evt.preventDefault();
+  const runBtn = document.getElementById("run-btn");
+  const synthetic = document.getElementById("synthetic").checked;
+  const symbol = document.getElementById("symbol").value.trim();
+  const startDate = document.getElementById("start_date").value || null;
+  const endDate = document.getElementById("end_date").value || null;
+
+  if (!synthetic && !symbol) {
+    setStatus("error", "Ingresa un símbolo o marca \"Usar escenario sintético\".");
+    return;
+  }
+
+  const payload = {
+    symbol: symbol || null,
+    strategy: document.getElementById("strategy").value || null,
+    synthetic,
+    start_date: startDate,
+    end_date: endDate,
+    initial_capital: parseFloat(document.getElementById("capital").value) || 10000,
+    commission_bps: parseFloat(document.getElementById("commission").value) || 5,
+    allow_short: document.getElementById("allow_short").checked,
+  };
+
+  runBtn.disabled = true;
+  setStatus("loading", "Simulando…");
+  document.getElementById("results").style.display = "none";
+  try {
+    const resp = await fetch("/simulate", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+    if (!resp.ok) {
+      const err = await resp.json().catch(() => ({}));
+      throw new Error(err.detail || `Error ${resp.status}`);
+    }
+    const report = await resp.json();
+    setStatus(null, "");
+    renderReport(report);
+  } catch (e) {
+    setStatus("error", e.message || "Ocurrió un error al simular.");
+  } finally {
+    runBtn.disabled = false;
+  }
+});
+
+loadOptions();
+</script>
+</body>
+</html>
