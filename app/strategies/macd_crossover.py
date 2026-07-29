@@ -3,13 +3,15 @@ from __future__ import annotations
 import pandas as pd
 
 from app.indicators.technical import macd
-from app.strategies.base import Strategy, _crosses_above, _crosses_below, stateful_positions
+from app.strategies.base import Strategy, _crosses_above, _crosses_below
 
 
 class MacdCrossoverStrategy(Strategy):
-    """Trend-following: go long when the MACD line crosses above its signal line."""
+    """Trend-following: long when the MACD line crosses above its signal line,
+    short when it crosses below (if allow_short)."""
 
-    def __init__(self, fast: int = 12, slow: int = 26, signal: int = 9):
+    def __init__(self, fast: int = 12, slow: int = 26, signal: int = 9, allow_short: bool = True):
+        super().__init__(allow_short=allow_short)
         self.fast = fast
         self.slow = slow
         self.signal = signal
@@ -23,10 +25,15 @@ class MacdCrossoverStrategy(Strategy):
         df["macd_hist"] = histogram
         return df
 
-    def generate_positions(self, df: pd.DataFrame) -> pd.Series:
-        entry = _crosses_above(df["macd_line"], df["macd_signal"])
-        exit_ = _crosses_below(df["macd_line"], df["macd_signal"])
-        return stateful_positions(entry, exit_)
+    def generate_signals(self, df: pd.DataFrame) -> dict[str, pd.Series]:
+        crosses_up = _crosses_above(df["macd_line"], df["macd_signal"])
+        crosses_down = _crosses_below(df["macd_line"], df["macd_signal"])
+        return {
+            "long_entry": crosses_up,
+            "long_exit": crosses_down,
+            "short_entry": crosses_down,
+            "short_exit": crosses_up,
+        }
 
     def explain(self, df: pd.DataFrame) -> dict:
         last = df.iloc[-1]

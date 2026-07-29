@@ -19,5 +19,11 @@ def build_strategy(name: str, **params) -> Strategy:
     return STRATEGY_REGISTRY[name](**params)
 
 
-def all_strategies(**params) -> list[Strategy]:
-    return [cls(**params.get(name, {})) for name, cls in STRATEGY_REGISTRY.items()]
+def all_strategies(allow_short: bool = True, **overrides) -> list[Strategy]:
+    """Build one instance of every registered strategy. `allow_short` applies
+    to all of them unless overridden per-name via `overrides={name: {...}}`."""
+    strategies = []
+    for name, cls in STRATEGY_REGISTRY.items():
+        params = {"allow_short": allow_short, **overrides.get(name, {})}
+        strategies.append(cls(**params))
+    return strategies

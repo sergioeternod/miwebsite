@@ -10,6 +10,7 @@ class BacktestRequest(BaseModel):
     interval: str = "1d"
     initial_capital: float = 10_000.0
     commission_bps: float = 5.0
+    allow_short: bool = True
 
 
 class CompareRequest(BaseModel):
@@ -18,5 +19,16 @@ class CompareRequest(BaseModel):
     interval: str = "1d"
     initial_capital: float = 10_000.0
     commission_bps: float = 5.0
+    allow_short: bool = True
 
 
+class SimulateRequest(BaseModel):
+    symbol: str | None = Field(None, description="Omitir si synthetic=true")
+    strategy: str | None = Field(None, description="Si se omite, corre y rankea todas")
+    synthetic: bool = False
+    seed: int = 42
+    period: str = "2y"
+    interval: str = "1d"
+    initial_capital: float = 10_000.0
+    commission_bps: float = 5.0
+    allow_short: bool = True

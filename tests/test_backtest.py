@@ -76,3 +76,19 @@ def test_compare_strategies_is_sorted_by_avg_profit_per_trade(random_walk_df):
     profits = [r.metrics["avg_profit_per_trade_pct"] for r in results]
     assert profits == sorted(profits, reverse=True)
     assert len(results) == len(all_strategies())
+
+
+def test_short_trade_profits_from_a_falling_price(downtrend_df):
+    strategy = build_strategy("sma_crossover", fast=5, slow=20, allow_short=True)
+    result = run_backtest(downtrend_df, strategy, symbol="TEST")
+
+    short_trades = [t for t in result.trades if t["direction"] == "short"]
+    assert short_trades, "se esperaba al menos una operación en corto"
+    assert all(t["return_pct"] > 0 for t in short_trades)
+
+
+def test_long_only_backtest_stays_flat_on_downtrend(downtrend_df):
+    strategy = build_strategy("sma_crossover", fast=5, slow=20, allow_short=False)
+    result = run_backtest(downtrend_df, strategy, symbol="TEST")
+    assert all(t["direction"] == "long" for t in result.trades)
+    assert result.metrics["num_trades"] == 0

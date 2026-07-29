@@ -25,6 +25,12 @@ def uptrend_df() -> pd.DataFrame:
 
 
 @pytest.fixture
+def downtrend_df() -> pd.DataFrame:
+    close = pd.Series(np.linspace(200, 100, 120))
+    return _make_ohlcv(close)
+
+
+@pytest.fixture
 def random_walk_df() -> pd.DataFrame:
     rng = np.random.default_rng(42)
     n = 400

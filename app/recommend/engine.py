@@ -16,7 +16,9 @@ from app.data.providers import get_ohlcv
 from app.strategies import Strategy, all_strategies
 
 BULLISH_ACTIONS = {"BUY", "HOLD_LONG"}
-BEARISH_ACTIONS = {"SELL"}
+BEARISH_ACTIONS = {"SELL_SHORT", "HOLD_SHORT"}
+# SELL (closed a long to flat), COVER (closed a short to flat) and HOLD_CASH
+# are treated as neutral: they mean "no active directional bet right now".
 
 
 def _strategy_weight(avg_profit_per_trade_pct: float) -> float:
@@ -33,8 +35,9 @@ def recommend(
     strategies: list[Strategy] | None = None,
     initial_capital: float = 10_000.0,
     commission_bps: float = 5.0,
+    allow_short: bool = True,
 ) -> dict:
-    strategies = strategies or all_strategies()
+    strategies = strategies or all_strategies(allow_short=allow_short)
 
     per_strategy = []
     action_score = {"BUY": 0.0, "SELL": 0.0, "HOLD": 0.0}
@@ -98,6 +101,7 @@ def recommend_for_symbol(
     strategies: list[Strategy] | None = None,
     initial_capital: float = 10_000.0,
     commission_bps: float = 5.0,
+    allow_short: bool = True,
 ) -> dict:
     df = get_ohlcv(symbol, period=period, interval=interval)
     return recommend(
@@ -106,4 +110,5 @@ def recommend_for_symbol(
         strategies=strategies,
         initial_capital=initial_capital,
         commission_bps=commission_bps,
+        allow_short=allow_short,
     )

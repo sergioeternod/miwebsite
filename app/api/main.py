@@ -4,11 +4,12 @@ from dataclasses import asdict
 
 from fastapi import FastAPI, HTTPException
 
-from app.api.schemas import BacktestRequest, CompareRequest
+from app.api.schemas import BacktestRequest, CompareRequest, SimulateRequest
 from app.backtest.engine import BacktestResult, compare_strategies, run_backtest
 from app.config import EXAMPLE_SYMBOLS
 from app.data.providers import DataUnavailableError, get_ohlcv
 from app.recommend.engine import recommend
+from app.simulate import simulate, simulate_synthetic
 from app.strategies import STRATEGY_REGISTRY, all_strategies, build_strategy
 
 app = FastAPI(
@@ -51,6 +52,7 @@ def get_recommendation(
     interval: str = "1d",
     initial_capital: float = 10_000.0,
     commission_bps: float = 5.0,
+    allow_short: bool = True,
 ) -> dict:
     try:
         df = get_ohlcv(symbol, period=period, interval=interval)
@@ -58,7 +60,11 @@ def get_recommendation(
         raise HTTPException(status_code=404, detail=str(exc)) from exc
 
     return recommend(
-        df, symbol=symbol, initial_capital=initial_capital, commission_bps=commission_bps
+        df,
+        symbol=symbol,
+        initial_capital=initial_capital,
+        commission_bps=commission_bps,
+        allow_short=allow_short,
     )
 
 
@@ -70,7 +76,7 @@ def post_backtest(request: BacktestRequest) -> dict:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
 
     try:
-        strategy = build_strategy(request.strategy)
+        strategy = build_strategy(request.strategy, allow_short=request.allow_short)
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
@@ -93,9 +99,38 @@ def post_compare(request: CompareRequest) -> dict:
 
     results = compare_strategies(
         df,
-        all_strategies(),
+        all_strategies(allow_short=request.allow_short),
         symbol=request.symbol,
         initial_capital=request.initial_capital,
         commission_bps=request.commission_bps,
     )
     return {"symbol": request.symbol, "ranked_by": "avg_profit_per_trade_pct", "results": [_serialize_backtest(r) for r in results]}
+
+
+@app.post("/simulate")
+def post_simulate(request: SimulateRequest) -> dict:
+    try:
+        if request.synthetic:
+            return simulate_synthetic(
+                strategy_name=request.strategy,
+                symbol=request.symbol or "SYNTH",
+                seed=request.seed,
+                initial_capital=request.initial_capital,
+                commission_bps=request.commission_bps,
+                allow_short=request.allow_short,
+            )
+        if not request.symbol:
+            raise HTTPException(status_code=400, detail="symbol es obligatorio salvo que synthetic=true")
+        df = get_ohlcv(request.symbol, period=request.period, interval=request.interval)
+        return simulate(
+            df,
+            strategy_name=request.strategy,
+            symbol=request.symbol,
+            initial_capital=request.initial_capital,
+            commission_bps=request.commission_bps,
+            allow_short=request.allow_short,
+        )
+    except DataUnavailableError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc

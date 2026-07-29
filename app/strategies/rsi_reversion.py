@@ -3,14 +3,17 @@ from __future__ import annotations
 import pandas as pd
 
 from app.indicators.technical import rsi
-from app.strategies.base import Strategy, stateful_positions
+from app.strategies.base import Strategy
 
 
 class RsiMeanReversionStrategy(Strategy):
-    """Mean reversion: buy a confirmed bounce off oversold, sell a confirmed
-    turn down from overbought."""
+    """Mean reversion: long a confirmed bounce off oversold, short a confirmed
+    turn down from overbought (if allow_short)."""
 
-    def __init__(self, window: int = 14, oversold: float = 30, overbought: float = 70):
+    def __init__(
+        self, window: int = 14, oversold: float = 30, overbought: float = 70, allow_short: bool = True
+    ):
+        super().__init__(allow_short=allow_short)
         if oversold >= overbought:
             raise ValueError("oversold debe ser menor que overbought")
         self.window = window
@@ -23,12 +26,19 @@ class RsiMeanReversionStrategy(Strategy):
         df["rsi"] = rsi(df["Close"], self.window)
         return df
 
-    def generate_positions(self, df: pd.DataFrame) -> pd.Series:
+    def generate_signals(self, df: pd.DataFrame) -> dict[str, pd.Series]:
         rsi_series = df["rsi"]
         prev = rsi_series.shift(1)
-        entry = (rsi_series >= self.oversold) & (prev < self.oversold)
-        exit_ = (rsi_series >= self.overbought) & (prev < self.overbought)
-        return stateful_positions(entry, exit_)
+        # Bottom confirmed: RSI bounces back up through the oversold line.
+        bottom_reversal = (rsi_series >= self.oversold) & (prev < self.oversold)
+        # Top confirmed: RSI turns back down through the overbought line.
+        top_reversal = (rsi_series < self.overbought) & (prev >= self.overbought)
+        return {
+            "long_entry": bottom_reversal,
+            "long_exit": top_reversal,
+            "short_entry": top_reversal,
+            "short_exit": bottom_reversal,
+        }
 
     def explain(self, df: pd.DataFrame) -> dict:
         last = df.iloc[-1]

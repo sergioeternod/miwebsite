@@ -3,14 +3,16 @@ from __future__ import annotations
 import pandas as pd
 
 from app.indicators.technical import bollinger_bands
-from app.strategies.base import Strategy, _crosses_above, _crosses_below, stateful_positions
+from app.strategies.base import Strategy, _crosses_above, _crosses_below
 
 
 class BollingerBreakoutStrategy(Strategy):
-    """Momentum breakout: go long when price breaks above the upper band,
-    exit when it falls back below the middle band (the moving average)."""
+    """Momentum breakout: long when price breaks above the upper band, short
+    when it breaks below the lower band (if allow_short); exits back at the
+    middle band (the moving average) in both cases."""
 
-    def __init__(self, window: int = 20, num_std: float = 2.0):
+    def __init__(self, window: int = 20, num_std: float = 2.0, allow_short: bool = True):
+        super().__init__(allow_short=allow_short)
         self.window = window
         self.num_std = num_std
         self.name = f"bollinger_breakout_{window}_{num_std}"
@@ -23,10 +25,14 @@ class BollingerBreakoutStrategy(Strategy):
         df["bb_lower"] = lower
         return df
 
-    def generate_positions(self, df: pd.DataFrame) -> pd.Series:
-        entry = _crosses_above(df["Close"], df["bb_upper"])
-        exit_ = _crosses_below(df["Close"], df["bb_middle"])
-        return stateful_positions(entry, exit_)
+    def generate_signals(self, df: pd.DataFrame) -> dict[str, pd.Series]:
+        close = df["Close"]
+        return {
+            "long_entry": _crosses_above(close, df["bb_upper"]),
+            "long_exit": _crosses_below(close, df["bb_middle"]),
+            "short_entry": _crosses_below(close, df["bb_lower"]),
+            "short_exit": _crosses_above(close, df["bb_middle"]),
+        }
 
     def explain(self, df: pd.DataFrame) -> dict:
         last = df.iloc[-1]

@@ -1,9 +1,9 @@
-"""Vectorized long-only backtester.
+"""Vectorized long/short backtester.
 
 Convention: a strategy's `position` at the close of bar i is entered at that
 same close and held into bar i+1 (i.e. returns are computed with
 `position.shift(1)`), which avoids look-ahead bias — you can only act on a
-signal after you have seen it.
+signal after you have seen it. `position` is -1 (short), 0 (flat) or 1 (long).
 """
 
 from __future__ import annotations
@@ -26,50 +26,57 @@ class BacktestResult:
 
 
 def extract_trades(enriched: pd.DataFrame, commission_bps: float = 0.0) -> list[dict]:
+    """Turn a -1/0/1 position series into a list of closed (and one possibly
+    open) trades. A direct flip (long->short or short->long on the same bar)
+    closes the old trade and opens the new one at that bar's close."""
     position = enriched["position"]
     close = enriched["Close"]
     commission_rate = commission_bps / 10000
 
-    trades = []
-    entry_idx = None
-    for i in range(1, len(enriched)):
-        prev_pos, curr_pos = position.iloc[i - 1], position.iloc[i]
-        if prev_pos == 0 and curr_pos == 1:
-            entry_idx = i
-        elif prev_pos == 1 and curr_pos == 0 and entry_idx is not None:
-            entry_price = float(close.iloc[entry_idx])
-            exit_price = float(close.iloc[i])
-            gross_return = exit_price / entry_price - 1
-            net_return_pct = (gross_return - 2 * commission_rate) * 100
-            trades.append(
-                {
-                    "entry_date": str(enriched.index[entry_idx]),
-                    "exit_date": str(enriched.index[i]),
-                    "entry_price": entry_price,
-                    "exit_price": exit_price,
-                    "bars_held": i - entry_idx,
-                    "return_pct": net_return_pct,
-                }
-            )
-            entry_idx = None
+    trades: list[dict] = []
+    open_trade: dict | None = None
 
-    if entry_idx is not None:
+    def _close(exit_idx: int, mark_open: bool = False) -> None:
+        nonlocal open_trade
+        direction = open_trade["direction"]
+        entry_idx = open_trade["entry_idx"]
+        entry_price = open_trade["entry_price"]
+        exit_price = float(close.iloc[exit_idx])
+
+        gross_return = (
+            exit_price / entry_price - 1 if direction == 1 else entry_price / exit_price - 1
+        )
+        commission_legs = 1 if mark_open else 2
+        net_return_pct = (gross_return - commission_legs * commission_rate) * 100
+
+        trade = {
+            "direction": "long" if direction == 1 else "short",
+            "entry_date": str(enriched.index[entry_idx]),
+            "exit_date": str(enriched.index[exit_idx]),
+            "entry_price": entry_price,
+            "exit_price": exit_price,
+            "bars_held": exit_idx - entry_idx,
+            "return_pct": net_return_pct,
+        }
+        if mark_open:
+            trade["open"] = True
+        trades.append(trade)
+        open_trade = None
+
+    for i in range(len(enriched)):
+        curr_pos = int(position.iloc[i])
+        prev_pos = int(position.iloc[i - 1]) if i > 0 else 0
+        if curr_pos == prev_pos:
+            continue
+        if open_trade is not None:
+            _close(i)
+        if curr_pos != 0:
+            open_trade = {"direction": curr_pos, "entry_idx": i, "entry_price": float(close.iloc[i])}
+
+    if open_trade is not None:
         # Position still open at the end of the data window: mark-to-market
         # so it shows up as context, flagged as unrealized.
-        entry_price = float(close.iloc[entry_idx])
-        exit_price = float(close.iloc[-1])
-        gross_return = exit_price / entry_price - 1
-        trades.append(
-            {
-                "entry_date": str(enriched.index[entry_idx]),
-                "exit_date": str(enriched.index[-1]),
-                "entry_price": entry_price,
-                "exit_price": exit_price,
-                "bars_held": len(enriched) - 1 - entry_idx,
-                "return_pct": (gross_return - commission_rate) * 100,
-                "open": True,
-            }
-        )
+        _close(len(enriched) - 1, mark_open=True)
 
     return trades
 
