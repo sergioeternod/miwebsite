@@ -5,7 +5,9 @@ from pydantic import BaseModel, Field
 
 class BacktestRequest(BaseModel):
     symbol: str = Field(..., examples=["AAPL", "BTC-USD", "EURUSD=X"])
-    strategy: str = Field(..., examples=["sma_crossover", "macd_crossover", "rsi_reversion", "bollinger_breakout"])
+    strategy: str = Field(
+        ..., examples=["sma_crossover", "macd_crossover", "rsi_reversion", "bollinger_breakout", "trend_confirmation"]
+    )
     period: str = "2y"
     interval: str = "1d"
     initial_capital: float = 10_000.0

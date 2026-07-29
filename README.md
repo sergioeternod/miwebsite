@@ -25,6 +25,10 @@ información histórica de mercado.
   - `macd_crossover` — seguimiento de tendencia (cruce de MACD/señal)
   - `rsi_reversion` — reversión a la media (rebote/techo confirmado en RSI)
   - `bollinger_breakout` — ruptura de momentum (banda superior/inferior)
+  - `trend_confirmation` — momentum filtrado por tendencia: solo toma la
+    señal de MACD cuando coincide con la tendencia de una SMA larga (menos
+    operaciones, buscando mayor ganancia promedio por operación al evitar
+    señales en contra de la tendencia)
 - **Motor de backtesting** long/short con métricas por estrategia e
   instrumento: retorno total, CAGR, máximo drawdown, Sharpe ratio, win rate,
   **ganancia promedio por transacción**, mejor/peor operación, profit factor.
@@ -50,8 +54,41 @@ información histórica de mercado.
   técnico detrás.
 - **API REST (FastAPI)** y **CLI** para correr backtests, simulaciones y
   recomendaciones.
-- Suite de tests (`pytest`, 47 casos) sobre datos sintéticos, sin depender de
+- Suite de tests (`pytest`, 53 casos) sobre datos sintéticos, sin depender de
   red — incluye cobertura de posiciones largas y cortas, y de rangos de fecha.
+
+## Comparación de las 5 estrategias
+
+Sobre el mismo escenario histórico sintético (alza → corrección → lateral →
+caída fuerte → recuperación), rankeadas por ganancia promedio por
+transacción:
+
+| Estrategia | Retorno total | Ganancia/operación | Win rate | Profit factor | Máx. drawdown | Operaciones |
+|---|---|---|---|---|---|---|
+| Cruce de SMA | +18.82% | **+5.89%** | 60.0% | 2.18 | -23.06% | 5 |
+| Ruptura Bollinger | +62.79% | +5.76% | 60.0% | 6.20 | -13.92% | 10 |
+| Confirmación de tendencia | +30.32% | +3.58% | 40.0% | 2.50 | -18.64% | 10 |
+| Cruce de MACD | +23.25% | +1.78% | 33.3% | 1.55 | -33.98% | 21 |
+| Reversión RSI | -50.32% | -18.29% | 33.3% | 0.02 | -53.59% | 3 |
+
+Ninguna estrategia es universalmente mejor: Ruptura Bollinger tiene el mayor
+retorno total, pero Cruce de SMA gana en ganancia promedio por transacción
+con muchas menos operaciones (5 vs. 10). `trend_confirmation` demuestra el
+valor de filtrar señales: comparado con el `macd_crossover` puro sobre el
+mismo escenario, reduce operaciones de 21 a 10 y casi duplica el Sharpe
+(1.14 vs 0.76), aunque paga por eso en ganancia promedio menor que las dos
+primeras. Reversión RSI es la peor en este escenario particular — no
+significa que sea mala en general, solo que no encaja con estos regímenes de
+mercado. Por eso existe `compare_strategies`/`simulate`/la pantalla web: para
+elegir la mejor estrategia por instrumento y periodo, no asumir una sola
+ganadora universal.
+
+Corre tu propia comparación:
+```bash
+python -m app.cli simulate --synthetic --out reporte.json          # sin red
+python -m app.cli simulate --symbol AAPL --period 2y                # datos reales
+```
+o desde la pantalla web (`/`), dejando "Estrategia" en "Todas (comparar)".
 
 ## Instalación
 
@@ -114,7 +151,7 @@ app/
   data/providers.py     # obtención de OHLCV (Yahoo Finance)
   data/synthetic.py      # generador de escenarios históricos sintéticos
   indicators/technical.py
-  strategies/           # framework base (long/short) + 4 estrategias concretas
+  strategies/           # framework base (long/short) + 5 estrategias concretas
   backtest/             # motor de backtesting + métricas
   recommend/engine.py    # ensemble de recomendaciones
   simulate.py            # simulador (datos reales o sintéticos, con rango de fechas)

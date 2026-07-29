@@ -59,3 +59,23 @@ def test_all_strategies_returns_one_of_each():
 def test_all_strategies_respects_allow_short_false():
     strategies = all_strategies(allow_short=False)
     assert all(not s.allow_short for s in strategies)
+
+
+def test_trend_confirmation_goes_long_on_sustained_uptrend(uptrend_df):
+    strategy = build_strategy("trend_confirmation", trend_window=20)
+    enriched = strategy.run(uptrend_df)
+    assert enriched["position"].iloc[-1] == 1
+    assert not (enriched["position"] == -1).any()
+
+
+def test_trend_confirmation_goes_short_on_sustained_downtrend(downtrend_df):
+    strategy = build_strategy("trend_confirmation", trend_window=20, allow_short=True)
+    enriched = strategy.run(downtrend_df)
+    assert enriched["position"].iloc[-1] == -1
+    assert not (enriched["position"] == 1).any()
+
+
+def test_trend_confirmation_stays_flat_on_downtrend_when_shorts_disabled(downtrend_df):
+    strategy = build_strategy("trend_confirmation", trend_window=20, allow_short=False)
+    enriched = strategy.run(downtrend_df)
+    assert (enriched["position"] >= 0).all()

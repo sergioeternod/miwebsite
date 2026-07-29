@@ -3,12 +3,14 @@ from app.strategies.bollinger_breakout import BollingerBreakoutStrategy
 from app.strategies.macd_crossover import MacdCrossoverStrategy
 from app.strategies.rsi_reversion import RsiMeanReversionStrategy
 from app.strategies.sma_crossover import SmaCrossoverStrategy
+from app.strategies.trend_confirmation import TrendConfirmationStrategy
 
 STRATEGY_REGISTRY: dict[str, type[Strategy]] = {
     "sma_crossover": SmaCrossoverStrategy,
     "macd_crossover": MacdCrossoverStrategy,
     "rsi_reversion": RsiMeanReversionStrategy,
     "bollinger_breakout": BollingerBreakoutStrategy,
+    "trend_confirmation": TrendConfirmationStrategy,
 }
 
 

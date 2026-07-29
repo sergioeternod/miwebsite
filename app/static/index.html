@@ -21,6 +21,7 @@
     --series-2:       #eb6834;
     --series-3:       #1baf7a;
     --series-4:       #eda100;
+    --series-5:       #e87ba4;
     --accent:         #2a78d6;
   }
   @media (prefers-color-scheme: dark) {
@@ -40,6 +41,7 @@
       --series-2:       #d95926;
       --series-3:       #199e70;
       --series-4:       #c98500;
+      --series-5:       #d55181;
       --accent:         #3987e5;
     }
   }
@@ -59,6 +61,7 @@
     --series-2:       #d95926;
     --series-3:       #199e70;
     --series-4:       #c98500;
+    --series-5:       #d55181;
     --accent:         #3987e5;
   }
 
@@ -297,12 +300,14 @@ const STRATEGY_COLORS = {
   "macd_crossover": "var(--series-2)",
   "rsi_reversion": "var(--series-3)",
   "bollinger_breakout": "var(--series-4)",
+  "trend_confirmation": "var(--series-5)",
 };
 const STRATEGY_LABELS = {
   "sma_crossover": "Cruce de SMA",
   "macd_crossover": "Cruce de MACD",
   "rsi_reversion": "Reversión RSI",
   "bollinger_breakout": "Ruptura Bollinger",
+  "trend_confirmation": "Confirmación de tendencia",
 };
 function strategyFamily(name) {
   for (const key of Object.keys(STRATEGY_COLORS)) if (name.startsWith(key)) return key;
