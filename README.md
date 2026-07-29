@@ -246,17 +246,17 @@ La señal BUY/SELL/HOLD **nunca cambia** por este overlay — solo su nivel de
 confianza, y siempre queda explícito en la respuesta (campo `earnings`) para
 qué se ajustó y por qué.
 
-**Configuración**: consigue una API key gratis en
-[finnhub.io](https://finnhub.io) y expórtala como variable de entorno:
+**Configuración**: consigue una API key gratis en [finnhub.io](https://finnhub.io)
+y guárdala en tu archivo `.env` local (ver "Configuración de API keys" más
+abajo) — luego funciona directo:
 ```bash
-export FINNHUB_API_KEY=tu_api_key   # Windows PowerShell: $env:FINNHUB_API_KEY="tu_api_key"
 python -m app.cli recommend --symbol AAPL --with-earnings
 python -m app.cli earnings --symbol AAPL   # solo el historial de earnings, sin la parte técnica
 ```
-También puedes pasar la key directamente con `--finnhub-key` en vez de la
-variable de entorno. Sin key configurada (o sin acceso de red a Finnhub), el
-overlay se omite de forma controlada — la recomendación técnica se devuelve
-igual, con `earnings.available = false` y el motivo.
+También puedes pasar la key directamente con `--finnhub-key` en vez de usar
+`.env`. Sin key configurada (o sin acceso de red a Finnhub), el overlay se
+omite de forma controlada — la recomendación técnica se devuelve igual, con
+`earnings.available = false` y el motivo.
 
 **Limitación intencional**: esto sirve para la recomendación *en vivo*, no
 para backtesting histórico de earnings — para *validar* si "expectativa de
@@ -269,6 +269,46 @@ es un dataset aparte. Queda fuera de este alcance inicial.
 ```bash
 pip install -r requirements.txt
 ```
+
+## Configuración de API keys
+
+Las API keys (Finnhub, y a futuro Alpha Vantage) **nunca van hardcodeadas en
+el código ni se commitean al repositorio** — se guardan en un archivo `.env`
+local, que ya está en `.gitignore`.
+
+**1. Copia la plantilla y pon tus keys reales:**
+```bash
+cp .env.example .env
+```
+Edita `.env` con cualquier editor de texto y complétalo:
+```
+FINNHUB_API_KEY=tu_key_de_finnhub
+ALPHAVANTAGE_API_KEY=tu_key_de_alphavantage
+```
+La app carga `.env` automáticamente al arrancar (CLI o `uvicorn`) con
+`python-dotenv` — no hace falta exportar nada a mano. `ALPHAVANTAGE_API_KEY`
+queda guardada para cuando se integre sentimiento de noticias; por ahora solo
+`FINNHUB_API_KEY` la usa la app (overlay de earnings).
+
+**2. Verifica que quedó bien:**
+```bash
+python -m app.cli earnings --symbol AAPL
+```
+Si ves el historial de earnings (o un error de Finnhub distinto a "no hay
+API key configurada"), quedó bien leída.
+
+**Alternativas a `.env`** (si prefieres no usar el archivo):
+- Pasar la key directamente en cada comando: `--finnhub-key tu_key`.
+- Variable de entorno de la sesión — se pierde al cerrar la terminal:
+  - Windows PowerShell: `$env:FINNHUB_API_KEY="tu_key"`
+  - Windows CMD: `set FINNHUB_API_KEY=tu_key`
+  - macOS/Linux: `export FINNHUB_API_KEY=tu_key`
+- Variable de entorno permanente en Windows (persiste entre sesiones):
+  `setx FINNHUB_API_KEY "tu_key"` (abre una terminal nueva para que tome efecto).
+
+**Importante**: `.env` es tuyo y local — nunca lo pegues en el chat, nunca lo
+subas a git, y si por error llegaras a commitearlo, hay que rotar (regenerar)
+esa key desde el sitio del proveedor, no basta con borrarlo del commit.
 
 ## Uso — CLI
 

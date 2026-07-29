@@ -3,8 +3,11 @@ from __future__ import annotations
 from dataclasses import asdict
 from pathlib import Path
 
+from dotenv import load_dotenv
 from fastapi import FastAPI, HTTPException, Response
 from fastapi.staticfiles import StaticFiles
+
+load_dotenv()  # lee .env si existe (API keys como FINNHUB_API_KEY); no sobreescribe variables ya definidas en el entorno
 
 from app.api.schemas import BacktestRequest, CompareRequest, RankRequest, ScreenRequest, SimulateRequest, ValidateRequest
 from app.backtest.engine import BacktestResult, compare_strategies, run_backtest

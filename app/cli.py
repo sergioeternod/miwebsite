@@ -17,6 +17,10 @@ import argparse
 import json
 import sys
 
+from dotenv import load_dotenv
+
+load_dotenv()  # lee .env si existe (API keys como FINNHUB_API_KEY); no sobreescribe variables ya definidas en el entorno
+
 from app.backtest.engine import compare_strategies, run_backtest
 from app.data.finnhub_client import FinnhubUnavailableError
 from app.data.providers import DataUnavailableError, get_ohlcv
