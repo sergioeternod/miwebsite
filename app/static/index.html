@@ -90,6 +90,7 @@
   }
   .field { display: flex; flex-direction: column; gap: 4px; }
   .field label { font-size: 12px; color: var(--text-secondary); }
+  .symbol-hint { font-size: 11.5px; color: var(--text-muted); min-height: 14px; }
   .field.checkbox { flex-direction: row; align-items: center; gap: 6px; }
   .field.checkbox label { font-size: 13px; color: var(--text-primary); }
   input, select {
@@ -181,8 +182,9 @@
     <form class="controls-form" id="sim-form">
       <div class="field">
         <label for="symbol">Símbolo</label>
-        <input id="symbol" name="symbol" placeholder="AAPL, BTC-USD, EURUSD=X..." list="symbol-examples">
+        <input id="symbol" name="symbol" placeholder="AAPL, BTC-USD, EURUSD=X..." list="symbol-examples" autocomplete="off">
         <datalist id="symbol-examples"></datalist>
+        <span class="symbol-hint" id="symbol-hint"></span>
       </div>
       <div class="field">
         <label for="start_date">Desde</label>
@@ -518,6 +520,8 @@ function setStatus(kind, message) {
   banner.textContent = message || "";
 }
 
+const symbolInfo = {};
+
 async function loadOptions() {
   try {
     const [strategiesRes, symbolsRes] = await Promise.all([fetch("/strategies"), fetch("/symbols/examples")]);
@@ -530,15 +534,27 @@ async function loadOptions() {
     });
     const symbols = await symbolsRes.json();
     const datalist = document.getElementById("symbol-examples");
-    Object.values(symbols).flat().forEach(sym => {
-      const opt = document.createElement("option");
-      opt.value = sym;
-      datalist.appendChild(opt);
+    const ASSET_CLASS_LABELS = { stock: "Acción", crypto: "Cripto", forex: "Divisa", commodity: "Commodity", index: "Índice" };
+    Object.entries(symbols).forEach(([assetClass, items]) => {
+      items.forEach(item => {
+        const opt = document.createElement("option");
+        opt.value = item.symbol;
+        const label = `${item.name} · ${ASSET_CLASS_LABELS[assetClass] || assetClass}`;
+        opt.label = label;
+        opt.textContent = label;
+        datalist.appendChild(opt);
+        symbolInfo[item.symbol] = label;
+      });
     });
   } catch (e) {
     // Options are a nice-to-have; the form still works without them.
   }
 }
+
+document.getElementById("symbol").addEventListener("input", (evt) => {
+  const hint = document.getElementById("symbol-hint");
+  hint.textContent = symbolInfo[evt.target.value.trim().toUpperCase()] || "";
+});
 
 document.getElementById("sim-form").addEventListener("submit", async (evt) => {
   evt.preventDefault();
