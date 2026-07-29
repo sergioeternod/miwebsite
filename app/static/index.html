@@ -565,7 +565,7 @@ async function loadOptions() {
 function renderSymbolDropdown(query) {
   const dropdown = document.getElementById("symbol-dropdown");
   const q = query.trim().toLowerCase();
-  const matches = (q ? symbolList.filter(s => s.symbol.toLowerCase().includes(q) || s.name.toLowerCase().includes(q)) : symbolList).slice(0, 8);
+  const matches = (q ? symbolList.filter(s => s.symbol.toLowerCase().includes(q) || s.name.toLowerCase().includes(q)) : symbolList).slice(0, 50);
   if (!matches.length) { dropdown.classList.remove("open"); dropdown.innerHTML = ""; return; }
   dropdown.innerHTML = matches.map(s =>
     `<div class="item" data-symbol="${s.symbol}"><span class="sym">${s.symbol}</span><span class="desc">${s.name} · ${s.classLabel}</span></div>`
