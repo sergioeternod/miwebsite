@@ -51,6 +51,17 @@ class RankRequest(BaseModel):
     allow_short: bool = True
 
 
+class ScreenRequest(BaseModel):
+    symbols: list[str] | None = Field(
+        None, description="Ej. ['AAPL', 'MSFT', 'BTC-USD']. Si se omite y synthetic=false, usa el universo de ejemplo"
+    )
+    synthetic: bool = False
+    seed: int = 42
+    period: str = "2y"
+    interval: str = "1d"
+    top_n: int = Field(5, description="Cuántos símbolos mostrar por ventana")
+
+
 class ValidateRequest(BaseModel):
     symbol: str | None = Field(None, description="Omitir si synthetic=true")
     synthetic: bool = False

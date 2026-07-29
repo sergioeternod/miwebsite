@@ -19,6 +19,7 @@ from app.backtest.engine import compare_strategies, run_backtest
 from app.data.providers import DataUnavailableError, get_ohlcv
 from app.ranking import rank_real_symbols, rank_synthetic_profiles
 from app.recommend.engine import recommend
+from app.screener import screen_real_symbols, screen_synthetic
 from app.simulate import simulate_symbol, simulate_synthetic
 from app.strategies import STRATEGY_REGISTRY, all_strategies, build_strategy
 from app.validation.report import validate_symbol, validate_synthetic
@@ -214,6 +215,23 @@ def cmd_rank(args: argparse.Namespace) -> None:
     _print_json(summary)
 
 
+def cmd_screen(args: argparse.Namespace) -> None:
+    if args.synthetic:
+        report = screen_synthetic(seed=args.seed, top_n=args.top_n)
+    else:
+        symbols = [s.strip() for s in args.symbols.split(",") if s.strip()] if args.symbols else None
+        report = screen_real_symbols(symbols, period=args.period, interval=args.interval, top_n=args.top_n)
+
+    if args.out:
+        with open(args.out, "w", encoding="utf-8") as f:
+            json.dump(report, f, indent=2, ensure_ascii=False, default=str)
+
+    summary = {"top_by_window": report["top_by_window"], "errors": report["errors"]}
+    if args.out:
+        summary["full_report_saved_to"] = args.out
+    _print_json(summary)
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="Trading signals CLI")
     subparsers = parser.add_subparsers(dest="command", required=True)
@@ -307,6 +325,20 @@ def build_parser() -> argparse.ArgumentParser:
     rank_parser.add_argument("--no-short", action="store_true", help="Desactiva las posiciones en corto")
     rank_parser.add_argument("--out", default=None, help="Ruta donde guardar el reporte completo en JSON")
     rank_parser.set_defaults(func=cmd_rank)
+
+    screen_parser = subparsers.add_parser(
+        "screen", help="Sugiere los símbolos más rentables por retorno en semana/mes/año"
+    )
+    screen_parser.add_argument(
+        "--symbols", default=None, help="Lista separada por comas; si se omite usa el universo de ejemplo"
+    )
+    screen_parser.add_argument("--synthetic", action="store_true", help="Usa perfiles de mercado sintéticos (sin red)")
+    screen_parser.add_argument("--seed", type=int, default=42, help="Semilla de los perfiles sintéticos")
+    screen_parser.add_argument("--period", default="2y")
+    screen_parser.add_argument("--interval", default="1d")
+    screen_parser.add_argument("--top-n", type=int, default=5, help="Cuántos símbolos mostrar por ventana")
+    screen_parser.add_argument("--out", default=None, help="Ruta donde guardar el reporte completo en JSON")
+    screen_parser.set_defaults(func=cmd_screen)
 
     return parser
 

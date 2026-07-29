@@ -78,12 +78,19 @@ información histórica de mercado.
   símbolo? Con datos reales (varios símbolos) o con 5 perfiles de mercado
   sintéticos (alcista, bajista, lateral, volátil, mixto) cuando no hay acceso
   a internet.
+- **Screener de rentabilidad** (`app/screener.py`): sugiere los símbolos con
+  mayor retorno de precio (comprar y mantener, sin depender de ninguna
+  estrategia) en la última semana, mes y año. Por defecto escanea el universo
+  completo de símbolos de ejemplo (o los 5 perfiles sintéticos sin red) y
+  devuelve el top-N por ventana — la vía rápida para "¿qué se está moviendo
+  ahora mismo?", antes de entrar a comparar estrategias sobre un símbolo en
+  particular.
 - **API REST (FastAPI)** y **CLI** para correr backtests, simulaciones,
-  recomendaciones, validaciones y rankings.
-- Suite de tests (`pytest`, 77 casos) sobre datos sintéticos, sin depender de
+  recomendaciones, validaciones, rankings y el screener.
+- Suite de tests (`pytest`, 83 casos) sobre datos sintéticos, sin depender de
   red — incluye cobertura de posiciones largas y cortas, rangos de fecha, las
-  tres validaciones de expectativa vs realidad, montos en dólares, y el
-  ranking de símbolos.
+  tres validaciones de expectativa vs realidad, montos en dólares, el
+  ranking de símbolos y el screener.
 
 ## Comparación de las 5 estrategias
 
@@ -183,6 +190,27 @@ misma a todo. Con red disponible, corre esto sobre símbolos reales:
 python -m app.cli rank --symbols AAPL,MSFT,TSLA,BTC-USD,ETH-USD,EURUSD=X --period 2y
 ```
 
+## Símbolos más rentables (screener)
+
+Corriendo `screen` sobre los 5 perfiles sintéticos, top-3 por ventana (retorno
+de precio comprar y mantener, no ligado a ninguna estrategia):
+
+| Ventana | 1º | 2º | 3º |
+|---|---|---|---|
+| Semana | Mixto (5 regímenes) -0.20% | Tendencia alcista -0.23% | Lateral / rango -0.68% |
+| Mes | Mixto (5 regímenes) +17.50% | Tendencia alcista +0.34% | Lateral / rango -1.77% |
+| Año | Tendencia alcista +18.30% | Lateral / rango -10.40% | Alta volatilidad -27.33% |
+
+En este escenario el perfil mixto está en plena "recuperación" al final del
+histórico (de ahí su +17.5% del último mes pese a ir casi plano en la última
+semana), mientras que a un año la tendencia alcista sostenida es la más
+rentable — justo lo que se espera de cada perfil por diseño. Con red
+disponible, sin pasar símbolos escanea el universo completo de ejemplo:
+```bash
+python -m app.cli screen --out screener.json
+python -m app.cli screen --symbols AAPL,MSFT,TSLA,BTC-USD,ETH-USD,EURUSD=X
+```
+
 ## Instalación
 
 ```bash
@@ -214,6 +242,11 @@ python -m app.cli validate --symbol AAPL --period 2y --split-ratio 0.6 --horizon
 # Ranking: ¿con qué símbolo funciona mejor cada estrategia?
 python -m app.cli rank --synthetic --out ranking.json
 python -m app.cli rank --symbols AAPL,MSFT,BTC-USD,EURUSD=X --period 2y
+
+# Screener: ¿cuáles son los símbolos más rentables ahora (semana/mes/año)?
+python -m app.cli screen --synthetic
+python -m app.cli screen --symbols AAPL,MSFT,BTC-USD,EURUSD=X --top-n 10
+python -m app.cli screen --out screener.json  # sin --symbols escanea el universo de ejemplo
 ```
 
 ## Uso — Pantalla web
@@ -222,7 +255,7 @@ python -m app.cli rank --symbols AAPL,MSFT,BTC-USD,EURUSD=X --period 2y
 uvicorn app.api.main:app --reload
 ```
 
-Abre `http://localhost:8000/` en el navegador. Tiene tres pestañas:
+Abre `http://localhost:8000/` en el navegador. Tiene cuatro pestañas:
 
 - **Simulador**: símbolo, **rango de fechas** (desde/hasta), estrategia (o
   "Todas" para comparar) y el switch de posiciones cortas. Si no hay acceso a
@@ -242,6 +275,10 @@ Abre `http://localhost:8000/` en el navegador. Tiene tres pestañas:
   sin red) — corre las 5 estrategias sobre todos y muestra el mejor símbolo
   por estrategia, la mejor estrategia por símbolo, y una matriz completa con
   mapa de calor (verde/rojo) de ganancia promedio por transacción.
+- **Más rentables**: lista de símbolos separada por coma, vacía para escanear
+  el universo de ejemplo completo, o perfiles sintéticos sin red — muestra el
+  top-N (configurable) de símbolos con mayor retorno de precio en la última
+  semana, mes y año, y qué símbolos no tenían datos suficientes.
 
 ## Uso — API
 
@@ -258,6 +295,7 @@ uvicorn app.api.main:app --reload
 - `POST /simulate` — body: `{"symbol": "AAPL", "start_date": "2023-06-01", "end_date": "2023-09-30"}` o `{"synthetic": true, "strategy": "sma_crossover", "start_date": "2023-04-01", "end_date": "2023-09-30"}`
 - `POST /validate` — body: `{"symbol": "AAPL", "period": "2y"}` o `{"synthetic": true, "split_ratio": 0.6, "horizon": 15}`
 - `POST /rank` — body: `{"symbols": ["AAPL", "MSFT", "BTC-USD"], "period": "2y"}` o `{"synthetic": true}`
+- `POST /screen` — body: `{"symbols": ["AAPL", "MSFT", "BTC-USD"], "top_n": 10}`, `{"synthetic": true}`, o `{}` (escanea el universo de ejemplo)
 
 ## Estructura del proyecto
 
@@ -274,8 +312,9 @@ app/
   validation/            # expectativa vs realidad: fuera de muestra, precisión
                          # direccional, precisión de recomendaciones
   ranking.py             # comparación estrategia × símbolo
+  screener.py            # ranking de rentabilidad por ventana (semana/mes/año)
   api/main.py            # FastAPI (sirve también la pantalla web en "/")
-  static/index.html       # pantalla web (3 pestañas: Simulador/Validación/Símbolos)
+  static/index.html       # pantalla web (4 pestañas: Simulador/Validación/Símbolos/Más rentables)
   cli.py                 # interfaz de línea de comandos
 tests/
 ```

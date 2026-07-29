@@ -6,12 +6,13 @@ from pathlib import Path
 from fastapi import FastAPI, HTTPException, Response
 from fastapi.staticfiles import StaticFiles
 
-from app.api.schemas import BacktestRequest, CompareRequest, RankRequest, SimulateRequest, ValidateRequest
+from app.api.schemas import BacktestRequest, CompareRequest, RankRequest, ScreenRequest, SimulateRequest, ValidateRequest
 from app.backtest.engine import BacktestResult, compare_strategies, run_backtest
 from app.config import EXAMPLE_SYMBOLS
 from app.data.providers import DataUnavailableError, get_ohlcv
 from app.ranking import rank_real_symbols, rank_synthetic_profiles
 from app.recommend.engine import recommend
+from app.screener import screen_real_symbols, screen_synthetic
 from app.simulate import simulate_symbol, simulate_synthetic
 from app.strategies import STRATEGY_REGISTRY, all_strategies, build_strategy
 from app.validation.report import validate_symbol, validate_synthetic
@@ -199,6 +200,23 @@ def post_rank(request: RankRequest) -> dict:
             start_date=request.start_date,
             end_date=request.end_date,
             **kwargs,
+        )
+    except DataUnavailableError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@app.post("/screen")
+def post_screen(request: ScreenRequest) -> dict:
+    try:
+        if request.synthetic:
+            return screen_synthetic(seed=request.seed, top_n=request.top_n)
+        return screen_real_symbols(
+            request.symbols,
+            period=request.period,
+            interval=request.interval,
+            top_n=request.top_n,
         )
     except DataUnavailableError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc

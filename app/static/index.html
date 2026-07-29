@@ -220,6 +220,7 @@
     <button type="button" id="tab-btn-simulate" class="active" role="tab" aria-selected="true">Simulador</button>
     <button type="button" id="tab-btn-validate" role="tab" aria-selected="false">Validación</button>
     <button type="button" id="tab-btn-rank" role="tab" aria-selected="false">Símbolos</button>
+    <button type="button" id="tab-btn-screen" role="tab" aria-selected="false">Más rentables</button>
   </div>
 
   <div id="panel-simulate" class="tab-panel active">
@@ -486,11 +487,65 @@
   </div>
   <!-- /#panel-rank -->
 
+  <div id="panel-screen" class="tab-panel">
+    <div class="card">
+      <h2>Símbolos más rentables</h2>
+      <p class="desc">Retorno de precio (comprar y mantener) en la última semana, mes y año — sin depender de ninguna estrategia, para detectar rápido qué se está moviendo.</p>
+      <form class="controls-form" id="screen-form">
+        <div class="field" style="grid-column: span 2;">
+          <label for="screen-symbols">Símbolos (separados por coma)</label>
+          <input id="screen-symbols" placeholder="Vacío = usar universo de ejemplo completo">
+        </div>
+        <div class="field">
+          <label for="screen-period">Periodo de datos</label>
+          <select id="screen-period">
+            <option value="1y">1 año</option>
+            <option value="2y" selected>2 años</option>
+            <option value="5y">5 años</option>
+          </select>
+        </div>
+        <div class="field">
+          <label for="screen-top-n">Top N por ventana</label>
+          <input type="number" id="screen-top-n" value="5" min="1" max="20" step="1">
+        </div>
+        <div class="field checkbox">
+          <input type="checkbox" id="screen-synthetic">
+          <label for="screen-synthetic">Usar perfiles de mercado sintéticos (sin red)</label>
+        </div>
+        <button type="submit" class="run-btn" id="screen-run-btn">Buscar más rentables</button>
+        <div class="hint">Sin símbolos y sin marcar sintético, se escanea el universo de ejemplo (acciones, cripto, divisas, commodities, índices).</div>
+      </form>
+    </div>
+
+    <div class="status-banner" id="screen-status-banner"></div>
+
+    <div id="screen-results">
+      <div class="card" id="screen-errors-card" style="display:none;">
+        <h2>Símbolos sin datos</h2>
+        <p class="desc" id="screen-errors-list"></p>
+      </div>
+      <div class="card">
+        <h2>Última semana</h2>
+        <table class="metrics" id="screen-week-table"></table>
+      </div>
+      <div class="card">
+        <h2>Último mes</h2>
+        <table class="metrics" id="screen-month-table"></table>
+      </div>
+      <div class="card">
+        <h2>Último año</h2>
+        <table class="metrics" id="screen-year-table"></table>
+      </div>
+    </div>
+  </div>
+  <!-- /#panel-screen -->
+
   <footer>
     Trading Signals App — API en <code>/docs</code>. Los mismos parámetros están disponibles vía CLI:
     <code>python -m app.cli simulate --symbol AAPL --start-date 2023-06-01 --end-date 2023-09-30</code>
     · <code>python -m app.cli validate --symbol AAPL --period 2y</code>
     · <code>python -m app.cli rank --symbols AAPL,MSFT,BTC-USD</code>
+    · <code>python -m app.cli screen --synthetic</code>
   </footer>
 </div>
 
@@ -866,6 +921,7 @@ const TABS = {
   simulate: { btn: document.getElementById("tab-btn-simulate"), panel: document.getElementById("panel-simulate") },
   validate: { btn: document.getElementById("tab-btn-validate"), panel: document.getElementById("panel-validate") },
   rank: { btn: document.getElementById("tab-btn-rank"), panel: document.getElementById("panel-rank") },
+  screen: { btn: document.getElementById("tab-btn-screen"), panel: document.getElementById("panel-screen") },
 };
 
 function showTab(name) {
@@ -1235,6 +1291,83 @@ document.getElementById("rank-form").addEventListener("submit", async (evt) => {
     renderRankReport(report);
   } catch (e) {
     setRankStatus("error", e.message || "Ocurrió un error al comparar.");
+  } finally {
+    runBtn.disabled = false;
+  }
+});
+
+// ---------- Más rentables (screener) tab ----------
+function setScreenStatus(kind, message) {
+  const banner = document.getElementById("screen-status-banner");
+  banner.className = "status-banner" + (kind ? " " + kind : "");
+  banner.textContent = message || "";
+}
+
+const SCREEN_WINDOW_TABLES = { "semana": "screen-week-table", "mes": "screen-month-table", "año": "screen-year-table" };
+
+function renderScreenWindowTable(tableId, rows) {
+  const table = document.getElementById(tableId);
+  let html = "<thead><tr><th>#</th><th>Símbolo</th><th>Retorno</th></tr></thead><tbody>";
+  if (!rows.length) {
+    html += `<tr><td colspan="3" style="text-align:center;color:var(--text-muted);">Sin datos suficientes</td></tr>`;
+  }
+  rows.forEach((r, idx) => {
+    html += `<tr class="${idx === 0 ? "best" : ""}">
+      <td>${idx + 1}</td>
+      <td>${r.symbol}</td>
+      <td class="ret ${r.return_pct >= 0 ? "pos" : "neg"}">${fmtPct(r.return_pct)}</td>
+    </tr>`;
+  });
+  table.innerHTML = html + "</tbody>";
+}
+
+function renderScreenReport(report) {
+  document.getElementById("screen-results").style.display = "block";
+  Object.entries(SCREEN_WINDOW_TABLES).forEach(([window, tableId]) => {
+    renderScreenWindowTable(tableId, report.top_by_window[window] || []);
+  });
+  const errorEntries = Object.entries(report.errors || {});
+  const errorsCard = document.getElementById("screen-errors-card");
+  if (errorEntries.length) {
+    document.getElementById("screen-errors-list").textContent = errorEntries.map(([sym]) => sym).join(", ");
+    errorsCard.style.display = "block";
+  } else {
+    errorsCard.style.display = "none";
+  }
+}
+
+document.getElementById("screen-form").addEventListener("submit", async (evt) => {
+  evt.preventDefault();
+  const runBtn = document.getElementById("screen-run-btn");
+  const synthetic = document.getElementById("screen-synthetic").checked;
+  const symbolsRaw = document.getElementById("screen-symbols").value.trim();
+  const symbols = symbolsRaw ? symbolsRaw.split(",").map(s => s.trim()).filter(Boolean) : null;
+
+  const payload = {
+    symbols: synthetic ? null : symbols,
+    synthetic,
+    period: document.getElementById("screen-period").value,
+    top_n: parseInt(document.getElementById("screen-top-n").value, 10) || 5,
+  };
+
+  runBtn.disabled = true;
+  setScreenStatus("loading", "Buscando…");
+  document.getElementById("screen-results").style.display = "none";
+  try {
+    const resp = await fetch("/screen", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+    if (!resp.ok) {
+      const err = await resp.json().catch(() => ({}));
+      throw new Error(err.detail || `Error ${resp.status}`);
+    }
+    const report = await resp.json();
+    setScreenStatus(null, "");
+    renderScreenReport(report);
+  } catch (e) {
+    setScreenStatus("error", e.message || "Ocurrió un error al buscar símbolos rentables.");
   } finally {
     runBtn.disabled = false;
   }
