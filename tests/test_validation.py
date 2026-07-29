@@ -118,6 +118,12 @@ def test_build_validation_report_shape(random_walk_df):
     assert report["recommendation_walk_forward"]["num_evaluations"] > 0
 
 
+def test_build_validation_report_includes_price_series(random_walk_df):
+    report = build_validation_report(random_walk_df, symbol="TEST", warmup=110, horizon=10, step=20)
+    assert len(report["price_series"]) == len(random_walk_df)
+    assert report["regimes"] == []  # no regime_dates passed -> no synthetic regimes
+
+
 def test_build_validation_report_rejects_too_little_data(random_walk_df):
     with pytest.raises(ValueError):
         build_validation_report(random_walk_df.iloc[:50], warmup=110, horizon=10)
@@ -127,3 +133,18 @@ def test_validate_synthetic_end_to_end():
     report = validate_synthetic(warmup=110, horizon=10, step=20)
     assert report["symbol"] == "SYNTH"
     assert len(report["out_of_sample"]) == len(STRATEGY_REGISTRY)
+
+
+def test_validate_synthetic_includes_regimes_and_price_series():
+    report = validate_synthetic(warmup=110, horizon=10, step=20)
+    assert len(report["price_series"]) == report["num_bars"]
+    assert report["regimes"], "el escenario sintético debería exponer sus regímenes"
+
+
+def test_validate_synthetic_date_range_windows_regimes():
+    report = validate_synthetic(
+        warmup=30, horizon=5, step=10, start_date="2023-04-01", end_date="2023-09-30"
+    )
+    n = report["num_bars"]
+    for _name, start_idx, end_idx in report["regimes"]:
+        assert 0 <= start_idx <= end_idx < n

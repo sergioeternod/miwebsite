@@ -131,7 +131,7 @@
   .status-banner.error { display: block; background: color-mix(in srgb, var(--critical) 12%, transparent); color: var(--critical); border: 1px solid color-mix(in srgb, var(--critical) 30%, transparent); }
   .status-banner.loading { display: block; background: var(--surface-1); color: var(--text-secondary); border: 1px solid var(--border); }
 
-  #results { display: none; }
+  #results, #val-results { display: none; }
 
   .stat-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 14px; margin-bottom: 20px; }
   .stat-tile {
@@ -183,16 +183,44 @@
   .ret.neg { color: var(--critical); }
 
   footer { margin-top: 28px; font-size: 12px; color: var(--text-muted); line-height: 1.6; }
+
+  .tab-nav { display: flex; gap: 6px; margin-bottom: 20px; border-bottom: 1px solid var(--border); }
+  .tab-nav button {
+    font: inherit; font-size: 14px; font-weight: 600; padding: 10px 16px; margin-bottom: -1px;
+    border: none; background: transparent; color: var(--text-secondary); cursor: pointer;
+    border-bottom: 2px solid transparent;
+  }
+  .tab-nav button.active { color: var(--text-primary); border-bottom-color: var(--accent); }
+  .tab-panel { display: none; }
+  .tab-panel.active { display: block; }
+
+  details.advanced { margin-top: 4px; }
+  details.advanced summary { font-size: 12.5px; color: var(--text-secondary); cursor: pointer; }
+  details.advanced .controls-form { margin-top: 12px; }
+
+  .row-label { fill: var(--text-primary); font-size: 12.5px; font-weight: 600; }
+  .sub-label { fill: var(--text-muted); font-size: 10px; }
+  .value-label { font-size: 11px; font-weight: 600; }
+  .tag { font-size: 11px; padding: 2px 8px; border-radius: 5px; font-weight: 600; }
+  .tag.pos { background: color-mix(in srgb, var(--good) 16%, transparent); color: var(--good); }
+  .tag.neg { background: color-mix(in srgb, var(--critical) 16%, transparent); color: var(--critical); }
 </style>
 </head>
 <body>
 <div class="wrap">
-  <h1>Simulador de trading</h1>
-  <p class="subtitle">Elige un símbolo (o un escenario sintético), un rango de fechas y una estrategia, y corre la simulación sobre datos históricos.</p>
+  <h1>Trading Signals</h1>
+  <p class="subtitle">Simula estrategias sobre datos históricos, o valida qué tan bien predijeron lo que realmente pasó.</p>
 
   <div class="disclaimer">
     ⚠️ <strong>No es asesoría financiera.</strong> Resultados basados en indicadores técnicos y backtests históricos; el desempeño pasado no garantiza resultados futuros.
   </div>
+
+  <div class="tab-nav" role="tablist">
+    <button type="button" id="tab-btn-simulate" class="active" role="tab" aria-selected="true">Simulador</button>
+    <button type="button" id="tab-btn-validate" role="tab" aria-selected="false">Validación</button>
+  </div>
+
+  <div id="panel-simulate" class="tab-panel active">
 
   <div class="card">
     <h2>Parámetros de la simulación</h2>
@@ -287,10 +315,114 @@
       </div>
     </div>
   </div>
+  <!-- /#results -->
+  </div>
+  <!-- /#panel-simulate -->
+
+  <div id="panel-validate" class="tab-panel">
+    <div class="card">
+      <h2>Parámetros de la validación</h2>
+      <p class="desc">Compara expectativa (desempeño pasado) contra realidad (lo que pasó después) de tres formas: fuera de muestra, precisión direccional por operación, y precisión del motor de recomendaciones.</p>
+      <form class="controls-form" id="val-form">
+        <div class="field" style="position:relative;">
+          <label for="val-symbol">Símbolo</label>
+          <input id="val-symbol" name="symbol" placeholder="AAPL, BTC-USD, EURUSD=X..." autocomplete="off">
+          <span class="symbol-hint" id="val-symbol-hint"></span>
+          <div class="symbol-dropdown" id="val-symbol-dropdown"></div>
+        </div>
+        <div class="field">
+          <label for="val-start-date">Desde</label>
+          <input type="date" id="val-start-date" name="start_date">
+        </div>
+        <div class="field">
+          <label for="val-end-date">Hasta</label>
+          <input type="date" id="val-end-date" name="end_date">
+        </div>
+        <div class="field">
+          <label for="val-capital">Capital inicial</label>
+          <input type="number" id="val-capital" name="capital" value="10000" min="100" step="100">
+        </div>
+        <div class="field">
+          <label for="val-commission">Comisión (bps)</label>
+          <input type="number" id="val-commission" name="commission" value="5" min="0" step="1">
+        </div>
+        <div class="field checkbox">
+          <input type="checkbox" id="val-allow-short" name="allow_short" checked>
+          <label for="val-allow-short">Permitir posiciones cortas</label>
+        </div>
+        <div class="field checkbox">
+          <input type="checkbox" id="val-synthetic" name="synthetic">
+          <label for="val-synthetic">Usar escenario sintético (sin red)</label>
+        </div>
+        <button type="submit" class="run-btn" id="val-run-btn">Validar</button>
+        <details class="advanced">
+          <summary>Opciones avanzadas</summary>
+          <div class="controls-form">
+            <div class="field">
+              <label for="val-split-ratio">Expectativa (% del histórico)</label>
+              <input type="number" id="val-split-ratio" value="50" min="10" max="90" step="5">
+            </div>
+            <div class="field">
+              <label for="val-horizon">Horizonte (barras)</label>
+              <input type="number" id="val-horizon" value="10" min="1" step="1">
+            </div>
+            <div class="field">
+              <label for="val-step">Separación (barras)</label>
+              <input type="number" id="val-step" value="10" min="1" step="1">
+            </div>
+            <div class="field">
+              <label for="val-warmup">Calentamiento (barras)</label>
+              <input type="number" id="val-warmup" value="110" min="20" step="10">
+            </div>
+          </div>
+        </details>
+        <div class="hint">El escenario sintético cubre 2023-01-01 a 2023-11-16 — el rango de fechas recorta dentro de esa ventana.</div>
+      </form>
+    </div>
+
+    <div class="status-banner" id="val-status-banner"></div>
+
+    <div id="val-results">
+      <div class="card">
+        <h2>1. Validación fuera de muestra</h2>
+        <p class="desc">Expectativa = desempeño en la primera parte del histórico. Realidad = desempeño en la parte siguiente, sin reajustar nada. Barras a la derecha = ganancia promedio por operación positiva; a la izquierda = negativa.</p>
+        <div class="chart-container">
+          <svg class="chart" id="oos-chart" viewBox="0 0 960 400" preserveAspectRatio="xMidYMid meet"></svg>
+        </div>
+        <table class="metrics" id="oos-table" style="margin-top:16px;"></table>
+      </div>
+
+      <div class="card">
+        <h2>2. Precisión direccional por operación</h2>
+        <p class="desc">% de operaciones donde la dirección esperada (compra=sube, corto=baja) coincidió con la realidad. La línea punteada marca 50% (azar).</p>
+        <div class="chart-container">
+          <svg class="chart" id="hitrate-chart" viewBox="0 0 960 230" preserveAspectRatio="xMidYMid meet"></svg>
+        </div>
+      </div>
+
+      <div class="card">
+        <h2>3. Precisión del motor de recomendaciones (walk-forward)</h2>
+        <p class="desc">Recalcula la recomendación ensemble en varias fechas históricas usando solo datos disponibles hasta ese momento, y compara contra el retorno real de los siguientes N días.</p>
+        <div class="stat-row" id="rec-summary"></div>
+        <div class="chart-container" style="margin-top:16px;">
+          <svg class="chart" id="rec-chart" viewBox="0 0 960 360" preserveAspectRatio="xMidYMid meet"></svg>
+          <div class="tooltip" id="rec-tooltip"></div>
+        </div>
+        <div class="legend">
+          <span class="item"><span class="swatch" style="background:var(--good)"></span>BUY</span>
+          <span class="item"><span class="swatch" style="background:var(--critical)"></span>SELL</span>
+          <span class="item"><span class="swatch" style="background:var(--text-muted)"></span>HOLD</span>
+          <span class="item">Relleno = acertó · Hueco = falló</span>
+        </div>
+      </div>
+    </div>
+  </div>
+  <!-- /#panel-validate -->
 
   <footer>
     Trading Signals App — API en <code>/docs</code>. Los mismos parámetros están disponibles vía CLI:
     <code>python -m app.cli simulate --symbol AAPL --start-date 2023-06-01 --end-date 2023-09-30</code>
+    · <code>python -m app.cli validate --symbol AAPL --period 2y</code>
   </footer>
 </div>
 
@@ -567,41 +699,43 @@ async function loadOptions() {
   }
 }
 
-function renderSymbolDropdown(query) {
-  const dropdown = document.getElementById("symbol-dropdown");
-  const q = query.trim().toLowerCase();
-  const matches = (q ? symbolList.filter(s => s.symbol.toLowerCase().includes(q) || s.name.toLowerCase().includes(q)) : symbolList).slice(0, 50);
-  if (!matches.length) { dropdown.classList.remove("open"); dropdown.innerHTML = ""; return; }
-  dropdown.innerHTML = matches.map(s =>
-    `<div class="item" data-symbol="${s.symbol}"><span class="sym">${s.symbol}</span><span class="desc">${s.name} · ${s.classLabel}</span></div>`
-  ).join("");
-  dropdown.classList.add("open");
+function attachSymbolPicker(inputId, dropdownId, hintId) {
+  const input = document.getElementById(inputId);
+  const dropdown = document.getElementById(dropdownId);
+  const hint = document.getElementById(hintId);
+
+  function render(query) {
+    const q = query.trim().toLowerCase();
+    const matches = (q ? symbolList.filter(s => s.symbol.toLowerCase().includes(q) || s.name.toLowerCase().includes(q)) : symbolList).slice(0, 50);
+    if (!matches.length) { dropdown.classList.remove("open"); dropdown.innerHTML = ""; return; }
+    dropdown.innerHTML = matches.map(s =>
+      `<div class="item" data-symbol="${s.symbol}"><span class="sym">${s.symbol}</span><span class="desc">${s.name} · ${s.classLabel}</span></div>`
+    ).join("");
+    dropdown.classList.add("open");
+  }
+  function close() { dropdown.classList.remove("open"); }
+
+  input.addEventListener("input", (evt) => {
+    hint.textContent = symbolInfo[evt.target.value.trim().toUpperCase()] || "";
+    render(evt.target.value);
+  });
+  input.addEventListener("focus", (evt) => render(evt.target.value));
+  input.addEventListener("blur", () => setTimeout(close, 150));
+  dropdown.addEventListener("mousedown", (evt) => {
+    const item = evt.target.closest(".item");
+    if (!item) return;
+    evt.preventDefault();
+    input.value = item.dataset.symbol;
+    hint.textContent = symbolInfo[item.dataset.symbol] || "";
+    close();
+  });
+  document.addEventListener("click", (evt) => {
+    if (evt.target !== input && !dropdown.contains(evt.target)) close();
+  });
 }
 
-function closeSymbolDropdown() {
-  const dropdown = document.getElementById("symbol-dropdown");
-  dropdown.classList.remove("open");
-}
-
-const symbolInput = document.getElementById("symbol");
-const symbolDropdown = document.getElementById("symbol-dropdown");
-
-symbolInput.addEventListener("input", (evt) => {
-  document.getElementById("symbol-hint").textContent = symbolInfo[evt.target.value.trim().toUpperCase()] || "";
-  renderSymbolDropdown(evt.target.value);
-});
-symbolInput.addEventListener("focus", (evt) => renderSymbolDropdown(evt.target.value));
-symbolDropdown.addEventListener("mousedown", (evt) => {
-  const item = evt.target.closest(".item");
-  if (!item) return;
-  evt.preventDefault();
-  symbolInput.value = item.dataset.symbol;
-  document.getElementById("symbol-hint").textContent = symbolInfo[item.dataset.symbol] || "";
-  closeSymbolDropdown();
-});
-document.addEventListener("click", (evt) => {
-  if (evt.target !== symbolInput && !symbolDropdown.contains(evt.target)) closeSymbolDropdown();
-});
+attachSymbolPicker("symbol", "symbol-dropdown", "symbol-hint");
+attachSymbolPicker("val-symbol", "val-symbol-dropdown", "val-symbol-hint");
 
 document.getElementById("sim-form").addEventListener("submit", async (evt) => {
   evt.preventDefault();
@@ -645,6 +779,274 @@ document.getElementById("sim-form").addEventListener("submit", async (evt) => {
     renderReport(report);
   } catch (e) {
     setStatus("error", e.message || "Ocurrió un error al simular.");
+  } finally {
+    runBtn.disabled = false;
+  }
+});
+
+// ---------- Tabs ----------
+const tabBtnSimulate = document.getElementById("tab-btn-simulate");
+const tabBtnValidate = document.getElementById("tab-btn-validate");
+const panelSimulate = document.getElementById("panel-simulate");
+const panelValidate = document.getElementById("panel-validate");
+
+function showTab(name) {
+  const isSim = name === "simulate";
+  panelSimulate.classList.toggle("active", isSim);
+  panelValidate.classList.toggle("active", !isSim);
+  tabBtnSimulate.classList.toggle("active", isSim);
+  tabBtnValidate.classList.toggle("active", !isSim);
+  tabBtnSimulate.setAttribute("aria-selected", String(isSim));
+  tabBtnValidate.setAttribute("aria-selected", String(!isSim));
+}
+tabBtnSimulate.addEventListener("click", () => showTab("simulate"));
+tabBtnValidate.addEventListener("click", () => showTab("validate"));
+
+function setValStatus(kind, message) {
+  const banner = document.getElementById("val-status-banner");
+  banner.className = "status-banner" + (kind ? " " + kind : "");
+  banner.textContent = message || "";
+}
+
+// ---------- 1. Out-of-sample diverging bar chart ----------
+function renderOosChart(report) {
+  const svg = document.getElementById("oos-chart");
+  svg.innerHTML = "";
+  const rows = report.out_of_sample;
+  const W = 960, LABEL_W = 190, MARGIN_R = 60, ROW_H = 68, BAR_H = 14, GAP = 6;
+  const barAreaW = W - LABEL_W - MARGIN_R;
+  const zeroX = LABEL_W + barAreaW / 2;
+
+  const allVals = rows.flatMap(r => [r.period_a.metrics.avg_profit_per_trade_pct, r.period_b.metrics.avg_profit_per_trade_pct]);
+  const maxAbs = Math.max(...allVals.map(Math.abs), 1);
+  const pxPerUnit = (barAreaW / 2 - 45) / maxAbs;
+
+  svg.setAttribute("viewBox", `0 0 ${W} ${rows.length * ROW_H + 20}`);
+  svg.appendChild(svgEl("line", { x1: zeroX, x2: zeroX, y1: 4, y2: rows.length * ROW_H + 10, class: "gridline" }));
+
+  rows.forEach((r, i) => {
+    const yTop = i * ROW_H + 10;
+    const label = svgEl("text", { x: 0, y: yTop + BAR_H + 2, class: "row-label" });
+    label.textContent = strategyLabel(r.strategy);
+    svg.appendChild(label);
+
+    [
+      { key: "Expectativa", value: r.period_a.metrics.avg_profit_per_trade_pct, y: yTop + BAR_H + 10 },
+      { key: "Realidad", value: r.period_b.metrics.avg_profit_per_trade_pct, y: yTop + BAR_H + 10 + BAR_H + GAP },
+    ].forEach(bar => {
+      const color = bar.value >= 0 ? "var(--good)" : "var(--critical)";
+      const barW = Math.abs(bar.value) * pxPerUnit;
+      const x = bar.value >= 0 ? zeroX : zeroX - barW;
+      svg.appendChild(svgEl("rect", { x, y: bar.y, width: barW, height: BAR_H, rx: 3, fill: color }));
+      const tag = svgEl("text", { x: LABEL_W - 8, y: bar.y + BAR_H - 3, "text-anchor": "end", class: "sub-label" });
+      tag.textContent = bar.key;
+      svg.appendChild(tag);
+      const valueLabel = svgEl("text", {
+        x: bar.value >= 0 ? x + barW + 6 : x - 6,
+        y: bar.y + BAR_H - 3,
+        "text-anchor": bar.value >= 0 ? "start" : "end",
+        class: "value-label",
+        fill: color,
+      });
+      valueLabel.textContent = fmtPct(bar.value);
+      svg.appendChild(valueLabel);
+    });
+  });
+}
+
+function renderOosTable(report) {
+  const table = document.getElementById("oos-table");
+  let html = "<thead><tr><th>Estrategia</th><th>Fecha de corte</th><th>Expectativa</th><th>Realidad</th><th>Win rate exp.</th><th>Win rate real</th><th>¿Coincide?</th></tr></thead><tbody>";
+  report.out_of_sample.forEach(r => {
+    const match = r.consistency.profitability_sign_matches;
+    html += `<tr>
+      <td>${strategyLabel(r.strategy)}</td>
+      <td>${r.split_date.slice(0,10)}</td>
+      <td>${fmtPct(r.period_a.metrics.avg_profit_per_trade_pct)}</td>
+      <td>${fmtPct(r.period_b.metrics.avg_profit_per_trade_pct)}</td>
+      <td>${r.period_a.metrics.win_rate_pct.toFixed(1)}%</td>
+      <td>${r.period_b.metrics.win_rate_pct.toFixed(1)}%</td>
+      <td><span class="tag ${match ? "pos" : "neg"}">${match ? "Sí" : "No"}</span></td>
+    </tr>`;
+  });
+  table.innerHTML = html + "</tbody>";
+}
+
+// ---------- 2. Directional hit-rate chart ----------
+function renderHitRateChart(report) {
+  const svg = document.getElementById("hitrate-chart");
+  svg.innerHTML = "";
+  const rows = report.directional_accuracy;
+  const W = 960, LABEL_W = 190, MARGIN_R = 70, ROW_H = 40, BAR_H = 16;
+  const barAreaW = W - LABEL_W - MARGIN_R;
+  const pxPerPct = barAreaW / 100;
+
+  svg.setAttribute("viewBox", `0 0 ${W} ${rows.length * ROW_H + 20}`);
+
+  const refX = LABEL_W + 50 * pxPerPct;
+  svg.appendChild(svgEl("line", { x1: refX, x2: refX, y1: 4, y2: rows.length * ROW_H + 6, stroke: "var(--baseline)", "stroke-width": 1, "stroke-dasharray": "4,3" }));
+  const refLabel = svgEl("text", { x: refX, y: rows.length * ROW_H + 16, "text-anchor": "middle", class: "axis-text" });
+  refLabel.textContent = "50% (azar)";
+  svg.appendChild(refLabel);
+
+  rows.forEach((r, i) => {
+    const y = i * ROW_H + 10;
+    const label = svgEl("text", { x: 0, y: y + BAR_H - 3, class: "row-label" });
+    label.textContent = strategyLabel(r.strategy);
+    svg.appendChild(label);
+
+    const hitRate = r.accuracy.hit_rate_pct;
+    const color = hitRate >= 50 ? "var(--good)" : "var(--critical)";
+    const barW = hitRate * pxPerPct;
+    svg.appendChild(svgEl("rect", { x: LABEL_W, y, width: barW, height: BAR_H, rx: 3, fill: color }));
+    const valueLabel = svgEl("text", { x: LABEL_W + barW + 8, y: y + BAR_H - 3, class: "value-label", fill: color });
+    valueLabel.textContent = `${hitRate.toFixed(1)}% (${r.accuracy.num_trades} operaciones)`;
+    svg.appendChild(valueLabel);
+  });
+}
+
+// ---------- 3. Recommendation walk-forward ----------
+function renderRecSummary(report) {
+  const container = document.getElementById("rec-summary");
+  container.innerHTML = "";
+  const s = report.recommendation_walk_forward.summary;
+  const tile = (label, bucket) => {
+    const div = document.createElement("div");
+    div.className = "stat-tile";
+    const avgClass = (bucket.avg_forward_return_pct ?? 0) >= 0 ? "pos" : "neg";
+    const hitLine = (bucket.hit_rate_pct !== null && bucket.hit_rate_pct !== undefined)
+      ? `<div class="sub">Acierto: ${bucket.hit_rate_pct.toFixed(1)}%</div>` : "";
+    div.innerHTML = `<div class="label">${label} (${bucket.count})</div>` +
+      `<div class="value ${avgClass}">${fmtPct(bucket.avg_forward_return_pct ?? 0)}</div>` +
+      `<div class="sub">Retorno real promedio a ${report.recommendation_walk_forward.horizon_bars} días</div>${hitLine}`;
+    return div;
+  };
+  container.appendChild(tile("BUY", s.buy));
+  container.appendChild(tile("SELL", s.sell));
+  container.appendChild(tile("HOLD", s.hold));
+}
+
+function renderRecChart(report) {
+  const svg = document.getElementById("rec-chart");
+  svg.innerHTML = "";
+  const prices = report.price_series.map(p => p.close);
+  const n = prices.length;
+  const min = Math.min(...prices), max = Math.max(...prices);
+  const pad = (max - min) * 0.08 || 1;
+  const yMin = min - pad, yMax = max + pad;
+
+  (report.regimes || []).forEach(([name, start, end], idx) => {
+    const x0 = xScale(start, n), x1 = xScale(Math.min(end, n - 1), n);
+    svg.appendChild(svgEl("rect", { x: x0, y: MARGIN.top, width: Math.max(x1 - x0, 0), height: PLOT_H, fill: idx % 2 === 0 ? "var(--grid)" : "transparent", opacity: 0.35 }));
+    const label = svgEl("text", { x: (x0 + x1) / 2, y: MARGIN.top - 8, "text-anchor": "middle", class: "regime-band-label" });
+    label.textContent = name;
+    svg.appendChild(label);
+  });
+
+  niceTicks(yMin, yMax, 4).forEach(t => {
+    const y = yScale(t, yMin, yMax);
+    svg.appendChild(svgEl("line", { x1: MARGIN.left, x2: CHART_W - MARGIN.right, y1: y, y2: y, class: "gridline" }));
+    const label = svgEl("text", { x: MARGIN.left - 8, y: y + 3, "text-anchor": "end", class: "axis-text" });
+    label.textContent = t.toFixed(0);
+    svg.appendChild(label);
+  });
+
+  let d = "";
+  prices.forEach((p, i) => { const x = xScale(i, n), y = yScale(p, yMin, yMax); d += (i === 0 ? "M" : "L") + x.toFixed(2) + "," + y.toFixed(2) + " "; });
+  svg.appendChild(svgEl("path", { d, fill: "none", stroke: "var(--baseline)", "stroke-width": 2, "stroke-linejoin": "round", "stroke-linecap": "round" }));
+
+  const dateIndex = new Map(report.price_series.map((p, i) => [p.date, i]));
+  const ACTION_COLOR = { BUY: "var(--good)", SELL: "var(--critical)", HOLD: "var(--text-muted)" };
+  const markerNodes = [];
+  report.recommendation_walk_forward.records.forEach(rec => {
+    const i = dateIndex.get(rec.date);
+    if (i === undefined) return;
+    const color = ACTION_COLOR[rec.action];
+    const hit = rec.action === "BUY" ? rec.forward_return_pct > 0
+      : rec.action === "SELL" ? rec.forward_return_pct < 0
+      : Math.abs(rec.forward_return_pct) < 3;
+    const cx = xScale(i, n), cy = yScale(prices[i], yMin, yMax);
+    const circle = svgEl("circle", {
+      cx, cy, r: 6,
+      fill: hit ? color : "var(--surface-1)",
+      stroke: color, "stroke-width": 2,
+    });
+    svg.appendChild(circle);
+    markerNodes.push({ circle, rec });
+  });
+
+  const tooltip = document.getElementById("rec-tooltip");
+  markerNodes.forEach(({ circle, rec }) => {
+    circle.style.cursor = "pointer";
+    circle.addEventListener("mouseenter", () => {
+      tooltip.style.display = "block";
+      tooltip.innerHTML = `
+        <div class="row"><span class="k">${rec.date.slice(0,10)}</span><span>${rec.action}</span></div>
+        <div class="row"><span class="k">Confianza</span><span>${rec.confidence_pct.toFixed(1)}%</span></div>
+        <div class="row"><span class="k">Retorno real</span><span>${fmtPct(rec.forward_return_pct)}</span></div>`;
+      const rect = circle.getBoundingClientRect();
+      const containerRect = svg.parentElement.getBoundingClientRect();
+      tooltip.style.left = Math.min(rect.left - containerRect.left + 12, containerRect.width - 180) + "px";
+      tooltip.style.top = (rect.top - containerRect.top - 40) + "px";
+    });
+    circle.addEventListener("mouseleave", () => { tooltip.style.display = "none"; });
+  });
+}
+
+function renderValidationReport(report) {
+  document.getElementById("val-results").style.display = "block";
+  renderOosChart(report);
+  renderOosTable(report);
+  renderHitRateChart(report);
+  renderRecSummary(report);
+  renderRecChart(report);
+}
+
+document.getElementById("val-form").addEventListener("submit", async (evt) => {
+  evt.preventDefault();
+  const runBtn = document.getElementById("val-run-btn");
+  const synthetic = document.getElementById("val-synthetic").checked;
+  const symbol = document.getElementById("val-symbol").value.trim();
+  const startDate = document.getElementById("val-start-date").value || null;
+  const endDate = document.getElementById("val-end-date").value || null;
+
+  if (!synthetic && !symbol) {
+    setValStatus("error", "Ingresa un símbolo o marca \"Usar escenario sintético\".");
+    return;
+  }
+
+  const payload = {
+    symbol: symbol || null,
+    synthetic,
+    start_date: startDate,
+    end_date: endDate,
+    initial_capital: parseFloat(document.getElementById("val-capital").value) || 10000,
+    commission_bps: parseFloat(document.getElementById("val-commission").value) || 5,
+    allow_short: document.getElementById("val-allow-short").checked,
+    split_ratio: (parseFloat(document.getElementById("val-split-ratio").value) || 50) / 100,
+    horizon: parseInt(document.getElementById("val-horizon").value, 10) || 10,
+    step: parseInt(document.getElementById("val-step").value, 10) || 10,
+    warmup: parseInt(document.getElementById("val-warmup").value, 10) || 110,
+  };
+
+  runBtn.disabled = true;
+  setValStatus("loading", "Validando…");
+  document.getElementById("val-results").style.display = "none";
+  try {
+    const resp = await fetch("/validate", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+    if (!resp.ok) {
+      const err = await resp.json().catch(() => ({}));
+      throw new Error(err.detail || `Error ${resp.status}`);
+    }
+    const report = await resp.json();
+    setValStatus(null, "");
+    renderValidationReport(report);
+  } catch (e) {
+    setValStatus("error", e.message || "Ocurrió un error al validar.");
   } finally {
     runBtn.disabled = false;
   }

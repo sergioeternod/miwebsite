@@ -8,7 +8,7 @@ from __future__ import annotations
 import pandas as pd
 
 from app.data.providers import filter_date_range, get_ohlcv
-from app.data.synthetic import generate_ohlcv
+from app.data.synthetic import generate_ohlcv, regimes_for_range
 from app.strategies import Strategy, all_strategies
 from app.validation.out_of_sample import out_of_sample_comparison
 from app.validation.recommendation_accuracy import walk_forward_recommendation_accuracy
@@ -26,6 +26,7 @@ def build_validation_report(
     allow_short: bool = True,
     initial_capital: float = 10_000.0,
     commission_bps: float = 5.0,
+    regime_dates: list[tuple[str, str, str]] | None = None,
 ) -> dict:
     if len(df) < warmup + horizon + 1:
         raise ValueError(
@@ -35,11 +36,17 @@ def build_validation_report(
 
     strategies = strategies or all_strategies(allow_short=allow_short)
 
+    price_series = [
+        {"date": str(idx), "close": round(float(close), 4)} for idx, close in zip(df.index, df["Close"])
+    ]
+
     return {
         "symbol": symbol,
         "period_start": str(df.index[0]),
         "period_end": str(df.index[-1]),
         "num_bars": len(df),
+        "price_series": price_series,
+        "regimes": regimes_for_range(df, regime_dates) if regime_dates else [],
         "out_of_sample": out_of_sample_comparison(
             df,
             strategies,
@@ -85,6 +92,7 @@ def validate_synthetic(
     **kwargs,
 ) -> dict:
     df = generate_ohlcv(regimes=regimes, seed=seed)
+    regime_dates = df.attrs.get("regimes", [])
     if start_date or end_date:
         df = filter_date_range(df, start_date, end_date)
-    return build_validation_report(df, symbol=symbol, **kwargs)
+    return build_validation_report(df, symbol=symbol, regime_dates=regime_dates, **kwargs)

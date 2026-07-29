@@ -68,7 +68,7 @@ información histórica de mercado.
      recomendación BUY/SELL/HOLD en la práctica.
 - **API REST (FastAPI)** y **CLI** para correr backtests, simulaciones,
   recomendaciones y validaciones.
-- Suite de tests (`pytest`, 66 casos) sobre datos sintéticos, sin depender de
+- Suite de tests (`pytest`, 69 casos) sobre datos sintéticos, sin depender de
   red — incluye cobertura de posiciones largas y cortas, rangos de fecha, y
   las tres validaciones de expectativa vs realidad.
 
@@ -165,19 +165,27 @@ python -m app.cli validate --synthetic --out validacion.json
 python -m app.cli validate --symbol AAPL --period 2y --split-ratio 0.6 --horizon 15
 ```
 
-## Uso — Pantalla web (simulador)
+## Uso — Pantalla web
 
 ```bash
 uvicorn app.api.main:app --reload
 ```
 
-Abre `http://localhost:8000/` en el navegador: formulario con símbolo,
-**rango de fechas** (desde/hasta), estrategia (o "Todas" para comparar) y el
-switch de posiciones cortas. Si no hay acceso a datos de mercado en vivo,
-marca "Usar escenario sintético" para probar el motor con el histórico
-generado (2023-01-01 a 2023-11-16) — el rango de fechas recorta dentro de esa
-ventana. Muestra precio con señales de entrada/salida, curva de capital
-comparada contra buy&hold, tabla de métricas y bitácora de operaciones.
+Abre `http://localhost:8000/` en el navegador. Tiene dos pestañas:
+
+- **Simulador**: símbolo, **rango de fechas** (desde/hasta), estrategia (o
+  "Todas" para comparar) y el switch de posiciones cortas. Si no hay acceso a
+  datos de mercado en vivo, marca "Usar escenario sintético" para probar el
+  motor con el histórico generado (2023-01-01 a 2023-11-16) — el rango de
+  fechas recorta dentro de esa ventana. Muestra precio con señales de
+  entrada/salida, curva de capital comparada contra buy&hold, tabla de
+  métricas y bitácora de operaciones.
+- **Validación**: los mismos parámetros de símbolo/fechas/sintético, más
+  opciones avanzadas (% de expectativa, horizonte, separación, calentamiento).
+  Muestra las tres validaciones de expectativa vs realidad: barras de
+  expectativa/realidad por estrategia (fuera de muestra), precisión
+  direccional por estrategia, y el precio con cada llamada del motor de
+  recomendaciones marcada como acierto (relleno) o fallo (hueco), con tooltip.
 
 ## Uso — API
 
