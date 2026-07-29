@@ -91,6 +91,21 @@
   .field { display: flex; flex-direction: column; gap: 4px; }
   .field label { font-size: 12px; color: var(--text-secondary); }
   .symbol-hint { font-size: 11.5px; color: var(--text-muted); min-height: 14px; }
+  .symbol-dropdown {
+    display: none; position: absolute; top: 100%; left: 0; z-index: 20;
+    width: max-content; min-width: 100%; max-width: 320px;
+    background: var(--surface-1); border: 1px solid var(--border); border-radius: 8px;
+    margin-top: 2px; max-height: 260px; overflow-y: auto;
+    box-shadow: 0 8px 20px rgba(0,0,0,0.14);
+  }
+  .symbol-dropdown.open { display: block; }
+  .symbol-dropdown .item {
+    display: flex; justify-content: space-between; gap: 14px; align-items: baseline;
+    padding: 7px 10px; font-size: 13px; cursor: pointer;
+  }
+  .symbol-dropdown .item:hover, .symbol-dropdown .item.active { background: var(--grid); }
+  .symbol-dropdown .item .sym { font-weight: 600; color: var(--text-primary); white-space: nowrap; }
+  .symbol-dropdown .item .desc { color: var(--text-secondary); font-size: 12px; white-space: nowrap; }
   .field.checkbox { flex-direction: row; align-items: center; gap: 6px; }
   .field.checkbox label { font-size: 13px; color: var(--text-primary); }
   input, select {
@@ -180,11 +195,11 @@
     <h2>Parámetros de la simulación</h2>
     <p class="desc">Si el entorno no tiene acceso a datos de mercado en vivo, marca "Usar escenario sintético" para probar el motor con un histórico generado.</p>
     <form class="controls-form" id="sim-form">
-      <div class="field">
+      <div class="field" style="position:relative;">
         <label for="symbol">Símbolo</label>
-        <input id="symbol" name="symbol" placeholder="AAPL, BTC-USD, EURUSD=X..." list="symbol-examples" autocomplete="off">
-        <datalist id="symbol-examples"></datalist>
+        <input id="symbol" name="symbol" placeholder="AAPL, BTC-USD, EURUSD=X..." autocomplete="off">
         <span class="symbol-hint" id="symbol-hint"></span>
+        <div class="symbol-dropdown" id="symbol-dropdown"></div>
       </div>
       <div class="field">
         <label for="start_date">Desde</label>
@@ -520,7 +535,9 @@ function setStatus(kind, message) {
   banner.textContent = message || "";
 }
 
+const ASSET_CLASS_LABELS = { stock: "Acción", crypto: "Cripto", forex: "Divisa", commodity: "Commodity", index: "Índice" };
 const symbolInfo = {};
+let symbolList = [];
 
 async function loadOptions() {
   try {
@@ -533,17 +550,11 @@ async function loadOptions() {
       strategySelect.appendChild(opt);
     });
     const symbols = await symbolsRes.json();
-    const datalist = document.getElementById("symbol-examples");
-    const ASSET_CLASS_LABELS = { stock: "Acción", crypto: "Cripto", forex: "Divisa", commodity: "Commodity", index: "Índice" };
     Object.entries(symbols).forEach(([assetClass, items]) => {
       items.forEach(item => {
-        const opt = document.createElement("option");
-        opt.value = item.symbol;
-        const label = `${item.name} · ${ASSET_CLASS_LABELS[assetClass] || assetClass}`;
-        opt.label = label;
-        opt.textContent = label;
-        datalist.appendChild(opt);
-        symbolInfo[item.symbol] = label;
+        const classLabel = ASSET_CLASS_LABELS[assetClass] || assetClass;
+        symbolInfo[item.symbol] = `${item.name} · ${classLabel}`;
+        symbolList.push({ symbol: item.symbol, name: item.name, classLabel });
       });
     });
   } catch (e) {
@@ -551,9 +562,40 @@ async function loadOptions() {
   }
 }
 
-document.getElementById("symbol").addEventListener("input", (evt) => {
-  const hint = document.getElementById("symbol-hint");
-  hint.textContent = symbolInfo[evt.target.value.trim().toUpperCase()] || "";
+function renderSymbolDropdown(query) {
+  const dropdown = document.getElementById("symbol-dropdown");
+  const q = query.trim().toLowerCase();
+  const matches = (q ? symbolList.filter(s => s.symbol.toLowerCase().includes(q) || s.name.toLowerCase().includes(q)) : symbolList).slice(0, 8);
+  if (!matches.length) { dropdown.classList.remove("open"); dropdown.innerHTML = ""; return; }
+  dropdown.innerHTML = matches.map(s =>
+    `<div class="item" data-symbol="${s.symbol}"><span class="sym">${s.symbol}</span><span class="desc">${s.name} · ${s.classLabel}</span></div>`
+  ).join("");
+  dropdown.classList.add("open");
+}
+
+function closeSymbolDropdown() {
+  const dropdown = document.getElementById("symbol-dropdown");
+  dropdown.classList.remove("open");
+}
+
+const symbolInput = document.getElementById("symbol");
+const symbolDropdown = document.getElementById("symbol-dropdown");
+
+symbolInput.addEventListener("input", (evt) => {
+  document.getElementById("symbol-hint").textContent = symbolInfo[evt.target.value.trim().toUpperCase()] || "";
+  renderSymbolDropdown(evt.target.value);
+});
+symbolInput.addEventListener("focus", (evt) => renderSymbolDropdown(evt.target.value));
+symbolDropdown.addEventListener("mousedown", (evt) => {
+  const item = evt.target.closest(".item");
+  if (!item) return;
+  evt.preventDefault();
+  symbolInput.value = item.dataset.symbol;
+  document.getElementById("symbol-hint").textContent = symbolInfo[item.dataset.symbol] || "";
+  closeSymbolDropdown();
+});
+document.addEventListener("click", (evt) => {
+  if (evt.target !== symbolInput && !symbolDropdown.contains(evt.target)) closeSymbolDropdown();
 });
 
 document.getElementById("sim-form").addEventListener("submit", async (evt) => {
