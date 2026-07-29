@@ -52,10 +52,25 @@ información histórica de mercado.
   desempeño histórico de cada estrategia en ese instrumento específico,
   devolviendo una recomendación con nivel de confianza y el razonamiento
   técnico detrás.
-- **API REST (FastAPI)** y **CLI** para correr backtests, simulaciones y
-  recomendaciones.
-- Suite de tests (`pytest`, 53 casos) sobre datos sintéticos, sin depender de
-  red — incluye cobertura de posiciones largas y cortas, y de rangos de fecha.
+- **Validación: expectativa vs realidad** (`app/validation/`) — tres análisis
+  que comparan lo que una estrategia/recomendación "esperaba" contra lo que
+  realmente pasó después:
+  1. **Fuera de muestra** (`out_of_sample.py`): divide el histórico en dos
+     periodos consecutivos; el desempeño del primero es la "expectativa", el
+     del segundo la "realidad" — ¿la estrategia siguió funcionando después?
+  2. **Precisión direccional** (`trade_accuracy.py`): por cada operación,
+     ¿la dirección esperada (compra=sube, corto=baja) coincidió con lo que
+     pasó? Hit rate por estrategia y por dirección (long/short).
+  3. **Precisión del motor de recomendaciones** (`recommendation_accuracy.py`):
+     recalcula la recomendación ensemble en muchas fechas históricas usando
+     solo datos disponibles hasta ese momento (sin lookahead) y compara contra
+     el retorno real N barras después — valida qué tan confiable es la
+     recomendación BUY/SELL/HOLD en la práctica.
+- **API REST (FastAPI)** y **CLI** para correr backtests, simulaciones,
+  recomendaciones y validaciones.
+- Suite de tests (`pytest`, 66 casos) sobre datos sintéticos, sin depender de
+  red — incluye cobertura de posiciones largas y cortas, rangos de fecha, y
+  las tres validaciones de expectativa vs realidad.
 
 ## Comparación de las 5 estrategias
 
@@ -90,6 +105,37 @@ python -m app.cli simulate --symbol AAPL --period 2y                # datos real
 ```
 o desde la pantalla web (`/`), dejando "Estrategia" en "Todas (comparar)".
 
+## Expectativa vs realidad: resultados
+
+Corriendo las tres validaciones sobre el mismo escenario histórico sintético:
+
+**1. Fuera de muestra** (primera mitad = expectativa, segunda mitad = realidad,
+ganancia promedio por operación): en las 5 estrategias, el **signo**
+(rentable/no rentable) se mantuvo igual entre ambos periodos — ninguna pasó de
+ganar en la primera mitad a perder en la segunda, ni viceversa. La magnitud sí
+varía (ej. `sma_crossover` +6.82% → +5.27%, `macd_crossover` +0.03% → +3.71%),
+lo cual es normal y esperable — el punto es que ninguna estrategia se "rompió"
+al pasar a datos no vistos.
+
+**2. Precisión direccional** (¿la operación acertó la dirección?): `Cruce de
+SMA` y `Ruptura Bollinger` aciertan 60% de sus operaciones (mejor que el azar);
+`Cruce de MACD` y `Reversión RSI` solo 33.3% (peor que el azar — muchas
+operaciones, poca puntería); `Confirmación de tendencia` 40%.
+
+**3. Motor de recomendaciones** (retorno real a 10 días después de cada
+llamada): las recomendaciones **SELL** tuvieron 63.6% de acierto (el precio
+efectivamente bajó) con retorno promedio -1.35% — la señal bajista funcionó
+razonablemente bien en este escenario con una caída fuerte. Las **BUY**
+acertaron solo 50% (moneda al aire) con retorno promedio -0.11% — la señal
+alcista no fue confiable en este periodo particular. Esto es coherente con el
+escenario: tiene una caída fuerte prolongada, terreno favorable para llamadas
+bajistas y adverso para las alcistas.
+
+**Conclusión práctica**: ninguna estrategia ni el motor de recomendaciones son
+infalibles, y su confiabilidad depende del régimen de mercado. Por eso el
+valor real está en poder medir esto por instrumento y periodo (`validate`), no
+en confiar ciegamente en una sola señal.
+
 ## Instalación
 
 ```bash
@@ -113,6 +159,10 @@ python -m app.cli backtest --symbol BTC-USD --strategy sma_crossover --no-short
 
 # Simulador con rango de fechas explícito
 python -m app.cli simulate --symbol AAPL --start-date 2023-06-01 --end-date 2023-09-30
+
+# Validación: expectativa vs realidad (fuera de muestra + precisión direccional + recomendaciones)
+python -m app.cli validate --synthetic --out validacion.json
+python -m app.cli validate --symbol AAPL --period 2y --split-ratio 0.6 --horizon 15
 ```
 
 ## Uso — Pantalla web (simulador)
@@ -142,6 +192,7 @@ uvicorn app.api.main:app --reload
 - `POST /backtest` — body: `{"symbol": "AAPL", "strategy": "sma_crossover", "period": "2y", "allow_short": true}`
 - `POST /backtest/compare` — body: `{"symbol": "BTC-USD", "period": "1y"}`
 - `POST /simulate` — body: `{"symbol": "AAPL", "start_date": "2023-06-01", "end_date": "2023-09-30"}` o `{"synthetic": true, "strategy": "sma_crossover", "start_date": "2023-04-01", "end_date": "2023-09-30"}`
+- `POST /validate` — body: `{"symbol": "AAPL", "period": "2y"}` o `{"synthetic": true, "split_ratio": 0.6, "horizon": 15}`
 
 ## Estructura del proyecto
 
@@ -155,6 +206,8 @@ app/
   backtest/             # motor de backtesting + métricas
   recommend/engine.py    # ensemble de recomendaciones
   simulate.py            # simulador (datos reales o sintéticos, con rango de fechas)
+  validation/            # expectativa vs realidad: fuera de muestra, precisión
+                         # direccional, precisión de recomendaciones
   api/main.py            # FastAPI (sirve también la pantalla web en "/")
   static/index.html       # pantalla web del simulador
   cli.py                 # interfaz de línea de comandos

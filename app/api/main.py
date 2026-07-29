@@ -6,13 +6,14 @@ from pathlib import Path
 from fastapi import FastAPI, HTTPException, Response
 from fastapi.staticfiles import StaticFiles
 
-from app.api.schemas import BacktestRequest, CompareRequest, SimulateRequest
+from app.api.schemas import BacktestRequest, CompareRequest, SimulateRequest, ValidateRequest
 from app.backtest.engine import BacktestResult, compare_strategies, run_backtest
 from app.config import EXAMPLE_SYMBOLS
 from app.data.providers import DataUnavailableError, get_ohlcv
 from app.recommend.engine import recommend
 from app.simulate import simulate_symbol, simulate_synthetic
 from app.strategies import STRATEGY_REGISTRY, all_strategies, build_strategy
+from app.validation.report import validate_symbol, validate_synthetic
 
 app = FastAPI(
     title="Trading Signals API",
@@ -135,6 +136,42 @@ def post_simulate(request: SimulateRequest) -> dict:
             initial_capital=request.initial_capital,
             commission_bps=request.commission_bps,
             allow_short=request.allow_short,
+        )
+    except DataUnavailableError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@app.post("/validate")
+def post_validate(request: ValidateRequest) -> dict:
+    kwargs = dict(
+        split_ratio=request.split_ratio,
+        horizon=request.horizon,
+        step=request.step,
+        warmup=request.warmup,
+        initial_capital=request.initial_capital,
+        commission_bps=request.commission_bps,
+        allow_short=request.allow_short,
+    )
+    try:
+        if request.synthetic:
+            return validate_synthetic(
+                symbol=request.symbol or "SYNTH",
+                seed=request.seed,
+                start_date=request.start_date,
+                end_date=request.end_date,
+                **kwargs,
+            )
+        if not request.symbol:
+            raise HTTPException(status_code=400, detail="symbol es obligatorio salvo que synthetic=true")
+        return validate_symbol(
+            request.symbol,
+            period=request.period,
+            interval=request.interval,
+            start_date=request.start_date,
+            end_date=request.end_date,
+            **kwargs,
         )
     except DataUnavailableError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc

@@ -20,6 +20,7 @@ from app.data.providers import DataUnavailableError, get_ohlcv
 from app.recommend.engine import recommend
 from app.simulate import simulate_symbol, simulate_synthetic
 from app.strategies import STRATEGY_REGISTRY, all_strategies, build_strategy
+from app.validation.report import validate_symbol, validate_synthetic
 
 
 def _print_json(payload: dict) -> None:
@@ -118,6 +119,62 @@ def cmd_simulate(args: argparse.Namespace) -> None:
     _print_json(summary)
 
 
+def cmd_validate(args: argparse.Namespace) -> None:
+    kwargs = dict(
+        split_ratio=args.split_ratio,
+        horizon=args.horizon,
+        step=args.step,
+        warmup=args.warmup,
+        initial_capital=args.capital,
+        commission_bps=args.commission_bps,
+        allow_short=not args.no_short,
+    )
+    if args.synthetic:
+        report = validate_synthetic(
+            symbol=args.symbol or "SYNTH",
+            seed=args.seed,
+            start_date=args.start_date,
+            end_date=args.end_date,
+            **kwargs,
+        )
+    else:
+        if not args.symbol:
+            raise ValueError("--symbol es obligatorio salvo que uses --synthetic")
+        report = validate_symbol(
+            args.symbol,
+            period=args.period,
+            interval=args.interval,
+            start_date=args.start_date,
+            end_date=args.end_date,
+            **kwargs,
+        )
+
+    if args.out:
+        with open(args.out, "w", encoding="utf-8") as f:
+            json.dump(report, f, indent=2, ensure_ascii=False, default=str)
+
+    summary = {
+        "symbol": report["symbol"],
+        "period": f"{report['period_start']} -> {report['period_end']}",
+        "num_bars": report["num_bars"],
+        "out_of_sample": [
+            {
+                "strategy": r["strategy"],
+                "split_date": r["split_date"],
+                "expectativa_avg_profit_per_trade_pct": r["period_a"]["metrics"]["avg_profit_per_trade_pct"],
+                "realidad_avg_profit_per_trade_pct": r["period_b"]["metrics"]["avg_profit_per_trade_pct"],
+                "profitability_sign_matches": r["consistency"]["profitability_sign_matches"],
+            }
+            for r in report["out_of_sample"]
+        ],
+        "directional_accuracy": [{"strategy": r["strategy"], **r["accuracy"]} for r in report["directional_accuracy"]],
+        "recommendation_walk_forward_summary": report["recommendation_walk_forward"]["summary"],
+    }
+    if args.out:
+        summary["full_report_saved_to"] = args.out
+    _print_json(summary)
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="Trading signals CLI")
     subparsers = parser.add_subparsers(dest="command", required=True)
@@ -170,6 +227,31 @@ def build_parser() -> argparse.ArgumentParser:
     simulate_parser.add_argument("--no-short", action="store_true", help="Desactiva las posiciones en corto")
     simulate_parser.add_argument("--out", default=None, help="Ruta donde guardar el reporte completo en JSON")
     simulate_parser.set_defaults(func=cmd_simulate)
+
+    validate_parser = subparsers.add_parser(
+        "validate",
+        help="Compara expectativa vs realidad: fuera de muestra, precisión direccional y precisión de recomendaciones",
+    )
+    validate_parser.add_argument("--symbol", default=None, help="Símbolo real (omite si usas --synthetic)")
+    validate_parser.add_argument("--synthetic", action="store_true", help="Usa un escenario histórico sintético")
+    validate_parser.add_argument("--seed", type=int, default=42, help="Semilla del escenario sintético")
+    validate_parser.add_argument("--period", default="2y")
+    validate_parser.add_argument("--interval", default="1d")
+    validate_parser.add_argument("--start-date", default=None, help="ISO, ej. 2023-06-01 (prioridad sobre --period)")
+    validate_parser.add_argument("--end-date", default=None, help="ISO, ej. 2023-09-30")
+    validate_parser.add_argument(
+        "--split-ratio", type=float, default=0.5, help="Fracción del histórico usada como periodo 'expectativa'"
+    )
+    validate_parser.add_argument(
+        "--horizon", type=int, default=10, help="Barras hacia adelante para medir el retorno real de cada recomendación"
+    )
+    validate_parser.add_argument("--step", type=int, default=10, help="Separación en barras entre evaluaciones")
+    validate_parser.add_argument("--warmup", type=int, default=110, help="Barras iniciales antes de empezar a evaluar")
+    validate_parser.add_argument("--capital", type=float, default=10_000.0)
+    validate_parser.add_argument("--commission-bps", type=float, default=5.0)
+    validate_parser.add_argument("--no-short", action="store_true", help="Desactiva las posiciones en corto")
+    validate_parser.add_argument("--out", default=None, help="Ruta donde guardar el reporte completo en JSON")
+    validate_parser.set_defaults(func=cmd_validate)
 
     return parser
 
