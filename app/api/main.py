@@ -9,7 +9,15 @@ from fastapi.staticfiles import StaticFiles
 
 load_dotenv()  # lee .env si existe (API keys como FINNHUB_API_KEY); no sobreescribe variables ya definidas en el entorno
 
-from app.api.schemas import BacktestRequest, CompareRequest, RankRequest, ScreenRequest, SimulateRequest, ValidateRequest
+from app.api.schemas import (
+    BacktestRequest,
+    CompareRequest,
+    OpportunitiesRequest,
+    RankRequest,
+    ScreenRequest,
+    SimulateRequest,
+    ValidateRequest,
+)
 from app.backtest.engine import BacktestResult, compare_strategies, run_backtest
 from app.config import EXAMPLE_SYMBOLS
 from app.data.alphavantage_client import AlphaVantageUnavailableError
@@ -17,6 +25,7 @@ from app.data.finnhub_client import FinnhubUnavailableError
 from app.data.providers import DataUnavailableError, get_ohlcv
 from app.fundamentals.earnings import apply_earnings_overlay, earnings_report
 from app.fundamentals.news_sentiment import apply_news_overlay, news_report
+from app.opportunities import find_opportunities_real, find_opportunities_synthetic
 from app.ranking import rank_real_symbols, rank_synthetic_profiles
 from app.recommend.engine import recommend
 from app.screener import screen_real_symbols, screen_synthetic
@@ -251,6 +260,31 @@ def post_screen(request: ScreenRequest) -> dict:
             period=request.period,
             interval=request.interval,
             top_n=request.top_n,
+        )
+    except DataUnavailableError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@app.post("/opportunities")
+def post_opportunities(request: OpportunitiesRequest) -> dict:
+    kwargs = dict(
+        initial_capital=request.initial_capital,
+        commission_bps=request.commission_bps,
+        allow_short=request.allow_short,
+        include_earnings=request.with_earnings,
+        include_news=request.with_news,
+        top_n=request.top_n,
+    )
+    try:
+        if request.synthetic:
+            return find_opportunities_synthetic(seed=request.seed, **kwargs)
+        return find_opportunities_real(
+            request.symbols,
+            period=request.period,
+            interval=request.interval,
+            **kwargs,
         )
     except DataUnavailableError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc

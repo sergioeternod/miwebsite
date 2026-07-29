@@ -131,7 +131,7 @@
   .status-banner.error { display: block; background: color-mix(in srgb, var(--critical) 12%, transparent); color: var(--critical); border: 1px solid color-mix(in srgb, var(--critical) 30%, transparent); }
   .status-banner.loading { display: block; background: var(--surface-1); color: var(--text-secondary); border: 1px solid var(--border); }
 
-  #results, #val-results, #rank-results { display: none; }
+  #results, #val-results, #rank-results, #screen-results, #recommend-results, #opportunities-results { display: none; }
   .heat-cell { font-variant-numeric: tabular-nums; text-align: center !important; border-radius: 4px; }
 
   .stat-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 14px; margin-bottom: 20px; }
@@ -552,7 +552,69 @@
 
   <div id="panel-recommend" class="tab-panel">
     <div class="card">
-      <h2>Recomendación de compra/venta</h2>
+      <h2>Buscar oportunidades</h2>
+      <p class="desc">Escanea varios símbolos con el motor de recomendaciones y ordena los que tienen señal BUY o SELL/corto más fuerte ahora mismo — para descubrir qué mirar, en vez de tener que saber ya qué símbolo consultar.</p>
+      <form class="controls-form" id="opportunities-form">
+        <div class="field" style="grid-column: span 2;">
+          <label for="opportunities-symbols">Símbolos (separados por coma)</label>
+          <input id="opportunities-symbols" placeholder="Vacío = usar universo de ejemplo completo">
+        </div>
+        <div class="field">
+          <label for="opportunities-period">Periodo de datos</label>
+          <select id="opportunities-period">
+            <option value="1y">1 año</option>
+            <option value="2y" selected>2 años</option>
+            <option value="5y">5 años</option>
+          </select>
+        </div>
+        <div class="field">
+          <label for="opportunities-top-n">Top N por lista</label>
+          <input type="number" id="opportunities-top-n" value="5" min="1" max="20" step="1">
+        </div>
+        <div class="field checkbox">
+          <input type="checkbox" id="opportunities-allow-short" checked>
+          <label for="opportunities-allow-short">Permitir posiciones cortas</label>
+        </div>
+        <div class="field checkbox">
+          <input type="checkbox" id="opportunities-with-earnings">
+          <label for="opportunities-with-earnings">Ajustar con historial de earnings (Finnhub)</label>
+        </div>
+        <div class="field checkbox">
+          <input type="checkbox" id="opportunities-with-news">
+          <label for="opportunities-with-news">Ajustar con sentimiento de noticias (Alpha Vantage)</label>
+        </div>
+        <div class="field checkbox">
+          <input type="checkbox" id="opportunities-synthetic">
+          <label for="opportunities-synthetic">Usar perfiles de mercado sintéticos (sin red)</label>
+        </div>
+        <button type="submit" class="run-btn" id="opportunities-run-btn">Buscar oportunidades</button>
+        <div class="hint">Sin símbolos y sin marcar sintético, se escanea el universo de ejemplo (acciones, cripto, divisas, commodities, índices). Con muchos símbolos puede tardar — se evalúa cada uno con las 5 estrategias.</div>
+      </form>
+    </div>
+
+    <div class="status-banner" id="opportunities-status-banner"></div>
+
+    <div id="opportunities-results">
+      <div class="card" id="opportunities-errors-card" style="display:none;">
+        <h2>Símbolos sin datos</h2>
+        <p class="desc" id="opportunities-errors-list"></p>
+      </div>
+      <div class="card">
+        <h2>Mejores oportunidades de compra</h2>
+        <div class="scroll-x">
+          <table class="metrics" id="opportunities-buy-table"></table>
+        </div>
+      </div>
+      <div class="card">
+        <h2>Mejores oportunidades de venta en corto</h2>
+        <div class="scroll-x">
+          <table class="metrics" id="opportunities-sell-table"></table>
+        </div>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2>Consultar un símbolo específico</h2>
       <p class="desc">Ensemble de las 5 estrategias sobre datos recientes, opcionalmente ajustado por historial de earnings y sentimiento de noticias. Requiere un símbolo real con acceso a datos de mercado en vivo (no tiene modo sintético).</p>
       <form class="controls-form" id="recommend-form">
         <div class="field" style="position:relative;">
@@ -1597,8 +1659,7 @@ function renderRecommendReport(report) {
   renderNewsCard(report.news);
 }
 
-document.getElementById("recommend-form").addEventListener("submit", async (evt) => {
-  evt.preventDefault();
+async function runSingleSymbolRecommendation() {
   const runBtn = document.getElementById("recommend-run-btn");
   const symbol = document.getElementById("recommend-symbol").value.trim();
 
@@ -1630,6 +1691,117 @@ document.getElementById("recommend-form").addEventListener("submit", async (evt)
     renderRecommendReport(report);
   } catch (e) {
     setRecommendStatus("error", e.message || "Ocurrió un error al obtener la recomendación.");
+  } finally {
+    runBtn.disabled = false;
+  }
+}
+
+document.getElementById("recommend-form").addEventListener("submit", (evt) => {
+  evt.preventDefault();
+  runSingleSymbolRecommendation();
+});
+
+// ---------- Buscar oportunidades ----------
+function setOpportunitiesStatus(kind, message) {
+  const banner = document.getElementById("opportunities-status-banner");
+  banner.className = "status-banner" + (kind ? " " + kind : "");
+  banner.textContent = message || "";
+}
+
+function viewOpportunityDetail(symbol, withEarnings, withNews) {
+  document.getElementById("recommend-symbol").value = symbol;
+  document.getElementById("recommend-with-earnings").checked = withEarnings;
+  document.getElementById("recommend-with-news").checked = withNews;
+  document.getElementById("recommend-symbol").scrollIntoView({ behavior: "smooth", block: "center" });
+  runSingleSymbolRecommendation();
+}
+
+function renderOpportunitiesTable(tableId, rows, withEarnings, withNews) {
+  const table = document.getElementById(tableId);
+  const cols = ["Símbolo", "Confianza", "Último cierre", "Mejor estrategia histórica"];
+  if (withEarnings) cols.push("Earnings");
+  if (withNews) cols.push("Noticias");
+  cols.push("");
+
+  let html = "<thead><tr>" + cols.map(c => `<th>${c}</th>`).join("") + "</tr></thead><tbody>";
+  if (!rows.length) {
+    html += `<tr><td colspan="${cols.length}" style="text-align:center;color:var(--text-muted);">Sin candidatos en este escaneo</td></tr>`;
+  }
+  rows.forEach((r, idx) => {
+    html += `<tr class="${idx === 0 ? "best" : ""}">
+      <td>${r.symbol}</td>
+      <td>${r.confidence_pct.toFixed(1)}%</td>
+      <td>${fmtMoney(r.last_close)}</td>
+      <td>${strategyLabel(r.best_historical_strategy.strategy)} (${fmtPct(r.best_historical_strategy.avg_profit_per_trade_pct)})</td>`;
+    if (withEarnings) {
+      const e = r.earnings;
+      html += `<td>${e && e.available ? `<span class="tag ${overlaySignalClass(e.signal)}">${OVERLAY_SIGNAL_LABELS[e.signal] || e.signal}</span>` : `<span class="overlay-unavailable">n/d</span>`}</td>`;
+    }
+    if (withNews) {
+      const n = r.news;
+      html += `<td>${n && n.available ? `<span class="tag ${overlaySignalClass(n.signal)}">${OVERLAY_SIGNAL_LABELS[n.signal] || n.signal}</span>` : `<span class="overlay-unavailable">n/d</span>`}</td>`;
+    }
+    html += `<td><button type="button" class="run-btn opp-detail-btn" style="padding:4px 10px;font-size:12px;" data-symbol="${r.symbol}">Ver detalle</button></td></tr>`;
+  });
+  table.innerHTML = html + "</tbody>";
+
+  table.querySelectorAll(".opp-detail-btn").forEach(btn => {
+    btn.addEventListener("click", () => viewOpportunityDetail(btn.dataset.symbol, withEarnings, withNews));
+  });
+}
+
+function renderOpportunitiesReport(report, withEarnings, withNews) {
+  document.getElementById("opportunities-results").style.display = "block";
+  renderOpportunitiesTable("opportunities-buy-table", report.top_buy, withEarnings, withNews);
+  renderOpportunitiesTable("opportunities-sell-table", report.top_sell, withEarnings, withNews);
+
+  const errorEntries = Object.entries(report.errors || {});
+  const errorsCard = document.getElementById("opportunities-errors-card");
+  if (errorEntries.length) {
+    document.getElementById("opportunities-errors-list").textContent = errorEntries.map(([sym]) => sym).join(", ");
+    errorsCard.style.display = "block";
+  } else {
+    errorsCard.style.display = "none";
+  }
+}
+
+document.getElementById("opportunities-form").addEventListener("submit", async (evt) => {
+  evt.preventDefault();
+  const runBtn = document.getElementById("opportunities-run-btn");
+  const synthetic = document.getElementById("opportunities-synthetic").checked;
+  const symbolsRaw = document.getElementById("opportunities-symbols").value.trim();
+  const symbols = symbolsRaw ? symbolsRaw.split(",").map(s => s.trim()).filter(Boolean) : null;
+  const withEarnings = document.getElementById("opportunities-with-earnings").checked;
+  const withNews = document.getElementById("opportunities-with-news").checked;
+
+  const payload = {
+    symbols: synthetic ? null : symbols,
+    synthetic,
+    period: document.getElementById("opportunities-period").value,
+    allow_short: document.getElementById("opportunities-allow-short").checked,
+    with_earnings: withEarnings,
+    with_news: withNews,
+    top_n: parseInt(document.getElementById("opportunities-top-n").value, 10) || 5,
+  };
+
+  runBtn.disabled = true;
+  setOpportunitiesStatus("loading", "Escaneando…");
+  document.getElementById("opportunities-results").style.display = "none";
+  try {
+    const resp = await fetch("/opportunities", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+    if (!resp.ok) {
+      const err = await resp.json().catch(() => ({}));
+      throw new Error(err.detail || `Error ${resp.status}`);
+    }
+    const report = await resp.json();
+    setOpportunitiesStatus(null, "");
+    renderOpportunitiesReport(report, withEarnings, withNews);
+  } catch (e) {
+    setOpportunitiesStatus("error", e.message || "Ocurrió un error al buscar oportunidades.");
   } finally {
     runBtn.disabled = false;
   }

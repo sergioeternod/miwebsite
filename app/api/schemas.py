@@ -62,6 +62,22 @@ class ScreenRequest(BaseModel):
     top_n: int = Field(5, description="Cuántos símbolos mostrar por ventana")
 
 
+class OpportunitiesRequest(BaseModel):
+    symbols: list[str] | None = Field(
+        None, description="Ej. ['AAPL', 'MSFT', 'BTC-USD']. Si se omite y synthetic=false, usa el universo de ejemplo"
+    )
+    synthetic: bool = False
+    seed: int = 42
+    period: str = "2y"
+    interval: str = "1d"
+    initial_capital: float = 10_000.0
+    commission_bps: float = 5.0
+    allow_short: bool = True
+    with_earnings: bool = Field(False, description="Ajusta cada símbolo con el historial de earnings (Finnhub)")
+    with_news: bool = Field(False, description="Ajusta cada símbolo con el sentimiento de noticias (Alpha Vantage)")
+    top_n: int = Field(5, description="Cuántos símbolos mostrar en cada lista (compra/venta)")
+
+
 class ValidateRequest(BaseModel):
     symbol: str | None = Field(None, description="Omitir si synthetic=true")
     synthetic: bool = False

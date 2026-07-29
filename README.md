@@ -103,14 +103,23 @@ información histórica de mercado.
   devuelve el top-N por ventana — la vía rápida para "¿qué se está moviendo
   ahora mismo?", antes de entrar a comparar estrategias sobre un símbolo en
   particular.
+- **Escáner de oportunidades** (`app/opportunities.py`): a diferencia del
+  screener (que rankea por retorno de precio pasado), este corre el motor de
+  recomendaciones — técnico + overlays opcionales de earnings/noticias —
+  sobre varios símbolos a la vez, y devuelve los que tienen la señal BUY o
+  SELL/corto con **mayor confianza ahora mismo**. Responde directamente
+  "¿cuáles son los más probables de ganar?" sin tener que ya saber qué
+  símbolo consultar. Igual que el resto: universo de ejemplo completo por
+  defecto, o perfiles sintéticos sin red.
 - **API REST (FastAPI)** y **CLI** para correr backtests, simulaciones,
-  recomendaciones, validaciones, rankings, el screener y los overlays de
-  earnings/noticias.
-- Suite de tests (`pytest`, 125 casos) sobre datos sintéticos y llamadas HTTP
+  recomendaciones, validaciones, rankings, el screener, el escáner de
+  oportunidades y los overlays de earnings/noticias.
+- Suite de tests (`pytest`, 133 casos) sobre datos sintéticos y llamadas HTTP
   simuladas, sin depender de red real — incluye cobertura de posiciones
   largas y cortas, rangos de fecha, las tres validaciones de expectativa vs
-  realidad, montos en dólares, el ranking de símbolos, el screener y los
-  overlays de earnings/noticias (con los clientes Finnhub/Alpha Vantage
+  realidad, montos en dólares, el ranking de símbolos, el screener, el
+  escáner de oportunidades y los overlays de earnings/noticias (con los
+  clientes Finnhub/Alpha Vantage
   mockeados).
 
 ## Comparación de las 5 estrategias
@@ -230,6 +239,27 @@ disponible, sin pasar símbolos escanea el universo completo de ejemplo:
 ```bash
 python -m app.cli screen --out screener.json
 python -m app.cli screen --symbols AAPL,MSFT,TSLA,BTC-USD,ETH-USD,EURUSD=X
+```
+
+## Escáner de oportunidades
+
+Distinto del screener: en vez de retorno de precio pasado, corre el motor de
+recomendaciones (ensemble de las 5 estrategias) sobre cada símbolo y ordena
+por **confianza de la señal actual**. Corriendo `opportunities` sobre los 5
+perfiles sintéticos, top-2 por lista:
+
+| Compra | Confianza | Venta en corto | Confianza |
+|---|---|---|---|
+| Mixto (5 regímenes) | 99.7% | Tendencia bajista sostenida | 95.4% |
+| Tendencia alcista sostenida | 97.2% | Lateral / rango | 85.1% |
+
+Esto es justo lo que responde a "¿cuáles son los símbolos más probables de
+ganar ahora?" sin tener que indicar de antemano cuál mirar. Con red
+disponible, sin pasar símbolos escanea el universo completo de ejemplo, y
+acepta los mismos overlays que `recommend`:
+```bash
+python -m app.cli opportunities --out oportunidades.json
+python -m app.cli opportunities --symbols AAPL,MSFT,TSLA,BTC-USD,ETH-USD,EURUSD=X --with-earnings --with-news
 ```
 
 ## Recomendaciones con historial de earnings (Finnhub)
@@ -405,6 +435,11 @@ python -m app.cli rank --symbols AAPL,MSFT,BTC-USD,EURUSD=X --period 2y
 python -m app.cli screen --synthetic
 python -m app.cli screen --symbols AAPL,MSFT,BTC-USD,EURUSD=X --top-n 10
 python -m app.cli screen --out screener.json  # sin --symbols escanea el universo de ejemplo
+
+# Escáner de oportunidades: ¿cuáles símbolos tienen la señal de compra/venta más fuerte ahora?
+python -m app.cli opportunities --synthetic
+python -m app.cli opportunities --symbols AAPL,MSFT,BTC-USD,EURUSD=X --with-earnings --with-news
+python -m app.cli opportunities --out oportunidades.json  # sin --symbols escanea el universo de ejemplo
 ```
 
 ## Uso — Pantalla web
@@ -437,15 +472,19 @@ Abre `http://localhost:8000/` en el navegador. Tiene cinco pestañas:
   el universo de ejemplo completo, o perfiles sintéticos sin red — muestra el
   top-N (configurable) de símbolos con mayor retorno de precio en la última
   semana, mes y año, y qué símbolos no tenían datos suficientes.
-- **Recomendación**: símbolo (requiere datos reales, no tiene modo sintético)
-  con checkboxes para los overlays de earnings y noticias. Muestra la señal
-  BUY/SELL/HOLD del ensemble con su confianza, el detalle de cada una de las
-  5 estrategias, y — si están marcados y hay API key configurada en el
+- **Recomendación**: tiene dos partes. **"Buscar oportunidades"** escanea
+  varios símbolos a la vez (lista separada por coma, universo de ejemplo
+  completo si se deja vacío, o perfiles sintéticos sin red) y muestra dos
+  tablas — mejores oportunidades de compra y de venta en corto, ordenadas
+  por confianza — con un botón "Ver detalle" por fila que salta a la segunda
+  parte. **"Consultar un símbolo específico"** (requiere datos reales, no
+  tiene modo sintético) muestra la señal BUY/SELL/HOLD del ensemble con su
+  confianza, el detalle de cada una de las 5 estrategias, y — con los
+  checkboxes de earnings/noticias marcados y API key configurada en el
   servidor — una tarjeta por overlay con su señal, cuánto ajustó la
   confianza, si refuerza o contradice la señal técnica, y el detalle que lo
-  respalda (historial de sorpresas de EPS / artículos de noticias recientes).
-  Si falta la API key, la tarjeta lo indica sin bloquear el resto de la
-  recomendación.
+  respalda. Si falta la API key, la tarjeta lo indica sin bloquear el resto
+  de la recomendación.
 
 ## Uso — API
 
@@ -465,6 +504,7 @@ uvicorn app.api.main:app --reload
 - `POST /validate` — body: `{"symbol": "AAPL", "period": "2y"}` o `{"synthetic": true, "split_ratio": 0.6, "horizon": 15}`
 - `POST /rank` — body: `{"symbols": ["AAPL", "MSFT", "BTC-USD"], "period": "2y"}` o `{"synthetic": true}`
 - `POST /screen` — body: `{"symbols": ["AAPL", "MSFT", "BTC-USD"], "top_n": 10}`, `{"synthetic": true}`, o `{}` (escanea el universo de ejemplo)
+- `POST /opportunities` — body: `{"symbols": ["AAPL", "MSFT", "BTC-USD"], "with_earnings": true, "with_news": true, "top_n": 10}`, `{"synthetic": true}`, o `{}` (escanea el universo de ejemplo)
 
 ## Estructura del proyecto
 
@@ -486,8 +526,9 @@ app/
                          # direccional, precisión de recomendaciones
   ranking.py             # comparación estrategia × símbolo
   screener.py            # ranking de rentabilidad por ventana (semana/mes/año)
+  opportunities.py       # escáner multi-símbolo del motor de recomendaciones (+ overlays)
   api/main.py            # FastAPI (sirve también la pantalla web en "/")
-  static/index.html       # pantalla web (4 pestañas: Simulador/Validación/Símbolos/Más rentables)
+  static/index.html       # pantalla web (5 pestañas: Simulador/Validación/Símbolos/Más rentables/Recomendación)
   cli.py                 # interfaz de línea de comandos
 tests/
 ```

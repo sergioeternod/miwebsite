@@ -8,6 +8,8 @@ Examples:
     python -m app.cli recommend --symbol AAPL --with-earnings --with-news
     python -m app.cli earnings --symbol AAPL
     python -m app.cli news --symbol AAPL
+    python -m app.cli opportunities --synthetic
+    python -m app.cli opportunities --symbols AAPL,MSFT,TSLA,BTC-USD --with-earnings
     python -m app.cli simulate --synthetic --out /tmp/report.json
     python -m app.cli simulate --symbol AAPL --period 3y --strategy macd_crossover
 """
@@ -28,6 +30,7 @@ from app.data.finnhub_client import FinnhubUnavailableError
 from app.data.providers import DataUnavailableError, get_ohlcv
 from app.fundamentals.earnings import apply_earnings_overlay, earnings_report
 from app.fundamentals.news_sentiment import apply_news_overlay, news_report
+from app.opportunities import find_opportunities_real, find_opportunities_synthetic
 from app.ranking import rank_real_symbols, rank_synthetic_profiles
 from app.recommend.engine import recommend
 from app.screener import screen_real_symbols, screen_synthetic
@@ -257,6 +260,27 @@ def cmd_screen(args: argparse.Namespace) -> None:
     _print_json(summary)
 
 
+def cmd_opportunities(args: argparse.Namespace) -> None:
+    kwargs = dict(
+        initial_capital=args.capital,
+        commission_bps=args.commission_bps,
+        allow_short=not args.no_short,
+        include_earnings=args.with_earnings,
+        include_news=args.with_news,
+        top_n=args.top_n,
+    )
+    if args.synthetic:
+        report = find_opportunities_synthetic(seed=args.seed, **kwargs)
+    else:
+        symbols = [s.strip() for s in args.symbols.split(",") if s.strip()] if args.symbols else None
+        report = find_opportunities_real(symbols, period=args.period, interval=args.interval, **kwargs)
+
+    if args.out:
+        with open(args.out, "w", encoding="utf-8") as f:
+            json.dump(report, f, indent=2, ensure_ascii=False, default=str)
+    _print_json(report)
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="Trading signals CLI")
     subparsers = parser.add_subparsers(dest="command", required=True)
@@ -394,6 +418,30 @@ def build_parser() -> argparse.ArgumentParser:
     screen_parser.add_argument("--top-n", type=int, default=5, help="Cuántos símbolos mostrar por ventana")
     screen_parser.add_argument("--out", default=None, help="Ruta donde guardar el reporte completo en JSON")
     screen_parser.set_defaults(func=cmd_screen)
+
+    opportunities_parser = subparsers.add_parser(
+        "opportunities",
+        help="Escanea varios símbolos con el motor de recomendaciones y sugiere los que tienen mejor señal ahora",
+    )
+    opportunities_parser.add_argument(
+        "--symbols", default=None, help="Lista separada por comas; si se omite usa el universo de ejemplo"
+    )
+    opportunities_parser.add_argument("--synthetic", action="store_true", help="Usa perfiles de mercado sintéticos (sin red)")
+    opportunities_parser.add_argument("--seed", type=int, default=42, help="Semilla de los perfiles sintéticos")
+    opportunities_parser.add_argument("--period", default="2y")
+    opportunities_parser.add_argument("--interval", default="1d")
+    opportunities_parser.add_argument("--capital", type=float, default=10_000.0)
+    opportunities_parser.add_argument("--commission-bps", type=float, default=5.0)
+    opportunities_parser.add_argument("--no-short", action="store_true", help="Desactiva las posiciones en corto")
+    opportunities_parser.add_argument(
+        "--with-earnings", action="store_true", help="Ajusta cada símbolo con el historial de earnings (Finnhub)"
+    )
+    opportunities_parser.add_argument(
+        "--with-news", action="store_true", help="Ajusta cada símbolo con el sentimiento de noticias (Alpha Vantage)"
+    )
+    opportunities_parser.add_argument("--top-n", type=int, default=5, help="Cuántos símbolos mostrar por lista (compra/venta)")
+    opportunities_parser.add_argument("--out", default=None, help="Ruta donde guardar el reporte completo en JSON")
+    opportunities_parser.set_defaults(func=cmd_opportunities)
 
     return parser
 
