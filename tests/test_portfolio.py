@@ -5,11 +5,13 @@ import pytest
 import app.portfolio as portfolio_module
 from app.portfolio import (
     ADAPTIVE_REGRET_MAX_BOOST,
+    DEFAULT_STOP_LOSS_PCT,
     _closed_trades_so_far,
     _combine_equity_curves,
     _find_start_index,
     _recent_regret_boost,
     _risk_multiplier,
+    _risk_parity_weights,
     _select_portfolio,
     _walk_forward_result,
     simulate_portfolio_real,
@@ -115,10 +117,20 @@ def test_walk_forward_result_pnl_amounts_reconcile_with_equity_curve(monkeypatch
 
 def test_combine_equity_curves_sums_aligned_series():
     idx = pd.date_range("2026-01-01", periods=5, freq="D")
-    r1 = {"equity_curve": pd.Series([100, 110, 120, 130, 140], index=idx)}
-    r2 = {"equity_curve": pd.Series([200, 190, 180, 170, 160], index=idx)}
-    combined = _combine_equity_curves([r1, r2], capital_per_symbol=100.0)
+    r1 = {"symbol": "A", "equity_curve": pd.Series([100, 110, 120, 130, 140], index=idx)}
+    r2 = {"symbol": "B", "equity_curve": pd.Series([200, 190, 180, 170, 160], index=idx)}
+    combined = _combine_equity_curves([r1, r2], capital_by_symbol={"A": 100.0, "B": 100.0})
     assert combined.tolist() == [300, 300, 300, 300, 300]
+
+
+def test_combine_equity_curves_uses_each_symbols_own_capital():
+    idx = pd.date_range("2026-01-01", periods=3, freq="D")
+    short_idx = idx[1:]  # symbol B "starts" one day later than the combined date axis
+    r1 = {"symbol": "A", "equity_curve": pd.Series([100, 110, 120], index=idx)}
+    r2 = {"symbol": "B", "equity_curve": pd.Series([50, 55], index=short_idx)}
+    combined = _combine_equity_curves([r1, r2], capital_by_symbol={"A": 100.0, "B": 50.0})
+    # Day 1: A=100, B not started yet -> filled with B's own starting capital (50), not A's.
+    assert combined.iloc[0] == 150
 
 
 def test_simulate_portfolio_synthetic_end_to_end_small(monkeypatch):
@@ -128,7 +140,8 @@ def test_simulate_portfolio_synthetic_end_to_end_small(monkeypatch):
 
     assert report["start_date"] == "2026-01-01"
     assert len(report["portfolio"]) == 2
-    assert report["capital_per_symbol"] == pytest.approx(report["initial_capital"] / 2)
+    assert set(report["capital_by_symbol"]) == {p["symbol"] for p in report["portfolio"]}
+    assert sum(report["capital_by_symbol"].values()) == pytest.approx(report["initial_capital"])
     per_symbol_sum = round(sum(p["final_equity"] for p in report["per_symbol"]), 2)
     assert per_symbol_sum == pytest.approx(report["final_equity"], abs=0.05)
     assert not report["errors"]
@@ -152,16 +165,18 @@ def test_simulate_portfolio_real_records_per_symbol_fetch_failures(monkeypatch, 
     report = simulate_portfolio_real(start_date="2023-06-01", symbols=["OK", "BROKEN"], portfolio_size=2, step=30)
 
     assert "BROKEN" in report["errors"]
-    assert report["portfolio"] == [
-        {
-            "symbol": "OK",
-            "action_at_selection": "BUY",
-            "confidence_pct_at_selection": 80.0,
-            "sharpe_ratio": None,
-            "max_drawdown_pct": None,
-            "risk_adjusted_score": 80.0,
-        }
-    ]
+    assert len(report["portfolio"]) == 1
+    candidate = report["portfolio"][0]
+    assert candidate["volatility_pct"] > 0
+    del candidate["volatility_pct"]
+    assert candidate == {
+        "symbol": "OK",
+        "action_at_selection": "BUY",
+        "confidence_pct_at_selection": 80.0,
+        "sharpe_ratio": None,
+        "max_drawdown_pct": None,
+        "risk_adjusted_score": 80.0,
+    }
 
 
 def test_walk_forward_recommend_never_sees_future_data(monkeypatch, long_uptrend_df):
@@ -519,3 +534,166 @@ def test_simulate_portfolio_synthetic_adaptive_learning_flag_is_threaded(monkeyp
     simulate_portfolio_synthetic(portfolio_size=1, step=30, adaptive_learning=False)
 
     assert seen_flags == [False]
+
+
+# ---------------------------------------------------------------------------
+# Asset-class diversification cap
+# ---------------------------------------------------------------------------
+
+
+def test_select_portfolio_caps_picks_per_asset_class(monkeypatch, long_uptrend_df):
+    """Two crypto pairs shouldn't both make the cut when a cap of 1-per-class
+    is in effect, even if both individually outscore everything else."""
+    monkeypatch.setattr(
+        portfolio_module,
+        "recommend",
+        lambda window, symbol="", **k: _fake_rec(
+            action="SELL", confidence=95.0 if "USD" in symbol else 60.0, sharpe_ratio=1.0, max_drawdown_pct=-5.0
+        ),
+    )
+    dfs = {"BTC-USD": long_uptrend_df, "ETH-USD": long_uptrend_df, "^GSPC": long_uptrend_df}
+    start_idx_by_symbol = {s: 200 for s in dfs}
+
+    portfolio = _select_portfolio(
+        dfs, start_idx_by_symbol, portfolio_size=3, allow_short=True, initial_capital=10000.0,
+        commission_bps=5.0, max_per_asset_class=1,
+    )
+
+    crypto_picks = [c for c in portfolio if c["symbol"] in ("BTC-USD", "ETH-USD")]
+    assert len(crypto_picks) == 1
+    assert "^GSPC" in [c["symbol"] for c in portfolio]
+
+
+def test_select_portfolio_max_per_asset_class_none_disables_cap(monkeypatch, long_uptrend_df):
+    monkeypatch.setattr(
+        portfolio_module, "recommend", lambda window, symbol="", **k: _fake_rec(action="SELL", confidence=95.0)
+    )
+    dfs = {"BTC-USD": long_uptrend_df, "ETH-USD": long_uptrend_df}
+    start_idx_by_symbol = {s: 200 for s in dfs}
+
+    portfolio = _select_portfolio(
+        dfs, start_idx_by_symbol, portfolio_size=2, allow_short=True, initial_capital=10000.0,
+        commission_bps=5.0, max_per_asset_class=None,
+    )
+    assert len(portfolio) == 2
+
+
+def test_select_portfolio_includes_volatility_pct(monkeypatch, long_uptrend_df):
+    monkeypatch.setattr(portfolio_module, "recommend", lambda *a, **k: _fake_rec(action="BUY", confidence=80.0))
+    portfolio = _select_portfolio(
+        {"AAPL": long_uptrend_df}, {"AAPL": 200}, portfolio_size=1, allow_short=True,
+        initial_capital=10000.0, commission_bps=5.0,
+    )
+    assert portfolio[0]["volatility_pct"] > 0
+
+
+# ---------------------------------------------------------------------------
+# Risk-parity position sizing
+# ---------------------------------------------------------------------------
+
+
+def test_risk_parity_weights_favor_lower_volatility():
+    portfolio = [
+        {"symbol": "CALM", "volatility_pct": 0.5},
+        {"symbol": "WILD", "volatility_pct": 5.0},
+    ]
+    weights = _risk_parity_weights(portfolio)
+    assert weights["CALM"] > weights["WILD"]
+    assert weights["CALM"] + weights["WILD"] == pytest.approx(1.0)
+
+
+def test_risk_parity_weights_equal_for_equal_volatility():
+    portfolio = [{"symbol": "A", "volatility_pct": 1.0}, {"symbol": "B", "volatility_pct": 1.0}]
+    weights = _risk_parity_weights(portfolio)
+    assert weights["A"] == pytest.approx(weights["B"])
+
+
+def test_risk_parity_weights_handles_missing_volatility():
+    portfolio = [{"symbol": "A", "volatility_pct": None}, {"symbol": "B", "volatility_pct": 1.0}]
+    weights = _risk_parity_weights(portfolio)
+    assert weights["A"] + weights["B"] == pytest.approx(1.0)
+    assert weights["A"] > 0 and weights["B"] > 0
+
+
+def test_simulate_portfolio_synthetic_risk_parity_sizes_unequally(monkeypatch):
+    """With two symbols of very different volatility, risk-parity sizing
+    should NOT split capital 50/50 the way equal-weighting would."""
+    calls = {"n": 0}
+
+    def fake_recommend(window, symbol="", **k):
+        calls["n"] += 1
+        return _fake_rec(action="BUY", confidence=80.0)
+
+    monkeypatch.setattr(portfolio_module, "recommend", fake_recommend)
+    report = simulate_portfolio_synthetic(portfolio_size=2, step=30, risk_parity_sizing=True)
+    capitals = list(report["capital_by_symbol"].values())
+    assert sum(capitals) == pytest.approx(report["initial_capital"])
+    # The two synthetic profiles picked have different historical volatility
+    # (different regimes/seeds), so risk parity shouldn't land on an exact 50/50 split.
+    assert capitals[0] != pytest.approx(capitals[1])
+
+
+def test_simulate_portfolio_synthetic_equal_weight_when_disabled(monkeypatch):
+    monkeypatch.setattr(portfolio_module, "recommend", lambda *a, **k: _fake_rec(action="BUY", confidence=80.0))
+    report = simulate_portfolio_synthetic(portfolio_size=2, step=30, risk_parity_sizing=False)
+    capitals = list(report["capital_by_symbol"].values())
+    assert capitals[0] == pytest.approx(capitals[1])
+    assert capitals[0] == pytest.approx(report["initial_capital"] / 2)
+
+
+# ---------------------------------------------------------------------------
+# Stop-loss
+# ---------------------------------------------------------------------------
+
+
+def test_stop_loss_triggered_for_long_position():
+    from app.portfolio import _stop_loss_triggered
+
+    assert _stop_loss_triggered(price_today=80.0, entry_price=100.0, direction=1, stop_loss_pct=15.0) is True
+    assert _stop_loss_triggered(price_today=90.0, entry_price=100.0, direction=1, stop_loss_pct=15.0) is False
+
+
+def test_stop_loss_triggered_for_short_position():
+    from app.portfolio import _stop_loss_triggered
+
+    # Short position: price RISING hurts it.
+    assert _stop_loss_triggered(price_today=120.0, entry_price=100.0, direction=-1, stop_loss_pct=15.0) is True
+    assert _stop_loss_triggered(price_today=105.0, entry_price=100.0, direction=-1, stop_loss_pct=15.0) is False
+
+
+def test_walk_forward_result_stop_loss_flattens_a_crashing_long(monkeypatch):
+    """A long position entered once (BUY on the very first bar, HOLD forever
+    after — so only the stop-loss, never a fresh signal, can close it) then
+    hit with a sharp, sustained drop should get flattened by the stop-loss,
+    preserving capital that riding the full decline would have lost."""
+    close = pd.Series([100.0] * 200 + [100 - i for i in range(1, 61)])  # flat, then a steady 60-point slide
+    df = _make_ohlcv(close)
+
+    def buy_once_then_hold(window, *a, **k):
+        action = "BUY" if len(window) == 200 else "HOLD"
+        return {"overall_action": action, "confidence_pct": 80.0}
+
+    monkeypatch.setattr(portfolio_module, "recommend", buy_once_then_hold)
+
+    with_stop = _walk_forward_result(
+        df, 199, "SYM", allow_short=True, capital=10_000.0, commission_bps=0.0, step=1, stop_loss_pct=15.0
+    )
+    without_stop = _walk_forward_result(
+        df, 199, "SYM", allow_short=True, capital=10_000.0, commission_bps=0.0, step=1, stop_loss_pct=None
+    )
+
+    assert with_stop["equity_curve"].iloc[-1] > without_stop["equity_curve"].iloc[-1]
+    assert any(t.get("open") is not True for t in with_stop["trades"])  # the stop-loss closed the trade
+
+
+def test_walk_forward_result_no_stop_loss_when_disabled(monkeypatch):
+    close = pd.Series([100.0] * 200 + [100 - i for i in range(1, 61)])
+    df = _make_ohlcv(close)
+    monkeypatch.setattr(portfolio_module, "recommend", lambda *a, **k: {"overall_action": "BUY", "confidence_pct": 80.0})
+
+    result = _walk_forward_result(
+        df, 199, "SYM", allow_short=True, capital=10_000.0, commission_bps=0.0, step=1, stop_loss_pct=None
+    )
+    close_final = close.iloc[-1]
+    expected_final = 10_000.0 * (close_final / close.iloc[199])
+    assert result["equity_curve"].iloc[-1] == pytest.approx(expected_final, rel=1e-6)

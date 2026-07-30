@@ -307,7 +307,14 @@ def post_simulate_portfolio(request: PortfolioSimulateRequest) -> dict:
         adaptive_learning=request.adaptive_learning,
         include_earnings=request.with_earnings,
         include_news=request.with_news,
+        risk_parity_sizing=request.risk_parity_sizing,
+        stop_loss_pct=request.stop_loss_pct,
     )
+    if request.max_per_asset_class is not None:
+        # Omit otherwise so each path's own smart default applies (2 for
+        # real symbols; disabled for synthetic labels — see
+        # simulate_portfolio_synthetic).
+        kwargs["max_per_asset_class"] = request.max_per_asset_class
     try:
         if request.synthetic:
             return simulate_portfolio_synthetic(start_date=request.start_date, seed=request.seed, **kwargs)

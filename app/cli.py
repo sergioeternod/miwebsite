@@ -296,7 +296,14 @@ def cmd_portfolio_sim(args: argparse.Namespace) -> None:
         adaptive_learning=not args.no_adaptive_learning,
         include_earnings=args.with_earnings,
         include_news=args.with_news,
+        risk_parity_sizing=not args.equal_weight,
+        stop_loss_pct=None if args.no_stop_loss else args.stop_loss_pct,
     )
+    if args.max_per_asset_class is not None:
+        # Omit otherwise so each path's own smart default applies (2 for
+        # real symbols; disabled for synthetic labels, which carry no real
+        # asset-class information — see simulate_portfolio_synthetic).
+        kwargs["max_per_asset_class"] = args.max_per_asset_class
     if args.synthetic:
         report = simulate_portfolio_synthetic(start_date=args.start_date, seed=args.seed, **kwargs)
     else:
@@ -313,6 +320,7 @@ def cmd_portfolio_sim(args: argparse.Namespace) -> None:
         "num_trading_days": report["num_trading_days"],
         "portfolio": report["portfolio"],
         "initial_capital": report["initial_capital"],
+        "capital_by_symbol": report["capital_by_symbol"],
         "final_equity": report["final_equity"],
         "total_pnl_amount": report["total_pnl_amount"],
         "total_return_pct": report["total_return_pct"],
@@ -548,6 +556,21 @@ def build_parser() -> argparse.ArgumentParser:
     portfolio_sim_parser.add_argument(
         "--with-news", action="store_true",
         help="Al elegir el portafolio, ajusta la confianza con el sentimiento de noticias recientes (Alpha Vantage) — solo afecta acciones individuales",
+    )
+    portfolio_sim_parser.add_argument(
+        "--max-per-asset-class", type=int, default=None,
+        help="Máximo de símbolos del portafolio que pueden venir de la misma clase de activo (default: 2 en símbolos reales, sin límite en sintético). Usa un número igual o mayor a --portfolio-size para desactivarlo",
+    )
+    portfolio_sim_parser.add_argument(
+        "--equal-weight", action="store_true",
+        help="Reparte el capital en partes iguales entre los símbolos elegidos, en vez de ponderar por volatilidad inversa (risk parity, el default)",
+    )
+    portfolio_sim_parser.add_argument(
+        "--stop-loss-pct", type=float, default=15.0,
+        help="Cierra una posición si pierde más de este %% desde que se abrió, sin importar lo que diga la señal técnica (default 15%%)",
+    )
+    portfolio_sim_parser.add_argument(
+        "--no-stop-loss", action="store_true", help="Desactiva el stop-loss por posición",
     )
     portfolio_sim_parser.add_argument("--out", default=None, help="Ruta donde guardar el reporte completo en JSON")
     portfolio_sim_parser.set_defaults(func=cmd_portfolio_sim)

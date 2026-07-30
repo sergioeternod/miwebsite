@@ -37,7 +37,7 @@ import pandas as pd
 
 from app.backtest.engine import extract_trades
 from app.backtest.metrics import compute_metrics
-from app.config import EXAMPLE_SYMBOLS, default_commission_bps
+from app.config import EXAMPLE_SYMBOLS, default_commission_bps, infer_asset_class
 from app.data.providers import get_ohlcv
 from app.data.synthetic import generate_ohlcv
 from app.fundamentals.earnings import apply_earnings_overlay
@@ -82,6 +82,37 @@ def _risk_multiplier(sharpe_ratio: float | None, max_drawdown_pct: float | None)
         drawdown_multiplier = 1.0 - (1.0 - DRAWDOWN_MULTIPLIER_FLOOR) * drawdown_component
 
     return sharpe_multiplier * drawdown_multiplier
+
+
+# Diversification cap: without this, nothing stops the top N candidates by
+# score from being 2-3 flavors of the same bet (e.g. BTC-USD *and* ETH-USD
+# both short at once) — same trade, twice the exposure, not real
+# diversification. Capping how many picks can come from one asset class
+# forces the rest of the portfolio slots to come from elsewhere.
+DEFAULT_MAX_PER_ASSET_CLASS = 2
+
+# Risk-parity position sizing: instead of splitting capital equally across
+# selected symbols, size each position inversely to its own historical daily
+# volatility, so a calm instrument (e.g. a major forex pair) gets more
+# capital than a wild one (e.g. crypto) for the same portfolio slot — this
+# captures *some* upside from a volatile pick without giving it the same
+# dollar exposure as a stable one, instead of the earlier all-or-nothing
+# choice between including it at full size or excluding it outright.
+MIN_VOLATILITY_PCT = 0.1  # floor so a near-flat instrument doesn't dominate the weights
+
+
+def _risk_parity_weights(portfolio: list[dict]) -> dict[str, float]:
+    """Inverse-volatility weights for the selected `portfolio`, normalized to
+    sum to 1.0. A missing/zero volatility reading is floored to
+    `MIN_VOLATILITY_PCT` rather than treated as "infinitely safe" — otherwise
+    a single degenerate reading could claim almost all the capital."""
+    inv_vols = {
+        c["symbol"]: 1.0 / max(c.get("volatility_pct") or MIN_VOLATILITY_PCT, MIN_VOLATILITY_PCT)
+        for c in portfolio
+    }
+    total = sum(inv_vols.values())
+    return {symbol: inv_vol / total for symbol, inv_vol in inv_vols.items()}
+
 
 # "Learning from old positions": every `step` bars, before deciding the next
 # position, the simulator looks back — causally, only at trades that already
@@ -165,6 +196,7 @@ def _select_portfolio(
     min_confidence_pct: float = 55.0,
     include_earnings: bool = False,
     include_news: bool = False,
+    max_per_asset_class: int | None = DEFAULT_MAX_PER_ASSET_CLASS,
 ) -> list[dict]:
     """Ranks symbols using only data strictly before the simulation's start
     index (no lookahead), and returns the top `portfolio_size` — BUY and
@@ -181,7 +213,15 @@ def _select_portfolio(
     more consistent one. Candidates below `min_confidence_pct` (checked
     *after* any overlay nudge) are excluded outright, same bar the daily
     walk-forward uses to decide whether to act on a signal — a portfolio
-    built on a coin-flip call isn't a real portfolio, it's noise."""
+    built on a coin-flip call isn't a real portfolio, it's noise.
+
+    `max_per_asset_class` (default `DEFAULT_MAX_PER_ASSET_CLASS`, `None` to
+    disable) caps how many picks can come from the same asset class —
+    otherwise the top-N by score can end up as two or three flavors of the
+    same bet (e.g. BTC-USD *and* ETH-USD both short at once), which is
+    concentrated exposure, not diversification. A candidate that would
+    exceed its class's cap is skipped in favor of the next-best one from a
+    class with room left, rather than shrinking the portfolio."""
     allowed_actions = {"BUY", "SELL"} if allow_short else {"BUY"}
     candidates = []
     for symbol, df in dfs.items():
@@ -202,12 +242,14 @@ def _select_portfolio(
 
         best_strategy = rec.get("best_historical_strategy", {})
         risk_multiplier = _risk_multiplier(best_strategy.get("sharpe_ratio"), best_strategy.get("max_drawdown_pct"))
+        volatility_pct = float(window["Close"].pct_change().std() * 100) if len(window) > 1 else None
         candidate = {
             "symbol": symbol,
             "action_at_selection": rec["overall_action"],
             "confidence_pct_at_selection": rec["confidence_pct"],
             "sharpe_ratio": best_strategy.get("sharpe_ratio"),
             "max_drawdown_pct": best_strategy.get("max_drawdown_pct"),
+            "volatility_pct": round(volatility_pct, 3) if volatility_pct is not None and not pd.isna(volatility_pct) else None,
             "risk_adjusted_score": round(rec["confidence_pct"] * risk_multiplier, 2),
         }
         if include_earnings:
@@ -217,7 +259,21 @@ def _select_portfolio(
         candidates.append(candidate)
 
     candidates.sort(key=lambda c: c["risk_adjusted_score"], reverse=True)
-    return candidates[:portfolio_size]
+
+    if max_per_asset_class is None:
+        return candidates[:portfolio_size]
+
+    selected = []
+    picks_per_class = {}
+    for candidate in candidates:
+        if len(selected) >= portfolio_size:
+            break
+        asset_class = infer_asset_class(candidate["symbol"])
+        if picks_per_class.get(asset_class, 0) >= max_per_asset_class:
+            continue
+        selected.append(candidate)
+        picks_per_class[asset_class] = picks_per_class.get(asset_class, 0) + 1
+    return selected
 
 
 def _closed_trades_so_far(
@@ -258,6 +314,19 @@ def _recent_regret_boost(closed_trades: list[dict], commission_bps: float) -> fl
     return min(avg_regret_pct, ADAPTIVE_REGRET_MAX_BOOST)
 
 
+DEFAULT_STOP_LOSS_PCT = 15.0
+
+
+def _stop_loss_triggered(price_today: float, entry_price: float, direction: int, stop_loss_pct: float) -> bool:
+    """`direction` is the position's sign (+1 long, -1 short). Multiplying
+    the raw price-ratio move by `direction` turns "which way did price move"
+    into "did this specific position gain or lose" — a short gains when
+    price falls, so the same falling price that would trip a long's stop
+    is exactly what a short wants."""
+    move_in_position_direction_pct = (price_today / entry_price - 1) * 100 * direction
+    return move_in_position_direction_pct <= -stop_loss_pct
+
+
 def _walk_forward_result(
     df: pd.DataFrame,
     start_idx: int,
@@ -268,6 +337,7 @@ def _walk_forward_result(
     step: int,
     min_confidence_pct: float = 55.0,
     adaptive_learning: bool = True,
+    stop_loss_pct: float | None = DEFAULT_STOP_LOSS_PCT,
 ) -> dict:
     """Recomputes the ensemble recommendation every `step` bars from
     `start_idx` onward (using only df.iloc[:t+1] each time — never later
@@ -290,6 +360,15 @@ def _walk_forward_result(
     turn a wrong call into a right one, only make the next one need more
     conviction.
 
+    `stop_loss_pct` (default `DEFAULT_STOP_LOSS_PCT`, `None` to disable) is a
+    hard exit the ensemble's own signal can't override: checked every bar
+    (not just every `step` bars — a risk control that only fires on the
+    scheduled recalculation day isn't a real safety net), if a position has
+    lost more than `stop_loss_pct` since it was opened, it's flattened
+    regardless of what the technical signal currently says. This is the one
+    exit rule in this simulator that doesn't wait for `recommend()` to
+    change its mind.
+
     `commission_bps=None` resolves once to a realistic default for `symbol`'s
     instrument type — resolved here (not left to `recommend()`/`run_backtest`
     to resolve internally) because this function also uses it directly for
@@ -299,7 +378,15 @@ def _walk_forward_result(
 
     positions = [0] * len(df)
     current = 0
+    entry_price = None
     for t in range(start_idx, len(df)):
+        price_today = float(df["Close"].iloc[t])
+
+        if stop_loss_pct is not None and current != 0 and entry_price is not None:
+            if _stop_loss_triggered(price_today, entry_price, current, stop_loss_pct):
+                current = 0
+                entry_price = None
+
         if (t - start_idx) % step == 0:
             window = df.iloc[: t + 1]
             rec = recommend(window, symbol=symbol, initial_capital=capital, commission_bps=commission_bps, allow_short=allow_short)
@@ -308,12 +395,16 @@ def _walk_forward_result(
             if adaptive_learning:
                 closed_so_far = _closed_trades_so_far(df, positions, start_idx, t, commission_bps, capital)
                 effective_min_confidence += _recent_regret_boost(closed_so_far, commission_bps)
+            new_current = current
             if rec["confidence_pct"] >= effective_min_confidence:
                 if action == "BUY":
-                    current = 1
+                    new_current = 1
                 elif action == "SELL":
-                    current = -1 if allow_short else 0
-            # HOLD, or a BUY/SELL below the confidence threshold: keep `current` unchanged.
+                    new_current = -1 if allow_short else 0
+                # HOLD, or a BUY/SELL below the confidence threshold: keep `current` unchanged.
+            if new_current != current:
+                entry_price = price_today if new_current != 0 else None
+            current = new_current
         positions[t] = current
 
     sim_df = df.iloc[start_idx:].copy()
@@ -342,12 +433,15 @@ def _walk_forward_result(
     }
 
 
-def _combine_equity_curves(results: list[dict], capital_per_symbol: float) -> pd.Series:
+def _combine_equity_curves(results: list[dict], capital_by_symbol: dict[str, float]) -> pd.Series:
+    """`capital_by_symbol` gives each result's own starting capital (not
+    necessarily equal across symbols — see `_risk_parity_weights`), used to
+    fill in a symbol's pre-entry days on the combined date axis."""
     all_dates = sorted(set().union(*(r["equity_curve"].index for r in results)))
     combined = pd.Series(0.0, index=all_dates)
     for r in results:
         aligned = r["equity_curve"].reindex(all_dates)
-        aligned = aligned.ffill().fillna(capital_per_symbol)
+        aligned = aligned.ffill().fillna(capital_by_symbol[r["symbol"]])
         combined = combined.add(aligned, fill_value=0.0)
     return combined
 
@@ -366,6 +460,9 @@ def _run_simulation(
     adaptive_learning: bool = True,
     include_earnings: bool = False,
     include_news: bool = False,
+    max_per_asset_class: int | None = DEFAULT_MAX_PER_ASSET_CLASS,
+    risk_parity_sizing: bool = True,
+    stop_loss_pct: float | None = DEFAULT_STOP_LOSS_PCT,
 ) -> dict:
     if step < 1:
         raise ValueError("step debe ser >= 1")
@@ -396,6 +493,7 @@ def _run_simulation(
         min_confidence_pct,
         include_earnings,
         include_news,
+        max_per_asset_class,
     )
     if not portfolio:
         raise ValueError(
@@ -405,23 +503,29 @@ def _run_simulation(
             "Prueba con otro universo, fecha, un umbral de confianza más bajo, o habilita posiciones cortas."
         )
 
-    capital_per_symbol = round(initial_capital / len(portfolio), 2)
+    if risk_parity_sizing:
+        weights = _risk_parity_weights(portfolio)
+    else:
+        weights = {c["symbol"]: 1.0 / len(portfolio) for c in portfolio}
+    capital_by_symbol = {symbol: round(initial_capital * weight, 2) for symbol, weight in weights.items()}
+
     per_symbol_results = [
         _walk_forward_result(
             usable[c["symbol"]],
             start_idx_by_symbol[c["symbol"]],
             c["symbol"],
             allow_short,
-            capital_per_symbol,
+            capital_by_symbol[c["symbol"]],
             commission_bps,
             step,
             min_confidence_pct,
             adaptive_learning,
+            stop_loss_pct,
         )
         for c in portfolio
     ]
 
-    portfolio_equity_curve = _combine_equity_curves(per_symbol_results, capital_per_symbol)
+    portfolio_equity_curve = _combine_equity_curves(per_symbol_results, capital_by_symbol)
     final_equity = round(float(portfolio_equity_curve.iloc[-1]), 2)
     num_trading_days = max(len(r["equity_curve"]) for r in per_symbol_results)
     all_trades = [trade for r in per_symbol_results for trade in r["trades"]]
@@ -431,7 +535,7 @@ def _run_simulation(
         "end_date": str(portfolio_equity_curve.index[-1].date()),
         "num_trading_days": num_trading_days,
         "initial_capital": initial_capital,
-        "capital_per_symbol": capital_per_symbol,
+        "capital_by_symbol": capital_by_symbol,
         "portfolio": portfolio,
         "final_equity": final_equity,
         "total_pnl_amount": round(final_equity - initial_capital, 2),
@@ -440,7 +544,7 @@ def _run_simulation(
             {
                 "symbol": r["symbol"],
                 "final_equity": round(float(r["equity_curve"].iloc[-1]), 2),
-                "pnl_amount": round(float(r["equity_curve"].iloc[-1]) - capital_per_symbol, 2),
+                "pnl_amount": round(float(r["equity_curve"].iloc[-1]) - capital_by_symbol[r["symbol"]], 2),
                 "metrics": r["metrics"],
                 "trades": r["trades"],
                 "hindsight_summary": r["hindsight_summary"],
@@ -471,6 +575,9 @@ def simulate_portfolio_real(
     adaptive_learning: bool = True,
     include_earnings: bool = False,
     include_news: bool = False,
+    max_per_asset_class: int | None = DEFAULT_MAX_PER_ASSET_CLASS,
+    risk_parity_sizing: bool = True,
+    stop_loss_pct: float | None = DEFAULT_STOP_LOSS_PCT,
 ) -> dict:
     """Auto-selects a portfolio (from real symbols, defaulting to the full
     example universe) using only data before `start_date`, then walks
@@ -486,7 +593,13 @@ def simulate_portfolio_real(
     *selection* time only (Finnhub/Alpha Vantage — real stock tickers only;
     see the module docstring for why they aren't applied inside the daily
     walk-forward). Selection always also weighs each candidate's own
-    historical Sharpe ratio and max drawdown, regardless of these flags."""
+    historical Sharpe ratio and max drawdown, regardless of these flags.
+    `max_per_asset_class` caps how many picks can share an asset class
+    (`None` to disable — see `_select_portfolio`). `risk_parity_sizing`
+    sizes each position inversely to its own historical volatility instead
+    of splitting capital equally (see `_risk_parity_weights`).
+    `stop_loss_pct` is a hard per-position exit independent of the
+    technical signal (`None` to disable — see `_walk_forward_result`)."""
     symbols = symbols or _default_symbols()
 
     dfs = {}
@@ -511,6 +624,9 @@ def simulate_portfolio_real(
         adaptive_learning,
         include_earnings,
         include_news,
+        max_per_asset_class,
+        risk_parity_sizing,
+        stop_loss_pct,
     )
 
 
@@ -528,6 +644,9 @@ def simulate_portfolio_synthetic(
     adaptive_learning: bool = True,
     include_earnings: bool = False,
     include_news: bool = False,
+    max_per_asset_class: int | None = None,
+    risk_parity_sizing: bool = True,
+    stop_loss_pct: float | None = DEFAULT_STOP_LOSS_PCT,
 ) -> dict:
     """Same simulation, but over synthetic profiles reaching into 2026 —
     usable with no network access. Real dates only line up exactly with
@@ -539,7 +658,13 @@ def simulate_portfolio_synthetic(
     Vantage for these (fake) profile labels, so — same as
     `app.opportunities`'s synthetic path — they'll come back "unavailable"
     rather than do anything useful; the risk-adjusted (Sharpe/drawdown)
-    selection still applies regardless."""
+    selection still applies regardless. `max_per_asset_class` defaults to
+    `None` (disabled) here, unlike the real-data path: synthetic labels like
+    "Símbolo A (tendencia alcista)" carry no real ticker convention, so
+    `infer_asset_class` falls back to treating every one of them as
+    the same class — capping picks per class would silently shrink any
+    demo portfolio bigger than the cap. Pass a specific value to test the
+    cap's mechanics against a controlled scenario."""
     profiles = profiles or DEFAULT_PORTFOLIO_PROFILES
 
     dfs = {
@@ -560,4 +685,7 @@ def simulate_portfolio_synthetic(
         adaptive_learning,
         include_earnings,
         include_news,
+        max_per_asset_class,
+        risk_parity_sizing,
+        stop_loss_pct,
     )

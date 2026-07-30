@@ -121,6 +121,18 @@ class PortfolioSimulateRequest(BaseModel):
         False,
         description="Al elegir el portafolio, ajusta la confianza con el sentimiento de noticias recientes (Alpha Vantage) — solo afecta acciones individuales",
     )
+    max_per_asset_class: int | None = Field(
+        None,
+        description="Máximo de símbolos que pueden venir de la misma clase de activo. Si se omite: 2 en símbolos reales, sin límite (None) en sintético",
+    )
+    risk_parity_sizing: bool = Field(
+        True,
+        description="Si está activo, reparte el capital por volatilidad inversa (risk parity) en vez de partes iguales",
+    )
+    stop_loss_pct: float | None = Field(
+        15.0,
+        description="Cierra una posición si pierde más de este % desde que se abrió, sin importar la señal técnica. None para desactivarlo",
+    )
 
 
 class ValidateRequest(BaseModel):

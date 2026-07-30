@@ -499,6 +499,54 @@ real, no solo su beneficio. Ejecuta
 reproducir esto con tu propio universo/periodos antes de confiar en esto
 con dinero real.
 
+### Tres controles de riesgo más: diversificación, tamaño por volatilidad, stop-loss
+
+El ajuste por riesgo de la sección anterior cambia *cuáles* símbolos entran
+al portafolio. Estas tres mejoras adicionales cambian *cuánto* capital le
+das a cada uno y *cuándo* lo sacas — todas activas por defecto:
+
+1. **Límite por clase de activo** (`--max-per-asset-class`, default 2 en
+   símbolos reales): sin esto, nada impedía que el top-N por puntaje fueran
+   dos o tres sabores de la misma apuesta — por ejemplo BTC-USD *y*
+   ETH-USD ambos en corto a la vez, que no es diversificación real, es la
+   misma apuesta cripto duplicada. El límite obliga a que el resto de los
+   cupos del portafolio vengan de otra clase de activo, saltando al
+   siguiente mejor candidato en vez de encoger el portafolio. Desactivado
+   por defecto en el escenario sintético (las etiquetas como "Símbolo A"
+   no tienen una clase de activo real que inferir).
+2. **Tamaño de posición por volatilidad — risk parity** (`--equal-weight`
+   para desactivarlo y volver a partes iguales): en vez de repartir el
+   capital por igual entre los símbolos elegidos, cada posición recibe
+   capital inversamente proporcional a su propia volatilidad histórica
+   diaria — un instrumento tranquilo (ej. un par de forex mayor) recibe más
+   capital que uno salvaje (ej. cripto) por el mismo cupo del portafolio.
+   Esto captura *algo* de la subida de un símbolo volátil sin darle la
+   misma exposición en dólares que a uno estable, en vez de la elección de
+   todo-o-nada de antes (incluirlo a tamaño completo o excluirlo).
+3. **Stop-loss por posición** (`--stop-loss-pct`, default 15%;
+   `--no-stop-loss` para desactivarlo): se revisa *cada día* (no solo los
+   días en que se recalcula la señal) — si una posición pierde más de ese
+   porcentaje desde que se abrió, se cierra sin importar lo que diga la
+   señal técnica en ese momento. Es la única regla de salida de este
+   simulador que no espera a que `recommend()` cambie de opinión.
+
+### ¿Es un patrón real o suerte de un solo periodo? Validación en 5 ventanas históricas
+
+Un solo periodo que mejoró no prueba nada por sí solo — podría ser suerte
+de ese tramo específico. `scripts/multi_period_validation.py` compara el
+modelo original (selección por pura confianza, capital repartido en
+partes iguales, sin stop-loss) contra el modelo con las cuatro mejoras
+activas (selección ajustada por riesgo con límite por clase de activo,
+tamaño por volatilidad, stop-loss), sobre 5 ventanas de 3 años con datos
+reales que cubren regímenes distintos (era cripto temprana, bajista 2018,
+boom pandémico, bajista 2022 + recuperación 2023, y el periodo reciente):
+
+<!-- MULTI_PERIOD_TABLE -->
+
+Ejecuta `python scripts/multi_period_validation.py` (requiere red, puede
+tardar más de una hora) para reproducir esto con tu propio universo o
+periodos antes de confiar en esto con dinero real.
+
 ## Recomendaciones con historial de earnings (Finnhub)
 
 La recomendación técnica (`recommend`) no sabe nada de si una empresa
