@@ -2,12 +2,19 @@
 portfolio simulation (scripts/run_3y_real_sim.py's output)."""
 
 import json
+import os
 
 RESULT_PATH = "/home/user/miwebsite/scripts/sim_3y_real_result.json"
+OLD_RESULT_PATH = "/home/user/miwebsite/scripts/sim_3y_real_result_OLD_confidence_ranking.json"
 OUT_PATH = "/tmp/claude-0/-home-user/4000c46a-deef-52ab-9f3d-4eef518e131a/scratchpad/sim_3y_real_chart.html"
 
 with open(RESULT_PATH, encoding="utf-8") as f:
     report = json.load(f)
+
+old_report = None
+if os.path.exists(OLD_RESULT_PATH):
+    with open(OLD_RESULT_PATH, encoding="utf-8") as f:
+        old_report = json.load(f)
 
 curve = report["portfolio_equity_curve"]
 dates = [c["date"] for c in curve]
@@ -61,6 +68,14 @@ context = {
     ],
     "hindsight": report["hindsight_summary"],
     "disclaimer": report["disclaimer"],
+    "oldComparison": None
+    if old_report is None
+    else {
+        "finalEquity": old_report["final_equity"],
+        "totalPnlAmount": old_report["total_pnl_amount"],
+        "totalReturnPct": old_report["total_return_pct"],
+        "portfolioSymbols": [p["symbol"] for p in old_report["portfolio"]],
+    },
 }
 
 html = r"""<title>Simulación 3 años — datos reales</title>
@@ -198,6 +213,11 @@ html = r"""<title>Simulación 3 años — datos reales</title>
     <h1>Simulador de portafolio — 3 años con datos reales</h1>
     <p class="subtitle" id="subtitle"></p>
 
+    <div class="card" id="comparisonCard" style="display:none;">
+      <h2>Antes / después: selección ajustada por riesgo (Sharpe/drawdown)</h2>
+      <p class="card-sub" id="comparisonSub"></p>
+    </div>
+
     <div class="stat-row" id="statRow"></div>
 
     <div class="card">
@@ -260,6 +280,24 @@ document.getElementById("subtitle").textContent =
   `${CTX.startDate} → ${CTX.endDate} · ${CTX.numTradingDays} días de mercado · datos reales (Yahoo Finance)`;
 
 document.getElementById("disclaimer").textContent = CTX.disclaimer;
+
+if (CTX.oldComparison) {
+  const old = CTX.oldComparison;
+  document.getElementById("comparisonCard").style.display = "";
+  const sub = document.getElementById("comparisonSub");
+  sub.innerHTML = "";
+  const line1 = document.createElement("div");
+  line1.innerHTML =
+    `Antes (ranking por pura confianza del ensemble): portafolio <strong>${old.portfolioSymbols.join(", ")}</strong> → ` +
+    `<span style="color:var(--series-red)">${fmtMoney(old.totalPnlAmount)} (${fmtPct(old.totalReturnPct)})</span>`;
+  const line2 = document.createElement("div");
+  line2.style.marginTop = "4px";
+  line2.innerHTML =
+    `Ahora (ranking ajustado por Sharpe/drawdown histórico): portafolio <strong>${CTX.portfolio.map(p => p.symbol).join(", ")}</strong> → ` +
+    `<span style="color:${CTX.totalPnlAmount >= 0 ? 'var(--good-text)' : 'var(--series-red)'}">${fmtMoney(CTX.totalPnlAmount)} (${fmtPct(CTX.totalReturnPct)})</span>`;
+  sub.appendChild(line1);
+  sub.appendChild(line2);
+}
 
 const stats = [
   {label: "Capital inicial", value: fmtMoney(CTX.initialCapital)},

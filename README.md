@@ -415,6 +415,61 @@ consistentemente malas; no es una garantía de mejora en cualquier
 escenario, y aquí se reporta tal cual salió, sin recortar el caso en que no
 cambió nada.
 
+### Selección de portafolio ajustada por riesgo, noticias y earnings
+
+`recommend()` ya calculaba, para cada estrategia, su Sharpe ratio y máximo
+drawdown históricos (`run_backtest` los computa de todos modos) — pero el
+simulador de portafolio solo miraba la confianza del ensemble para elegir
+qué símbolos incluir. Ahora la selección (no el recálculo diario, ver
+abajo) usa un puntaje ajustado por riesgo:
+
+1. **Estadísticas de riesgo** (siempre activo): la confianza de cada
+   candidato se escala por un multiplicador basado en el Sharpe ratio y el
+   drawdown máximo histórico de su mejor estrategia — un símbolo con
+   confianza técnica alta pero un historial de riesgo agresivo (Sharpe
+   bajo, drawdowns profundos) ya no gana automáticamente sobre uno con
+   confianza algo menor pero un track record más consistente.
+2. **Noticias y earnings** (`--with-earnings`/`--with-news`, igual que
+   `opportunities`): ajustan la confianza de cada candidato *solo al
+   elegir el portafolio*, usando los mismos overlays de Finnhub/Alpha
+   Vantage — solo sirven para acciones individuales (AAPL, MSFT, etc.), no
+   para cripto/forex/commodities/índices.
+
+**Por qué esto NO se aplica también en el recálculo diario del
+walk-forward**: Finnhub y Alpha Vantage devuelven datos relativos a *ahora*
+(el reloj real), sin forma de pedir "cómo se veía esto en tal fecha
+pasada". Meterlos en la reevaluación diaria de un backtest de varios años
+filtraría noticias/earnings de hoy hacia una decisión fechada años atrás —
+lookahead bias real, no un detalle de estilo — además de agotar el límite
+gratuito de ambas APIs en un puñado de días simulados. Por eso quedan
+donde sí son honestos: eligiendo el portafolio de hoy, no relitigando cada
+día pasado de la simulación.
+
+**Resultado honesto, verificado con datos reales**: se recalculó la
+selección para el mismo universo y la misma fecha de inicio (2023-07-30)
+de la corrida de 3 años de la sección anterior. El ranking por pura
+confianza había elegido **CL=F, SI=F, ETH-USD, BTC-USD, ^GSPC** — el
+resultado real fue -$2,906.13 (-29.06%), arrastrado sobre todo por los
+shorts en BTC-USD (-$1,640.19) y ETH-USD (-$1,693.06), ambos con drawdowns
+históricos brutales (-50.34% y -59.66%) que el ranking anterior no
+penalizaba. El ranking ajustado por riesgo excluye a los dos: elige
+**^GSPC, SI=F, EURUSD=X, CL=F, ^DJI** en su lugar. Corriendo la simulación
+completa de 3 años sobre este nuevo portafolio, el resultado real fue
+**-$40.35 (-0.4%)** — prácticamente sin pérdidas, sobre el mismo periodo,
+mismos datos, misma fecha de inicio. Esto no es un caso construido para
+verse bien: es la misma corrida honesta de la sección anterior, repetida
+con el único cambio de cómo se elige el portafolio.
+
+Dicho esto — este es un resultado de una corrida sobre un periodo
+específico, no una garantía general. El multiplicador de riesgo penaliza
+drawdowns profundos e Sharpe bajo, que es exactamente lo que le pasó a
+BTC/ETH en este tramo del historial real; en un periodo distinto, o con un
+universo distinto, el mismo mecanismo puede no cambiar nada, o incluso
+empeorar el resultado si penaliza de más a un símbolo que resultó ganador.
+Ejecuta `python scripts/compare_selection_methods.py` (requiere red) para
+reproducir la comparación de selección con tu propia fecha/universo antes
+de confiar en esto con dinero real.
+
 ## Recomendaciones con historial de earnings (Finnhub)
 
 La recomendación técnica (`recommend`) no sabe nada de si una empresa
@@ -600,6 +655,7 @@ python -m app.cli portfolio-sim --start-date 2026-01-01 --symbols AAPL,MSFT,TSLA
 python -m app.cli portfolio-sim --start-date 2026-01-01 --out portafolio.json
 python -m app.cli portfolio-sim --start-date 2026-01-01 --min-confidence 65  # más exigente, menos operaciones
 python -m app.cli portfolio-sim --start-date 2026-01-01 --no-adaptive-learning  # desactiva el ajuste por hindsight
+python -m app.cli portfolio-sim --start-date 2026-01-01 --with-earnings --with-news  # ajusta la selección con Finnhub/Alpha Vantage
 ```
 
 ## Uso — Pantalla web
