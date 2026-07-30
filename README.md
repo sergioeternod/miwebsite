@@ -363,6 +363,51 @@ estas dos mejoras garantiza ganar más seguido; existen para que el ensemble
 razone mejor sobre el contexto de mercado y ejecute menos operaciones
 débiles, nada más.
 
+### Aprendizaje de posiciones pasadas: hindsight y umbral adaptativo
+
+Además de mirar hacia adelante (régimen de mercado, confianza del ensemble),
+el simulador ahora también mira hacia atrás, a sus propias operaciones ya
+cerradas:
+
+1. **Hindsight por operación** (`app.validation.trade_accuracy.
+   annotate_trade_hindsight`): para cada operación cerrada, compara —usando
+   solo el precio de entrada y salida, ya conocidos porque la operación ya
+   terminó— el resultado real contra las otras dos opciones que existían en
+   ese momento (la dirección contraria, o quedarse plano). Cada operación
+   queda anotada con `hindsight: {best_direction, regret_pct,
+   was_optimal, missed_pnl_amount}`, y `hindsight_summary` agrega esas
+   anotaciones por símbolo y por portafolio (`% de operaciones óptimas en
+   retrospectiva`, `regret promedio`, `$ dejados sobre la mesa`). Esto es
+   estrictamente retrospectivo — no hay forma de conocer el precio de salida
+   antes de que ocurra, así que nunca se usa como señal en vivo.
+2. **Umbral de confianza adaptativo** (`--no-adaptive-learning` para
+   desactivarlo, activo por defecto): en cada punto de decisión del
+   walk-forward, antes de actuar, el simulador calcula el hindsight de sus
+   últimas operaciones ya cerradas —solo las que cerraron estrictamente
+   antes del día actual, nunca información futura— y si el regret promedio
+   reciente es alto, sube el umbral de confianza exigido para la próxima
+   operación (hasta 20 puntos porcentuales más). Una racha de llamadas que en
+   retrospectiva debieron ser la dirección contraria hace que el simulador
+   se vuelva más exigente, en vez de repetir el mismo error al mismo umbral.
+   Esto ajusta la cautela, no la predicción: no puede convertir una llamada
+   equivocada en correcta, solo exigir más convicción para la siguiente.
+
+**Resultado honesto, no prometido**: en un escenario diseñado para
+demostrarlo (señales BUY/SELL alternadas justo en el límite de confianza,
+sobre una tendencia alcista sostenida, donde el lado SELL pierde
+sistemáticamente), el aprendizaje adaptativo detectó la racha perdedora y
+redujo las operaciones de 40 a 2, mejorando el capital final de $9,577 a
+$14,598 sobre los mismos datos y el mismo umbral base. Pero en el escenario
+sintético por defecto de este simulador (`portfolio-sim --synthetic`, con
+`--portfolio-size 5` o `2`, al umbral de confianza por defecto), el
+resultado con y sin aprendizaje adaptativo fue idéntico ($8,862.40 y
+$9,501.97 respectivamente) — las llamadas del ensemble en ese escenario casi
+nunca caen justo en la zona límite donde el ajuste importaría. El mecanismo
+funciona quirúrgicamente donde hay una racha de calls marginales y
+consistentemente malas; no es una garantía de mejora en cualquier
+escenario, y aquí se reporta tal cual salió, sin recortar el caso en que no
+cambió nada.
+
 ## Recomendaciones con historial de earnings (Finnhub)
 
 La recomendación técnica (`recommend`) no sabe nada de si una empresa
@@ -547,6 +592,7 @@ python -m app.cli portfolio-sim --synthetic --start-date 2026-01-01
 python -m app.cli portfolio-sim --start-date 2026-01-01 --symbols AAPL,MSFT,TSLA,BTC-USD,ETH-USD --portfolio-size 3
 python -m app.cli portfolio-sim --start-date 2026-01-01 --out portafolio.json
 python -m app.cli portfolio-sim --start-date 2026-01-01 --min-confidence 65  # más exigente, menos operaciones
+python -m app.cli portfolio-sim --start-date 2026-01-01 --no-adaptive-learning  # desactiva el ajuste por hindsight
 ```
 
 ## Uso — Pantalla web

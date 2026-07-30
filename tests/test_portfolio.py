@@ -4,8 +4,11 @@ import pytest
 
 import app.portfolio as portfolio_module
 from app.portfolio import (
+    ADAPTIVE_REGRET_MAX_BOOST,
+    _closed_trades_so_far,
     _combine_equity_curves,
     _find_start_index,
+    _recent_regret_boost,
     _select_portfolio,
     _walk_forward_result,
     simulate_portfolio_real,
@@ -234,3 +237,153 @@ def test_simulate_portfolio_synthetic_min_confidence_pct_reduces_or_matches_trad
     strict_trades = strict["per_symbol"][0]["metrics"]["num_trades"]
     loose_trades = loose["per_symbol"][0]["metrics"]["num_trades"]
     assert strict_trades <= loose_trades
+
+
+def _hindsight_trade(entry_price, exit_price, equity_at_entry=10_000.0):
+    return {"direction": "long", "entry_price": entry_price, "exit_price": exit_price, "equity_at_entry": equity_at_entry}
+
+
+def test_recent_regret_boost_is_zero_with_no_closed_trades():
+    assert _recent_regret_boost([], commission_bps=0.0) == 0.0
+
+
+def test_recent_regret_boost_positive_after_bad_calls():
+    trades = [_hindsight_trade(100, 90), _hindsight_trade(100, 80)]
+    assert _recent_regret_boost(trades, commission_bps=0.0) > 0.0
+
+
+def test_recent_regret_boost_capped_at_max():
+    trades = [_hindsight_trade(100, 1)] * 3
+    assert _recent_regret_boost(trades, commission_bps=0.0) == ADAPTIVE_REGRET_MAX_BOOST
+
+
+def test_recent_regret_boost_only_uses_last_lookback_trades():
+    # ADAPTIVE_REGRET_LOOKBACK is 3: only the last 3 (all "good") should count,
+    # regardless of how many bad calls came before them.
+    bad = _hindsight_trade(100, 50)
+    good = _hindsight_trade(100, 110)
+    trades = [bad, bad, bad, bad, good, good, good]
+    assert _recent_regret_boost(trades, commission_bps=0.0) == 0.0
+
+
+def test_closed_trades_so_far_empty_when_t_not_after_start(long_uptrend_df):
+    positions = [0] * len(long_uptrend_df)
+    assert _closed_trades_so_far(long_uptrend_df, positions, 200, 200, commission_bps=0.0, capital=10_000.0) == []
+
+
+def test_closed_trades_so_far_ignores_positions_at_and_after_t(long_uptrend_df):
+    """Regression guard: the sub-slice used for the regret look-back must
+    stop strictly before `t` — a value planted at index `t` (a "future" bar
+    from the perspective of the decision being made) must never leak in."""
+    positions = [0] * len(long_uptrend_df)
+    positions[200] = 1
+    positions[209] = 999  # sentinel: if this leaked in, it would show up as a bogus second trade
+    trades = _closed_trades_so_far(long_uptrend_df, positions, 200, 209, commission_bps=0.0, capital=10_000.0)
+    assert len(trades) == 1
+    assert trades[0]["direction"] == "long"
+
+
+def test_walk_forward_result_includes_hindsight_summary(monkeypatch, long_uptrend_df):
+    calls = {"n": 0}
+
+    def alternating_recommend(window, symbol="", initial_capital=10000.0, commission_bps=5.0, allow_short=True):
+        calls["n"] += 1
+        return {"overall_action": "BUY" if calls["n"] % 2 == 0 else "SELL", "confidence_pct": 70.0}
+
+    monkeypatch.setattr(portfolio_module, "recommend", alternating_recommend)
+    result = _walk_forward_result(long_uptrend_df, 200, "SYM", allow_short=True, capital=10_000.0, commission_bps=5.0, step=5)
+
+    closed_trades = [t for t in result["trades"] if not t.get("open")]
+    assert all(t.get("hindsight") is not None for t in closed_trades)
+    assert result["hindsight_summary"]["num_trades"] == len(closed_trades)
+
+
+def test_walk_forward_adaptive_learning_reduces_trades_after_bad_streak(monkeypatch, long_uptrend_df):
+    """In a strong uptrend, alternating BUY/SELL calls right at the
+    confidence bar keep losing money on the SELL leg. Adaptive learning
+    should notice via hindsight and raise the bar enough to stop acting on
+    it, ending up with fewer trades (and, in this scenario, a better
+    result) than the same run with adaptive learning turned off — but the
+    mechanism is judged here on trade count, not on promising better P&L in
+    general."""
+    calls = {"n": 0}
+
+    def alternating_borderline(window, symbol="", initial_capital=10000.0, commission_bps=5.0, allow_short=True):
+        calls["n"] += 1
+        action = "SELL" if calls["n"] % 2 == 1 else "BUY"
+        return {"overall_action": action, "confidence_pct": 55.5}
+
+    monkeypatch.setattr(portfolio_module, "recommend", alternating_borderline)
+    adaptive = _walk_forward_result(
+        long_uptrend_df, 200, "SYM", allow_short=True, capital=10_000.0, commission_bps=5.0, step=5,
+        min_confidence_pct=55.0, adaptive_learning=True,
+    )
+
+    calls["n"] = 0
+    baseline = _walk_forward_result(
+        long_uptrend_df, 200, "SYM", allow_short=True, capital=10_000.0, commission_bps=5.0, step=5,
+        min_confidence_pct=55.0, adaptive_learning=False,
+    )
+
+    assert len(adaptive["trades"]) < len(baseline["trades"])
+
+
+def test_walk_forward_adaptive_learning_never_uses_future_positions(monkeypatch, long_uptrend_df):
+    """Regression guard: the regret look-back must only ever be computed
+    from positions already decided strictly before the current decision
+    point `t` — mirroring the no-lookahead discipline `recommend()` itself
+    is held to."""
+    real_closed_trades_so_far = portfolio_module._closed_trades_so_far
+    seen_t_values = []
+
+    def spy(df, positions, start_idx, t, commission_bps, capital):
+        assert all(p == 0 for p in positions[t:])  # nothing beyond t has been decided yet
+        seen_t_values.append(t)
+        return real_closed_trades_so_far(df, positions, start_idx, t, commission_bps, capital)
+
+    monkeypatch.setattr(portfolio_module, "_closed_trades_so_far", spy)
+    monkeypatch.setattr(portfolio_module, "recommend", lambda *a, **k: {"overall_action": "BUY", "confidence_pct": 80.0})
+    _walk_forward_result(long_uptrend_df, 200, "SYM", allow_short=True, capital=10_000.0, commission_bps=5.0, step=10)
+
+    assert seen_t_values  # sanity: the adaptive path actually ran
+
+
+def test_walk_forward_result_adaptive_learning_off_matches_fixed_threshold(monkeypatch, long_uptrend_df):
+    """With adaptive_learning=False, the confidence bar must stay exactly
+    at min_confidence_pct regardless of how bad recent trades looked in
+    hindsight."""
+    monkeypatch.setattr(portfolio_module, "recommend", lambda *a, **k: {"overall_action": "BUY", "confidence_pct": 40.0})
+    result = _walk_forward_result(
+        long_uptrend_df, 200, "SYM", allow_short=True, capital=10_000.0, commission_bps=0.0, step=1,
+        min_confidence_pct=10.0, adaptive_learning=False,
+    )
+    close = long_uptrend_df["Close"]
+    expected_final = 10_000.0 * (close.iloc[-1] / close.iloc[200])
+    assert result["equity_curve"].iloc[-1] == pytest.approx(expected_final, rel=1e-6)
+
+
+def test_simulate_portfolio_synthetic_includes_hindsight_summary(monkeypatch):
+    monkeypatch.setattr(portfolio_module, "recommend", lambda *a, **k: {"overall_action": "BUY", "confidence_pct": 80.0})
+    report = simulate_portfolio_synthetic(portfolio_size=2, step=30)
+
+    assert "hindsight_summary" in report
+    assert all("hindsight_summary" in p for p in report["per_symbol"])
+
+
+def test_simulate_portfolio_synthetic_adaptive_learning_flag_is_threaded(monkeypatch, long_uptrend_df):
+    # `_run_simulation` calls `_walk_forward_result` positionally, with
+    # `adaptive_learning` as the last argument — assert on that directly
+    # instead of via kwargs.
+    seen_flags = []
+    real_walk_forward_result = portfolio_module._walk_forward_result
+
+    def spy(*args, **kwargs):
+        seen_flags.append(args[8] if len(args) > 8 else kwargs.get("adaptive_learning"))
+        return real_walk_forward_result(*args, **kwargs)
+
+    monkeypatch.setattr(portfolio_module, "_walk_forward_result", spy)
+    monkeypatch.setattr(portfolio_module, "recommend", lambda *a, **k: {"overall_action": "BUY", "confidence_pct": 80.0})
+
+    simulate_portfolio_synthetic(portfolio_size=1, step=30, adaptive_learning=False)
+
+    assert seen_flags == [False]

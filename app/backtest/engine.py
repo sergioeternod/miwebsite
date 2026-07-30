@@ -90,6 +90,7 @@ def extract_trades(
             "bars_held": exit_idx - entry_idx,
             "return_pct": net_return_pct,
             "pnl_amount": round(equity_at_entry * net_return_pct / 100, 2),
+            "equity_at_entry": round(equity_at_entry, 2),
         }
         if mark_open:
             trade["open"] = True

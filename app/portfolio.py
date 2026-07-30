@@ -24,8 +24,21 @@ from app.config import EXAMPLE_SYMBOLS, default_commission_bps
 from app.data.providers import get_ohlcv
 from app.data.synthetic import generate_ohlcv
 from app.recommend.engine import recommend
+from app.validation.trade_accuracy import annotate_trade_hindsight, hindsight_summary
 
 MIN_WARMUP_BARS = 120
+
+# "Learning from old positions": every `step` bars, before deciding the next
+# position, the simulator looks back — causally, only at trades that already
+# closed — and checks whether those positions were the best of long/short/
+# flat in hindsight (app.validation.trade_accuracy.annotate_trade_hindsight).
+# A run of bad-in-hindsight calls temporarily raises the confidence bar
+# required to act, up to ADAPTIVE_REGRET_MAX_BOOST points, so the simulator
+# gets pickier after a losing streak instead of repeating it at the same
+# threshold. This adapts caution, not the underlying prediction — it cannot
+# turn a wrong call right, only make the next one need more conviction.
+ADAPTIVE_REGRET_LOOKBACK = 3
+ADAPTIVE_REGRET_MAX_BOOST = 20.0
 
 # A single default synthetic scenario for this feature: ~3 years of
 # "historial previo" (so real dates like 2026-01-01 fall well after warmup),
@@ -122,6 +135,44 @@ def _select_portfolio(
     return candidates[:portfolio_size]
 
 
+def _closed_trades_so_far(
+    df: pd.DataFrame,
+    positions: list[int],
+    start_idx: int,
+    t: int,
+    commission_bps: float,
+    capital: float,
+) -> list[dict]:
+    """Trades implied by the positions already decided for bars
+    `[start_idx, t)` — never `t` itself, which is still being decided.
+    Used only to look back at the simulator's own recent track record; the
+    resulting trades' `equity_at_entry` falls back to `capital` (no
+    `equity_curve` is passed) since this is a same-symbol sub-slice, not the
+    period's own accounting."""
+    if t <= start_idx:
+        return []
+    sub_df = df.iloc[start_idx:t].copy()
+    sub_df["position"] = pd.Series(positions[start_idx:t], index=sub_df.index)
+    return extract_trades(sub_df, commission_bps, equity_curve=None, initial_capital=capital)
+
+
+def _recent_regret_boost(closed_trades: list[dict], commission_bps: float) -> float:
+    """How much extra confidence to demand right now, based on how badly the
+    last few *closed* trades did in hindsight (see
+    `app.validation.trade_accuracy.annotate_trade_hindsight`). A streak of
+    trades that, in hindsight, should have gone the other way (or stayed
+    flat) raises the bar for the next call — capped at
+    `ADAPTIVE_REGRET_MAX_BOOST` so it can dampen but never fully silence the
+    simulator."""
+    annotated = annotate_trade_hindsight(closed_trades, commission_bps=commission_bps)
+    closed = [t for t in annotated if t.get("hindsight") is not None]
+    if not closed:
+        return 0.0
+    recent = closed[-ADAPTIVE_REGRET_LOOKBACK:]
+    avg_regret_pct = sum(t["hindsight"]["regret_pct"] for t in recent) / len(recent)
+    return min(avg_regret_pct, ADAPTIVE_REGRET_MAX_BOOST)
+
+
 def _walk_forward_result(
     df: pd.DataFrame,
     start_idx: int,
@@ -131,6 +182,7 @@ def _walk_forward_result(
     commission_bps: float | None,
     step: int,
     min_confidence_pct: float = 55.0,
+    adaptive_learning: bool = True,
 ) -> dict:
     """Recomputes the ensemble recommendation every `step` bars from
     `start_idx` onward (using only df.iloc[:t+1] each time — never later
@@ -143,6 +195,15 @@ def _walk_forward_result(
     stretch into overtrading: extra commission drag plus a position that
     reverses right before the market does. This doesn't change what
     `recommend()` reports, only whether the simulator acts on it.
+
+    When `adaptive_learning` is on, that confidence bar isn't fixed: at each
+    decision point the simulator looks back — causally, only at trades that
+    already closed strictly before this point — and raises the bar further
+    after a streak of calls that, in hindsight, should have gone the other
+    way (see `_recent_regret_boost`). This adapts caution based on the
+    simulator's own recent track record; it cannot see the future and cannot
+    turn a wrong call into a right one, only make the next one need more
+    conviction.
 
     `commission_bps=None` resolves once to a realistic default for `symbol`'s
     instrument type — resolved here (not left to `recommend()`/`run_backtest`
@@ -158,7 +219,11 @@ def _walk_forward_result(
             window = df.iloc[: t + 1]
             rec = recommend(window, symbol=symbol, initial_capital=capital, commission_bps=commission_bps, allow_short=allow_short)
             action = rec["overall_action"]
-            if rec["confidence_pct"] >= min_confidence_pct:
+            effective_min_confidence = min_confidence_pct
+            if adaptive_learning:
+                closed_so_far = _closed_trades_so_far(df, positions, start_idx, t, commission_bps, capital)
+                effective_min_confidence += _recent_regret_boost(closed_so_far, commission_bps)
+            if rec["confidence_pct"] >= effective_min_confidence:
                 if action == "BUY":
                     current = 1
                 elif action == "SELL":
@@ -179,10 +244,17 @@ def _walk_forward_result(
     trades = extract_trades(sim_df, commission_bps, equity_curve=equity_curve, initial_capital=capital)
     metrics = compute_metrics(equity_curve, trades, period_returns)
 
+    trades = annotate_trade_hindsight(trades, commission_bps=commission_bps)
     for trade in trades:
         trade["symbol"] = symbol
 
-    return {"symbol": symbol, "equity_curve": equity_curve, "trades": trades, "metrics": metrics}
+    return {
+        "symbol": symbol,
+        "equity_curve": equity_curve,
+        "trades": trades,
+        "metrics": metrics,
+        "hindsight_summary": hindsight_summary(trades),
+    }
 
 
 def _combine_equity_curves(results: list[dict], capital_per_symbol: float) -> pd.Series:
@@ -206,6 +278,7 @@ def _run_simulation(
     step: int,
     errors: dict[str, str],
     min_confidence_pct: float = 55.0,
+    adaptive_learning: bool = True,
 ) -> dict:
     if step < 1:
         raise ValueError("step debe ser >= 1")
@@ -248,6 +321,7 @@ def _run_simulation(
             commission_bps,
             step,
             min_confidence_pct,
+            adaptive_learning,
         )
         for c in portfolio
     ]
@@ -255,6 +329,7 @@ def _run_simulation(
     portfolio_equity_curve = _combine_equity_curves(per_symbol_results, capital_per_symbol)
     final_equity = round(float(portfolio_equity_curve.iloc[-1]), 2)
     num_trading_days = max(len(r["equity_curve"]) for r in per_symbol_results)
+    all_trades = [trade for r in per_symbol_results for trade in r["trades"]]
 
     return {
         "start_date": start_date,
@@ -273,12 +348,14 @@ def _run_simulation(
                 "pnl_amount": round(float(r["equity_curve"].iloc[-1]) - capital_per_symbol, 2),
                 "metrics": r["metrics"],
                 "trades": r["trades"],
+                "hindsight_summary": r["hindsight_summary"],
             }
             for r in per_symbol_results
         ],
         "portfolio_equity_curve": [
             {"date": str(d.date()), "equity": round(float(v), 2)} for d, v in portfolio_equity_curve.items()
         ],
+        "hindsight_summary": hindsight_summary(all_trades),
         "errors": errors,
         "disclaimer": DISCLAIMER,
     }
@@ -296,6 +373,7 @@ def simulate_portfolio_real(
     allow_short: bool = True,
     step: int = 1,
     min_confidence_pct: float = 55.0,
+    adaptive_learning: bool = True,
 ) -> dict:
     """Auto-selects a portfolio (from real symbols, defaulting to the full
     example universe) using only data before `start_date`, then walks
@@ -303,7 +381,9 @@ def simulate_portfolio_real(
     reporting the combined dollar P&L over the period. `min_confidence_pct`
     is the minimum ensemble confidence required to select a symbol or flip
     its position on a given day — below it, a BUY/SELL call is treated as a
-    HOLD, to avoid overtrading on weak/noisy signals."""
+    HOLD, to avoid overtrading on weak/noisy signals. `adaptive_learning`
+    additionally raises that bar on the fly based on the simulator's own
+    recent hindsight track record (see `_walk_forward_result`)."""
     symbols = symbols or _default_symbols()
 
     dfs = {}
@@ -315,7 +395,17 @@ def simulate_portfolio_real(
             errors[symbol] = str(exc)
 
     return _run_simulation(
-        dfs, start_date, end_date, portfolio_size, initial_capital, commission_bps, allow_short, step, errors, min_confidence_pct
+        dfs,
+        start_date,
+        end_date,
+        portfolio_size,
+        initial_capital,
+        commission_bps,
+        allow_short,
+        step,
+        errors,
+        min_confidence_pct,
+        adaptive_learning,
     )
 
 
@@ -330,6 +420,7 @@ def simulate_portfolio_synthetic(
     allow_short: bool = True,
     step: int = 1,
     min_confidence_pct: float = 55.0,
+    adaptive_learning: bool = True,
 ) -> dict:
     """Same simulation, but over synthetic profiles reaching into 2026 —
     usable with no network access. Real dates only line up exactly with
@@ -343,5 +434,15 @@ def simulate_portfolio_synthetic(
         for profile in profiles
     }
     return _run_simulation(
-        dfs, start_date, end_date, portfolio_size, initial_capital, commission_bps, allow_short, step, {}, min_confidence_pct
+        dfs,
+        start_date,
+        end_date,
+        portfolio_size,
+        initial_capital,
+        commission_bps,
+        allow_short,
+        step,
+        {},
+        min_confidence_pct,
+        adaptive_learning,
     )

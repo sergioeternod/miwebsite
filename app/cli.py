@@ -293,6 +293,7 @@ def cmd_portfolio_sim(args: argparse.Namespace) -> None:
         allow_short=not args.no_short,
         step=args.step,
         min_confidence_pct=args.min_confidence,
+        adaptive_learning=not args.no_adaptive_learning,
     )
     if args.synthetic:
         report = simulate_portfolio_synthetic(start_date=args.start_date, seed=args.seed, **kwargs)
@@ -320,9 +321,11 @@ def cmd_portfolio_sim(args: argparse.Namespace) -> None:
                 "pnl_amount": p["pnl_amount"],
                 "num_trades": p["metrics"]["num_trades"],
                 "win_rate_pct": p["metrics"]["win_rate_pct"],
+                "hindsight_summary": p["hindsight_summary"],
             }
             for p in report["per_symbol"]
         ],
+        "hindsight_summary": report["hindsight_summary"],
         "errors": report["errors"],
     }
     if args.out:
@@ -531,6 +534,10 @@ def build_parser() -> argparse.ArgumentParser:
     portfolio_sim_parser.add_argument(
         "--min-confidence", type=float, default=55.0,
         help="Confianza mínima del ensemble (%%) para elegir un símbolo o voltear su posición; por debajo se trata como HOLD",
+    )
+    portfolio_sim_parser.add_argument(
+        "--no-adaptive-learning", action="store_true",
+        help="Desactiva el aprendizaje adaptativo (por defecto, una racha de operaciones subóptimas en retrospectiva sube el umbral de confianza)",
     )
     portfolio_sim_parser.add_argument("--out", default=None, help="Ruta donde guardar el reporte completo en JSON")
     portfolio_sim_parser.set_defaults(func=cmd_portfolio_sim)

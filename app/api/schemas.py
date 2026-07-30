@@ -109,6 +109,10 @@ class PortfolioSimulateRequest(BaseModel):
         55.0,
         description="Confianza mínima del ensemble (%) para elegir un símbolo o voltear su posición; por debajo se trata como HOLD",
     )
+    adaptive_learning: bool = Field(
+        True,
+        description="Si está activo, una racha de operaciones subóptimas en retrospectiva (ver hindsight) sube el umbral de confianza sobre la marcha",
+    )
 
 
 class ValidateRequest(BaseModel):

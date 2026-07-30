@@ -304,6 +304,7 @@ def post_simulate_portfolio(request: PortfolioSimulateRequest) -> dict:
         allow_short=request.allow_short,
         step=request.step,
         min_confidence_pct=request.min_confidence_pct,
+        adaptive_learning=request.adaptive_learning,
     )
     try:
         if request.synthetic:
