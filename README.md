@@ -12,15 +12,17 @@ información histórica de mercado.
 
 ## Qué incluye esta primera fase (MVP)
 
-- **Datos multi-instrumento**: Yahoo Finance (vía `yfinance`) como fuente
-  principal cubre acciones, cripto, divisas, commodities e índices con el
-  mismo formato OHLCV, usando el símbolo de cada instrumento (`AAPL`,
-  `BTC-USD`, `EURUSD=X`, `GC=F`, `^GSPC`, etc.). Si Yahoo falla por cualquier
-  motivo (bloqueo de red, una de sus caídas periódicas por protección
-  anti-bot, error de conexión), `get_ohlcv` reintenta automáticamente contra
+- **Datos multi-instrumento**: Yahoo Finance como fuente principal cubre
+  acciones, cripto, divisas, commodities e índices con el mismo formato
+  OHLCV, usando el símbolo de cada instrumento (`AAPL`, `BTC-USD`,
+  `EURUSD=X`, `GC=F`, `^GSPC`, etc.). `get_ohlcv` prueba primero `yfinance`
+  y, si falla (su autenticación de cookie/crumb no sobrevive todos los
+  proxies), reintenta con un cliente directo al endpoint público de Yahoo
+  (`app/data/yahoo_client.py`, ajustando splits/dividendos igual que
+  `auto_adjust=True`). Si Yahoo falla por completo, reintenta contra
   **Stooq** (`app/data/stooq_client.py`), una segunda fuente gratuita sin
-  API key con cobertura similar — solo si ambas fallan se reporta un error,
-  citando lo que dijo cada una.
+  API key con cobertura similar — solo si las tres fallan se reporta un
+  error, citando lo que dijo cada una.
 - **Indicadores técnicos**: SMA, EMA, RSI, MACD, Bandas de Bollinger, ATR, ADX
   (`app/indicators/technical.py`).
 - **Estrategias, long y short** (con flag `allow_short` para restringir a
@@ -670,8 +672,9 @@ uvicorn app.api.main:app --reload
 ```
 app/
   config.py            # clases de activos, símbolos de ejemplo, comisión realista por tipo de instrumento
-  data/providers.py     # obtención de OHLCV (Yahoo Finance, con respaldo automático en Stooq)
-  data/stooq_client.py    # respaldo OHLCV sin API key (Stooq) si Yahoo falla
+  data/providers.py     # obtención de OHLCV (Yahoo Finance vía yfinance -> cliente directo -> Stooq)
+  data/yahoo_client.py    # cliente directo al endpoint público de Yahoo si yfinance falla
+  data/stooq_client.py    # respaldo OHLCV sin API key (Stooq) si Yahoo falla por completo
   data/synthetic.py      # generador de escenarios históricos sintéticos
   data/finnhub_client.py  # cliente HTTP de earnings surprises/calendario (Finnhub)
   data/alphavantage_client.py  # cliente HTTP de noticias con sentimiento (Alpha Vantage)
@@ -782,17 +785,40 @@ instrumento.)
 
 ## Nota sobre el entorno de desarrollo
 
-En el entorno sandbox donde se desarrolló este MVP, la política de red del
-contenedor bloquea **todo** el tráfico saliente a proveedores externos de
-datos de mercado por igual — no es algo específico de Yahoo: se confirmó
+Gran parte de este MVP se desarrolló en un entorno sandbox cuya política de
+red bloqueaba **todo** el tráfico saliente a proveedores externos de datos
+de mercado por igual — no era algo específico de Yahoo: se confirmó
 probando `fc.yahoo.com`, `stooq.com`, `www.alphavantage.co` y `finnhub.io`,
-los cuatro responden 403 en el proxy de egress. Por eso el motor de datos,
+los cuatro respondían 403 en el proxy de egress. Por eso el motor de datos,
 indicadores, estrategias, backtester y recomendaciones se validaron con
-datos sintéticos (`tests/`), y los clientes de Stooq/Finnhub/Alpha Vantage se
-probaron con llamadas HTTP simuladas (`tests/test_stooq_client.py`,
-`tests/test_providers.py`, `tests/test_finnhub_client.py`,
-`tests/test_earnings.py`, `tests/test_alphavantage_client.py`,
-`tests/test_news_sentiment.py`) en vez de contra las APIs reales. Para usar
-datos reales (Yahoo, con respaldo automático en Stooq) o los overlays de
-earnings/noticias, ejecuta la app en un entorno con acceso a internet sin
-estas restricciones (por ejemplo, tu máquina local).
+datos sintéticos (`tests/`), y los clientes de Stooq/Yahoo directo/Finnhub/
+Alpha Vantage se probaron con llamadas HTTP simuladas (`tests/test_stooq_client.py`,
+`tests/test_yahoo_client.py`, `tests/test_providers.py`,
+`tests/test_finnhub_client.py`, `tests/test_earnings.py`,
+`tests/test_alphavantage_client.py`, `tests/test_news_sentiment.py`) en vez
+de contra las APIs reales.
+
+Al habilitar después una política de red más abierta en ese mismo entorno,
+apareció un segundo problema, esta vez específico de `yfinance`: su llamado
+a `Ticker.history()` pasa primero por una autenticación de cookie/crumb (vía
+`curl_cffi`, imitando la huella TLS de un navegador) que existe solo para
+`Ticker.info` — algo que esta app nunca usa — y esa imitación no sobrevive
+todos los proxies (este entorno, entre ellos: la conexión se resetea en
+seco). El endpoint público `v8/finance/chart` de Yahoo devuelve exactamente
+los mismos datos históricos con un GET HTTPS plano, sin esa autenticación,
+así que `app/data/yahoo_client.py` habla directo con ese endpoint como
+segundo intento cuando `yfinance` falla (ajustando splits/dividendos con el
+mismo criterio que `auto_adjust=True`, vía el campo `adjclose` de la
+respuesta). Con ese respaldo, los datos reales sí funcionan en este mismo
+entorno una vez abierta la política de red — se verificó trayendo AAPL,
+BTC-USD, EURUSD=X, GC=F y ^GSPC de verdad, uno por cada clase de activo.
+
+Si tu entorno bloquea salida a internet o solo permite un allowlist de
+paquetes de desarrollo (`fc.yahoo.com`, `stooq.com`, `finnhub.io`,
+`alphavantage.co` fuera de ese allowlist), vas a necesitar una política de
+red más abierta para usar datos reales o los overlays de earnings/noticias
+— en Claude Code on the web esto se configura por entorno, no por sesión
+(ver el selector de entorno en la fila sobre la caja de mensaje en
+[claude.ai/code](https://claude.ai/code), y
+[la documentación de cloud environments](https://code.claude.com/docs/en/cloud-environments#network-access)
+para el detalle de niveles de acceso).

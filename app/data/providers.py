@@ -1,12 +1,16 @@
 """Market data access for stocks, crypto, forex, commodities and indices.
 
-Uses Yahoo Finance (via yfinance) as the primary data source, since it covers
-all of these instrument types under one free API. If Yahoo fails — a network
-policy blocking it specifically, one of its periodic anti-bot outages, or a
-plain connectivity error — `get_ohlcv` automatically retries via Stooq
-(`app.data.stooq_client`), a second free, no-API-key source with similar
-multi-asset-class coverage. Only if both fail does this raise
-`DataUnavailableError`, reporting what each provider said.
+Uses Yahoo Finance as the primary data source, since it covers all of these
+instrument types under one free API — first via `yfinance`, falling back to
+a direct HTTP client (`app.data.yahoo_client`) against Yahoo's public chart
+API if `yfinance` itself fails, since its cookie/crumb authentication flow
+(needed only for `Ticker.info`, not for historical OHLCV) doesn't survive
+every network proxy. If Yahoo fails outright — both of those, plus a
+network policy blocking it, one of its periodic anti-bot outages, or a plain
+connectivity error — `get_ohlcv` retries via Stooq (`app.data.stooq_client`),
+a second free, no-API-key source with similar multi-asset-class coverage.
+Only if all three fail does this raise `DataUnavailableError`, reporting
+what each provider said.
 """
 
 from __future__ import annotations
@@ -14,7 +18,7 @@ from __future__ import annotations
 import pandas as pd
 import yfinance as yf
 
-from app.data import stooq_client
+from app.data import stooq_client, yahoo_client
 
 
 class DataUnavailableError(RuntimeError):
@@ -28,7 +32,7 @@ def _flatten_columns(df: pd.DataFrame) -> pd.DataFrame:
     return df
 
 
-def _get_ohlcv_yahoo(
+def _get_ohlcv_yfinance(
     symbol: str,
     period: str,
     interval: str,
@@ -52,6 +56,24 @@ def _get_ohlcv_yahoo(
     return df
 
 
+def _get_ohlcv_yahoo(
+    symbol: str,
+    period: str,
+    interval: str,
+    start: str | None,
+    end: str | None,
+) -> pd.DataFrame:
+    try:
+        return _get_ohlcv_yfinance(symbol, period, interval, start, end)
+    except Exception as yfinance_exc:
+        try:
+            return yahoo_client.get_ohlcv(symbol, period=period, interval=interval, start=start, end=end)
+        except Exception as direct_exc:
+            raise DataUnavailableError(
+                f"yfinance falló ({yfinance_exc}) y el cliente directo de Yahoo también falló ({direct_exc})."
+            ) from direct_exc
+
+
 def get_ohlcv(
     symbol: str,
     period: str = "2y",
@@ -65,8 +87,9 @@ def get_ohlcv(
     If `start` and/or `end` (ISO date strings, e.g. "2023-06-01") are given,
     they take precedence over `period` and fetch that exact date range.
 
-    Falls back to Stooq (see module docstring) if Yahoo fails for any
-    reason; raises `DataUnavailableError` only if both do.
+    Falls back to Stooq (see module docstring) if Yahoo fails entirely
+    (both `yfinance` and the direct client); raises `DataUnavailableError`
+    only if all three do.
 
     Returns a DataFrame indexed by date with columns:
     Open, High, Low, Close, Volume
