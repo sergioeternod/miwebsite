@@ -67,6 +67,21 @@ def test_get_ohlcv_applies_adjclose_ratio_to_ohlc(monkeypatch):
     assert df["Open"].iloc[0] == pytest.approx((200.0 - 0.5) * 0.5)
 
 
+def test_get_ohlcv_dedupes_same_day_bars_keeping_the_last(monkeypatch):
+    # Two bars on the same UTC calendar day (e.g. a regular daily close plus
+    # a still-forming "live" bar for a near-24h instrument like forex/crypto)
+    # must collapse to one row instead of raising on a duplicate date index.
+    timestamps = [1704067200, 1704110400, 1704153600]  # 2024-01-01 00:00, 2024-01-01 12:00, 2024-01-02 00:00
+    close = [100.0, 105.0, 110.0]
+    payload = _chart_payload(timestamps, close, gmtoffset=0)
+    monkeypatch.setattr("app.data.yahoo_client.requests.get", lambda *a, **k: FakeResponse(200, payload))
+
+    df = get_ohlcv("EURUSD=X", period="1mo")
+    assert len(df) == 2
+    assert not df.index.duplicated().any()
+    assert df["Close"].iloc[0] == 105.0  # the later same-day bar wins
+
+
 def test_get_ohlcv_drops_bars_with_missing_close(monkeypatch):
     timestamps = [1690000000 + i * 86400 for i in range(3)]
     close = [100.0, None, 102.0]

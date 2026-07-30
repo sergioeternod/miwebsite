@@ -134,6 +134,16 @@ def get_ohlcv(
         df["Close"] = adj
 
     df = df.dropna(subset=["Open", "High", "Low", "Close", "Volume"])
+
+    # Near-24-hour instruments (forex, crypto) can come back with a second,
+    # still-forming bar for "today" alongside the regular daily one — both
+    # normalize to the same calendar date, since the live bar's timestamp
+    # doesn't follow the regular session-close convention the historical
+    # bars do. Keep the last (most current) of any such collision rather
+    # than let a duplicate date reach callers that assume a unique daily
+    # index (e.g. `pd.Series.reindex`, which raises on duplicate labels).
+    df = df[~df.index.duplicated(keep="last")]
+
     if df.empty:
         raise YahooUnavailableError(f"Yahoo Finance no tiene datos utilizables para '{symbol}'.")
     return df
