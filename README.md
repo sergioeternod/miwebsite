@@ -541,7 +541,28 @@ tamaño por volatilidad, stop-loss), sobre 5 ventanas de 3 años con datos
 reales que cubren regímenes distintos (era cripto temprana, bajista 2018,
 boom pandémico, bajista 2022 + recuperación 2023, y el periodo reciente):
 
-<!-- MULTI_PERIOD_TABLE -->
+| Periodo | Portafolio original | Resultado original | Portafolio con las 4 mejoras | Resultado nuevo | ¿Mejoró? |
+|---|---|---|---|---|---|
+| 2014-07-30 → 2017-07-30 (era cripto temprana) | NVDA, MSFT, AAPL, USDMXN=X, ^DJI | **-6.22%** | CL=F, ^DJI, USDMXN=X, MSFT, NVDA | **-11.76%** | No |
+| 2017-07-30 → 2020-07-30 (bajista/mixto) | CL=F, ^IXIC, GC=F, ^DJI, ^GSPC | **-43.84%** | AAPL, TSLA, GC=F, ^GSPC, ^IXIC | **-2.49%** | Sí |
+| 2019-07-30 → 2022-07-30 (covid + recuperación + inicio bajista 2022) | MSFT, NVDA, TSLA, ETH-USD, GC=F | **+35.28%** | USDMXN=X, GC=F, MSFT, EURUSD=X, NVDA | **-18.14%** | No |
+| 2021-07-30 → 2024-07-30 (bajista 2022 + recuperación 2023) | CL=F, ^DJI, GBPUSD=X, ^GSPC, MSFT | **-32.16%** | USDJPY=X, GBPUSD=X, ^GSPC, ^DJI, MSFT | **-16.40%** | Sí |
+| 2023-07-30 → 2026-07-30 | CL=F, SI=F, ETH-USD, BTC-USD, ^GSPC | **-29.39%** | ^GSPC, SI=F, EURUSD=X, CL=F, ^DJI | **-2.59%** | Sí |
+
+**3 de 5 periodos mejoraron, delta promedio de retorno: +4.99 puntos
+porcentuales.** Con 5 muestras esto no alcanza para hablar de
+significancia estadística real — es evidencia direccional, no una prueba.
+Lo honesto que sí se puede decir: las cuatro mejoras juntas parecen
+reducir la magnitud de las peores pérdidas (2017-2020 pasó de -43.84% a
+-2.49%; 2021-2024 de -32.16% a -16.40%; 2023-2026 de -29.39% a -2.59%) más
+consistentemente de lo que recortan una ganancia grande cuando el
+portafolio original acertó de lleno (2019-2022, +35.28% → -18.14%, el peor
+caso de los cinco). Es la misma historia de siempre en gestión de riesgo:
+suavizar las caídas casi siempre cuesta algo de la subida en los tramos
+donde el riesgo sí pagó. 2014-2017 muestra que ni siquiera esa
+compensación es automática — ahí el modelo nuevo simplemente salió peor,
+sin una historia clara de "protección" detrás (probablemente por el
+universo reducido de símbolos con historial disponible tan atrás).
 
 Ejecuta `python scripts/multi_period_validation.py` (requiere red, puede
 tardar más de una hora) para reproducir esto con tu propio universo o

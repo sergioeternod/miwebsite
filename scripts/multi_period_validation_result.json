@@ -1,8 +1,38 @@
 {
-  "elapsed_seconds": 1794.7,
-  "num_periods_tested": 3,
-  "num_periods_improved": 2,
+  "elapsed_seconds": 4008.9,
+  "num_periods_tested": 5,
+  "num_periods_improved": 3,
+  "avg_return_pct_delta": 4.99,
   "results": [
+    {
+      "period": "2014-07-30 -> 2017-07-30 (era cripto temprana)",
+      "start_date": "2014-07-30",
+      "old_portfolio": [
+        "NVDA",
+        "MSFT",
+        "AAPL",
+        "USDMXN=X",
+        "^DJI"
+      ],
+      "old_result": {
+        "final_equity": 9378.3,
+        "total_pnl_amount": -621.7,
+        "total_return_pct": -6.22
+      },
+      "new_portfolio": [
+        "CL=F",
+        "^DJI",
+        "USDMXN=X",
+        "MSFT",
+        "NVDA"
+      ],
+      "new_result": {
+        "final_equity": 8824.13,
+        "total_pnl_amount": -1175.87,
+        "total_return_pct": -11.76
+      },
+      "improved": false
+    },
     {
       "period": "2017-07-30 -> 2020-07-30 (bajista/mixto)",
       "start_date": "2017-07-30",
@@ -22,13 +52,13 @@
         "AAPL",
         "TSLA",
         "GC=F",
-        "AMZN",
-        "^GSPC"
+        "^GSPC",
+        "^IXIC"
       ],
       "new_result": {
-        "final_equity": 10295.83,
-        "total_pnl_amount": 295.83,
-        "total_return_pct": 2.96
+        "final_equity": 9750.84,
+        "total_pnl_amount": -249.16,
+        "total_return_pct": -2.49
       },
       "improved": true
     },
@@ -38,14 +68,14 @@
       "old_portfolio": [
         "MSFT",
         "NVDA",
+        "TSLA",
         "ETH-USD",
-        "GC=F",
-        "SI=F"
+        "GC=F"
       ],
       "old_result": {
-        "final_equity": 11462.47,
-        "total_pnl_amount": 1462.47,
-        "total_return_pct": 14.62
+        "final_equity": 13527.89,
+        "total_pnl_amount": 3527.89,
+        "total_return_pct": 35.28
       },
       "new_portfolio": [
         "USDMXN=X",
@@ -55,11 +85,40 @@
         "NVDA"
       ],
       "new_result": {
-        "final_equity": 7216.63,
-        "total_pnl_amount": -2783.37,
-        "total_return_pct": -27.83
+        "final_equity": 8185.79,
+        "total_pnl_amount": -1814.21,
+        "total_return_pct": -18.14
       },
       "improved": false
+    },
+    {
+      "period": "2021-07-30 -> 2024-07-30 (bajista 2022 + recuperación 2023)",
+      "start_date": "2021-07-30",
+      "old_portfolio": [
+        "CL=F",
+        "^DJI",
+        "GBPUSD=X",
+        "^GSPC",
+        "MSFT"
+      ],
+      "old_result": {
+        "final_equity": 6784.48,
+        "total_pnl_amount": -3215.52,
+        "total_return_pct": -32.16
+      },
+      "new_portfolio": [
+        "USDJPY=X",
+        "GBPUSD=X",
+        "^GSPC",
+        "^DJI",
+        "MSFT"
+      ],
+      "new_result": {
+        "final_equity": 8359.96,
+        "total_pnl_amount": -1640.04,
+        "total_return_pct": -16.4
+      },
+      "improved": true
     },
     {
       "period": "2023-07-30 -> 2026-07-30 (ya corrida antes)",
@@ -72,9 +131,9 @@
         "^GSPC"
       ],
       "old_result": {
-        "final_equity": 7078.9,
-        "total_pnl_amount": -2921.1,
-        "total_return_pct": -29.21
+        "final_equity": 7060.72,
+        "total_pnl_amount": -2939.28,
+        "total_return_pct": -29.39
       },
       "new_portfolio": [
         "^GSPC",
@@ -84,18 +143,22 @@
         "^DJI"
       ],
       "new_result": {
-        "final_equity": 9955.94,
-        "total_pnl_amount": -44.06,
-        "total_return_pct": -0.44
+        "final_equity": 9740.79,
+        "total_pnl_amount": -259.21,
+        "total_return_pct": -2.59
       },
       "improved": true
     }
   ],
   "fetch_errors": {
-    "2017-07-30": {},
-    "2019-07-30": {
-      "TSLA": "No se pudo obtener data para 'TSLA': Yahoo Finance falló (yfinance falló (No se pudo obtener data para el símbolo 'TSLA' (start=2017-07-30, end=2022-07-30, period=2y, interval=1d).) y el cliente directo de Yahoo también falló (No se pudo conectar con Yahoo Finance: ('Connection aborted.', ConnectionResetError(104, 'Connection reset by peer'))).) y el respaldo Stooq también falló (Stooq no tiene datos para 'TSLA' (mapeado a 'tsla.us').)."
+    "2014-07-30": {
+      "ETH-USD": "No se pudo obtener data para 'ETH-USD': Yahoo Finance falló (yfinance falló (No se pudo obtener data para el símbolo 'ETH-USD' (start=2012-07-30, end=2017-07-30, period=2y, interval=1d).) y el cliente directo de Yahoo también falló (Yahoo Finance respondió 400 para 'ETH-USD'.).) y el respaldo Stooq también falló (Stooq no tiene datos para 'ETH-USD' (mapeado a 'ethusd').).",
+      "SOL-USD": "No se pudo obtener data para 'SOL-USD': Yahoo Finance falló (yfinance falló (No se pudo obtener data para el símbolo 'SOL-USD' (start=2012-07-30, end=2017-07-30, period=2y, interval=1d).) y el cliente directo de Yahoo también falló (Yahoo Finance respondió 400 para 'SOL-USD'.).) y el respaldo Stooq también falló (Stooq no tiene datos para 'SOL-USD' (mapeado a 'solusd').).",
+      "XRP-USD": "No se pudo obtener data para 'XRP-USD': Yahoo Finance falló (yfinance falló (No se pudo obtener data para el símbolo 'XRP-USD' (start=2012-07-30, end=2017-07-30, period=2y, interval=1d).) y el cliente directo de Yahoo también falló (Yahoo Finance respondió 400 para 'XRP-USD'.).) y el respaldo Stooq también falló (Stooq no tiene datos para 'XRP-USD' (mapeado a 'xrpusd').)."
     },
+    "2017-07-30": {},
+    "2019-07-30": {},
+    "2021-07-30": {},
     "2023-07-30": {}
   }
 }
