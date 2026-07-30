@@ -7,3 +7,4 @@ venv/
 .env
 .DS_Store
 scripts/sim_10y_result.json
+scripts/sim_3y_real_result.json
