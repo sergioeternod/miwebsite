@@ -462,13 +462,42 @@ con el único cambio de cómo se elige el portafolio.
 
 Dicho esto — este es un resultado de una corrida sobre un periodo
 específico, no una garantía general. El multiplicador de riesgo penaliza
-drawdowns profundos e Sharpe bajo, que es exactamente lo que le pasó a
+drawdowns profundos y Sharpe bajo, que es exactamente lo que le pasó a
 BTC/ETH en este tramo del historial real; en un periodo distinto, o con un
 universo distinto, el mismo mecanismo puede no cambiar nada, o incluso
 empeorar el resultado si penaliza de más a un símbolo que resultó ganador.
-Ejecuta `python scripts/compare_selection_methods.py` (requiere red) para
-reproducir la comparación de selección con tu propia fecha/universo antes
-de confiar en esto con dinero real.
+
+### ¿Es un patrón real o suerte de un solo periodo? Validación en 3 ventanas históricas
+
+Un solo periodo que mejoró no prueba nada por sí solo — podría ser suerte
+de ese tramo específico. `scripts/multi_period_validation.py` corre la
+misma comparación (selección vieja por confianza vs. nueva ajustada por
+riesgo) sobre 3 ventanas de 3 años no solapadas, con datos reales:
+
+| Periodo | Portafolio viejo (confianza) | Resultado viejo | Portafolio nuevo (riesgo) | Resultado nuevo | ¿Mejoró? |
+|---|---|---|---|---|---|
+| 2017-07-30 → 2020-07-30 | CL=F, ^IXIC, GC=F, ^DJI, ^GSPC | **-43.84%** | AAPL, TSLA, GC=F, AMZN, ^GSPC | **+2.96%** | Sí |
+| 2019-07-30 → 2022-07-30 | MSFT, NVDA, ETH-USD, GC=F, SI=F | **+14.62%** | USDMXN=X, GC=F, MSFT, EURUSD=X, NVDA | **-27.83%** | **No** |
+| 2023-07-30 → 2026-07-30 | CL=F, SI=F, ETH-USD, BTC-USD, ^GSPC | **-29.21%** | ^GSPC, SI=F, EURUSD=X, CL=F, ^DJI | **-0.44%** | Sí |
+
+**2 de 3 periodos mejoraron — y el que no mejoró explica exactamente por
+qué esto no es magia.** En 2019-2022 (el arranque del boom cripto durante
+la pandemia), la selección vieja incluyó ETH-USD y le fue de maravilla
+(era exactamente el activo volátil que sí pagó). La selección nueva
+excluyó a ETH-USD por su historial de drawdowns profundos — el mismo
+criterio que evitó el desastre de BTC/ETH en 2023-2026 — y esta vez ese
+criterio le costó la ganancia. **El ajuste por riesgo no predice el
+futuro: cambia qué tipo de error cometes.** Reduce sistemáticamente la
+exposición a activos con drawdowns históricos brutales, lo cual evita
+desastres cuando esos activos vuelven a caer fuerte (2/3 de los casos
+aquí), pero también te deja fuera cuando esos mismos activos son los que
+suben con fuerza. No es "el modelo correcto" en un sentido absoluto — es
+una elección de perfil de riesgo (más estable, menos exposición a
+sorpresas grandes en ambas direcciones), y aquí se reporta con su costo
+real, no solo su beneficio. Ejecuta
+`python scripts/multi_period_validation.py` (requiere red, ~30 min) para
+reproducir esto con tu propio universo/periodos antes de confiar en esto
+con dinero real.
 
 ## Recomendaciones con historial de earnings (Finnhub)
 

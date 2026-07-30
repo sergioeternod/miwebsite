@@ -1,0 +1,101 @@
+{
+  "elapsed_seconds": 1794.7,
+  "num_periods_tested": 3,
+  "num_periods_improved": 2,
+  "results": [
+    {
+      "period": "2017-07-30 -> 2020-07-30 (bajista/mixto)",
+      "start_date": "2017-07-30",
+      "old_portfolio": [
+        "CL=F",
+        "^IXIC",
+        "GC=F",
+        "^DJI",
+        "^GSPC"
+      ],
+      "old_result": {
+        "final_equity": 5615.86,
+        "total_pnl_amount": -4384.14,
+        "total_return_pct": -43.84
+      },
+      "new_portfolio": [
+        "AAPL",
+        "TSLA",
+        "GC=F",
+        "AMZN",
+        "^GSPC"
+      ],
+      "new_result": {
+        "final_equity": 10295.83,
+        "total_pnl_amount": 295.83,
+        "total_return_pct": 2.96
+      },
+      "improved": true
+    },
+    {
+      "period": "2019-07-30 -> 2022-07-30 (covid + recuperación + inicio bajista 2022)",
+      "start_date": "2019-07-30",
+      "old_portfolio": [
+        "MSFT",
+        "NVDA",
+        "ETH-USD",
+        "GC=F",
+        "SI=F"
+      ],
+      "old_result": {
+        "final_equity": 11462.47,
+        "total_pnl_amount": 1462.47,
+        "total_return_pct": 14.62
+      },
+      "new_portfolio": [
+        "USDMXN=X",
+        "GC=F",
+        "MSFT",
+        "EURUSD=X",
+        "NVDA"
+      ],
+      "new_result": {
+        "final_equity": 7216.63,
+        "total_pnl_amount": -2783.37,
+        "total_return_pct": -27.83
+      },
+      "improved": false
+    },
+    {
+      "period": "2023-07-30 -> 2026-07-30 (ya corrida antes)",
+      "start_date": "2023-07-30",
+      "old_portfolio": [
+        "CL=F",
+        "SI=F",
+        "ETH-USD",
+        "BTC-USD",
+        "^GSPC"
+      ],
+      "old_result": {
+        "final_equity": 7078.9,
+        "total_pnl_amount": -2921.1,
+        "total_return_pct": -29.21
+      },
+      "new_portfolio": [
+        "^GSPC",
+        "SI=F",
+        "EURUSD=X",
+        "CL=F",
+        "^DJI"
+      ],
+      "new_result": {
+        "final_equity": 9955.94,
+        "total_pnl_amount": -44.06,
+        "total_return_pct": -0.44
+      },
+      "improved": true
+    }
+  ],
+  "fetch_errors": {
+    "2017-07-30": {},
+    "2019-07-30": {
+      "TSLA": "No se pudo obtener data para 'TSLA': Yahoo Finance falló (yfinance falló (No se pudo obtener data para el símbolo 'TSLA' (start=2017-07-30, end=2022-07-30, period=2y, interval=1d).) y el cliente directo de Yahoo también falló (No se pudo conectar con Yahoo Finance: ('Connection aborted.', ConnectionResetError(104, 'Connection reset by peer'))).) y el respaldo Stooq también falló (Stooq no tiene datos para 'TSLA' (mapeado a 'tsla.us').)."
+    },
+    "2023-07-30": {}
+  }
+}
