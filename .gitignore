@@ -6,3 +6,4 @@ venv/
 *.egg-info/
 .env
 .DS_Store
+scripts/sim_10y_result.json
