@@ -12,10 +12,15 @@ información histórica de mercado.
 
 ## Qué incluye esta primera fase (MVP)
 
-- **Datos multi-instrumento**: una sola fuente (Yahoo Finance vía `yfinance`)
-  cubre acciones, cripto, divisas, commodities e índices con el mismo formato
-  OHLCV, usando el símbolo de cada instrumento (`AAPL`, `BTC-USD`,
-  `EURUSD=X`, `GC=F`, `^GSPC`, etc.).
+- **Datos multi-instrumento**: Yahoo Finance (vía `yfinance`) como fuente
+  principal cubre acciones, cripto, divisas, commodities e índices con el
+  mismo formato OHLCV, usando el símbolo de cada instrumento (`AAPL`,
+  `BTC-USD`, `EURUSD=X`, `GC=F`, `^GSPC`, etc.). Si Yahoo falla por cualquier
+  motivo (bloqueo de red, una de sus caídas periódicas por protección
+  anti-bot, error de conexión), `get_ohlcv` reintenta automáticamente contra
+  **Stooq** (`app/data/stooq_client.py`), una segunda fuente gratuita sin
+  API key con cobertura similar — solo si ambas fallan se reporta un error,
+  citando lo que dijo cada una.
 - **Indicadores técnicos**: SMA, EMA, RSI, MACD, Bandas de Bollinger, ATR, ADX
   (`app/indicators/technical.py`).
 - **Estrategias, long y short** (con flag `allow_short` para restringir a
@@ -665,7 +670,8 @@ uvicorn app.api.main:app --reload
 ```
 app/
   config.py            # clases de activos, símbolos de ejemplo, comisión realista por tipo de instrumento
-  data/providers.py     # obtención de OHLCV (Yahoo Finance)
+  data/providers.py     # obtención de OHLCV (Yahoo Finance, con respaldo automático en Stooq)
+  data/stooq_client.py    # respaldo OHLCV sin API key (Stooq) si Yahoo falla
   data/synthetic.py      # generador de escenarios históricos sintéticos
   data/finnhub_client.py  # cliente HTTP de earnings surprises/calendario (Finnhub)
   data/alphavantage_client.py  # cliente HTTP de noticias con sentimiento (Alpha Vantage)
@@ -777,14 +783,16 @@ instrumento.)
 ## Nota sobre el entorno de desarrollo
 
 En el entorno sandbox donde se desarrolló este MVP, la política de red del
-contenedor bloquea el acceso saliente a Yahoo Finance
-(`fc.yahoo.com` responde 403 en el proxy de egress) y, por la misma política,
-también bloquea `finnhub.io` y `alphavantage.co`. Por eso el motor de datos,
+contenedor bloquea **todo** el tráfico saliente a proveedores externos de
+datos de mercado por igual — no es algo específico de Yahoo: se confirmó
+probando `fc.yahoo.com`, `stooq.com`, `www.alphavantage.co` y `finnhub.io`,
+los cuatro responden 403 en el proxy de egress. Por eso el motor de datos,
 indicadores, estrategias, backtester y recomendaciones se validaron con
-datos sintéticos (`tests/`), y los clientes de Finnhub/Alpha Vantage se
-probaron con llamadas HTTP simuladas (`tests/test_finnhub_client.py`,
+datos sintéticos (`tests/`), y los clientes de Stooq/Finnhub/Alpha Vantage se
+probaron con llamadas HTTP simuladas (`tests/test_stooq_client.py`,
+`tests/test_providers.py`, `tests/test_finnhub_client.py`,
 `tests/test_earnings.py`, `tests/test_alphavantage_client.py`,
 `tests/test_news_sentiment.py`) en vez de contra las APIs reales. Para usar
-datos reales o los overlays de earnings/noticias, ejecuta la app en un
-entorno con acceso a internet sin restricciones a `finance.yahoo.com`,
-`finnhub.io` ni `alphavantage.co` (por ejemplo, tu máquina local).
+datos reales (Yahoo, con respaldo automático en Stooq) o los overlays de
+earnings/noticias, ejecuta la app en un entorno con acceso a internet sin
+estas restricciones (por ejemplo, tu máquina local).

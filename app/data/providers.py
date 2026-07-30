@@ -1,14 +1,20 @@
 """Market data access for stocks, crypto, forex, commodities and indices.
 
-Uses Yahoo Finance (via yfinance) as a single free data source that covers all
-of these instrument types under one API, so the rest of the app does not need
-per-asset-class integrations for the MVP.
+Uses Yahoo Finance (via yfinance) as the primary data source, since it covers
+all of these instrument types under one free API. If Yahoo fails — a network
+policy blocking it specifically, one of its periodic anti-bot outages, or a
+plain connectivity error — `get_ohlcv` automatically retries via Stooq
+(`app.data.stooq_client`), a second free, no-API-key source with similar
+multi-asset-class coverage. Only if both fail does this raise
+`DataUnavailableError`, reporting what each provider said.
 """
 
 from __future__ import annotations
 
 import pandas as pd
 import yfinance as yf
+
+from app.data import stooq_client
 
 
 class DataUnavailableError(RuntimeError):
@@ -22,21 +28,13 @@ def _flatten_columns(df: pd.DataFrame) -> pd.DataFrame:
     return df
 
 
-def get_ohlcv(
+def _get_ohlcv_yahoo(
     symbol: str,
-    period: str = "2y",
-    interval: str = "1d",
-    start: str | None = None,
-    end: str | None = None,
+    period: str,
+    interval: str,
+    start: str | None,
+    end: str | None,
 ) -> pd.DataFrame:
-    """Fetch historical OHLCV data for any Yahoo Finance symbol.
-
-    If `start` and/or `end` (ISO date strings, e.g. "2023-06-01") are given,
-    they take precedence over `period` and fetch that exact date range.
-
-    Returns a DataFrame indexed by date with columns:
-    Open, High, Low, Close, Volume
-    """
     ticker = yf.Ticker(symbol)
     if start or end:
         df = ticker.history(start=start, end=end, interval=interval, auto_adjust=True)
@@ -52,6 +50,37 @@ def get_ohlcv(
     df = df[["Open", "High", "Low", "Close", "Volume"]].dropna()
     df.index.name = "Date"
     return df
+
+
+def get_ohlcv(
+    symbol: str,
+    period: str = "2y",
+    interval: str = "1d",
+    start: str | None = None,
+    end: str | None = None,
+) -> pd.DataFrame:
+    """Fetch historical OHLCV data for `symbol`, using Yahoo Finance's ticker
+    conventions (the source both providers are indexed by here).
+
+    If `start` and/or `end` (ISO date strings, e.g. "2023-06-01") are given,
+    they take precedence over `period` and fetch that exact date range.
+
+    Falls back to Stooq (see module docstring) if Yahoo fails for any
+    reason; raises `DataUnavailableError` only if both do.
+
+    Returns a DataFrame indexed by date with columns:
+    Open, High, Low, Close, Volume
+    """
+    try:
+        return _get_ohlcv_yahoo(symbol, period, interval, start, end)
+    except Exception as yahoo_exc:
+        try:
+            return stooq_client.get_ohlcv(symbol, period=period, interval=interval, start=start, end=end)
+        except Exception as stooq_exc:
+            raise DataUnavailableError(
+                f"No se pudo obtener data para '{symbol}': Yahoo Finance falló ({yahoo_exc}) "
+                f"y el respaldo Stooq también falló ({stooq_exc})."
+            ) from stooq_exc
 
 
 def filter_date_range(
