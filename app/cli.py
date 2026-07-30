@@ -294,6 +294,8 @@ def cmd_portfolio_sim(args: argparse.Namespace) -> None:
         step=args.step,
         min_confidence_pct=args.min_confidence,
         adaptive_learning=not args.no_adaptive_learning,
+        include_earnings=args.with_earnings,
+        include_news=args.with_news,
     )
     if args.synthetic:
         report = simulate_portfolio_synthetic(start_date=args.start_date, seed=args.seed, **kwargs)
@@ -538,6 +540,14 @@ def build_parser() -> argparse.ArgumentParser:
     portfolio_sim_parser.add_argument(
         "--no-adaptive-learning", action="store_true",
         help="Desactiva el aprendizaje adaptativo (por defecto, una racha de operaciones subóptimas en retrospectiva sube el umbral de confianza)",
+    )
+    portfolio_sim_parser.add_argument(
+        "--with-earnings", action="store_true",
+        help="Al elegir el portafolio, ajusta la confianza con el historial de earnings (Finnhub) — solo afecta acciones individuales, no cripto/forex/commodities/índices",
+    )
+    portfolio_sim_parser.add_argument(
+        "--with-news", action="store_true",
+        help="Al elegir el portafolio, ajusta la confianza con el sentimiento de noticias recientes (Alpha Vantage) — solo afecta acciones individuales",
     )
     portfolio_sim_parser.add_argument("--out", default=None, help="Ruta donde guardar el reporte completo en JSON")
     portfolio_sim_parser.set_defaults(func=cmd_portfolio_sim)

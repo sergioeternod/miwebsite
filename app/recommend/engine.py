@@ -117,6 +117,8 @@ def recommend(
                 "historical_avg_profit_per_trade_pct": backtest.metrics["avg_profit_per_trade_pct"],
                 "historical_win_rate_pct": backtest.metrics["win_rate_pct"],
                 "historical_num_trades": backtest.metrics["num_trades"],
+                "historical_max_drawdown_pct": backtest.metrics["max_drawdown_pct"],
+                "historical_sharpe_ratio": backtest.metrics["sharpe_ratio"],
                 "regime_multiplier": round(regime_multiplier, 2),
             }
         )
@@ -148,6 +150,8 @@ def recommend(
         "best_historical_strategy": {
             "strategy": best_by_profit_per_trade["strategy"],
             "avg_profit_per_trade_pct": best_by_profit_per_trade["historical_avg_profit_per_trade_pct"],
+            "max_drawdown_pct": best_by_profit_per_trade["historical_max_drawdown_pct"],
+            "sharpe_ratio": best_by_profit_per_trade["historical_sharpe_ratio"],
         },
         "disclaimer": (
             "Esta recomendación se basa únicamente en indicadores técnicos y backtests "

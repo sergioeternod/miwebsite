@@ -9,6 +9,7 @@ from app.portfolio import (
     _combine_equity_curves,
     _find_start_index,
     _recent_regret_boost,
+    _risk_multiplier,
     _select_portfolio,
     _walk_forward_result,
     simulate_portfolio_real,
@@ -151,7 +152,16 @@ def test_simulate_portfolio_real_records_per_symbol_fetch_failures(monkeypatch, 
     report = simulate_portfolio_real(start_date="2023-06-01", symbols=["OK", "BROKEN"], portfolio_size=2, step=30)
 
     assert "BROKEN" in report["errors"]
-    assert report["portfolio"] == [{"symbol": "OK", "action_at_selection": "BUY", "confidence_pct_at_selection": 80.0}]
+    assert report["portfolio"] == [
+        {
+            "symbol": "OK",
+            "action_at_selection": "BUY",
+            "confidence_pct_at_selection": 80.0,
+            "sharpe_ratio": None,
+            "max_drawdown_pct": None,
+            "risk_adjusted_score": 80.0,
+        }
+    ]
 
 
 def test_walk_forward_recommend_never_sees_future_data(monkeypatch, long_uptrend_df):
@@ -368,6 +378,128 @@ def test_simulate_portfolio_synthetic_includes_hindsight_summary(monkeypatch):
 
     assert "hindsight_summary" in report
     assert all("hindsight_summary" in p for p in report["per_symbol"])
+
+
+def _fake_rec(action="BUY", confidence=80.0, sharpe_ratio=None, max_drawdown_pct=None):
+    return {
+        "overall_action": action,
+        "confidence_pct": confidence,
+        "best_historical_strategy": {
+            "strategy": "fake_strategy",
+            "avg_profit_per_trade_pct": 1.0,
+            "sharpe_ratio": sharpe_ratio,
+            "max_drawdown_pct": max_drawdown_pct,
+        },
+    }
+
+
+def test_risk_multiplier_neutral_with_missing_stats():
+    assert _risk_multiplier(None, None) == 1.0
+    assert _risk_multiplier(float("nan"), float("nan")) == 1.0
+
+
+def test_risk_multiplier_rewards_good_sharpe_and_penalizes_bad():
+    good = _risk_multiplier(sharpe_ratio=2.0, max_drawdown_pct=-5.0)
+    bad = _risk_multiplier(sharpe_ratio=-1.0, max_drawdown_pct=-45.0)
+    assert good > 1.0
+    assert bad < 1.0
+    assert good > bad
+
+
+def test_risk_multiplier_stays_within_bounds():
+    assert _risk_multiplier(sharpe_ratio=10.0, max_drawdown_pct=0.0) == pytest.approx(1.4)
+    assert _risk_multiplier(sharpe_ratio=-10.0, max_drawdown_pct=-90.0) == pytest.approx(0.6 * 0.5)
+
+
+def test_select_portfolio_ranks_by_risk_adjusted_score_not_raw_confidence(monkeypatch, long_uptrend_df):
+    """A symbol with slightly lower confidence but a much better historical
+    risk profile (Sharpe/drawdown) should be able to outrank one with higher
+    raw confidence but a rough track record."""
+
+    def fake_recommend(window, symbol="", initial_capital=10000.0, commission_bps=5.0, allow_short=True):
+        if symbol == "LOUD_BUT_RISKY":
+            return _fake_rec(confidence=80.0, sharpe_ratio=-1.0, max_drawdown_pct=-45.0)
+        return _fake_rec(confidence=70.0, sharpe_ratio=2.0, max_drawdown_pct=-5.0)
+
+    monkeypatch.setattr(portfolio_module, "recommend", fake_recommend)
+    dfs = {"LOUD_BUT_RISKY": long_uptrend_df, "CALM_AND_CONSISTENT": long_uptrend_df}
+    start_idx_by_symbol = {"LOUD_BUT_RISKY": 200, "CALM_AND_CONSISTENT": 200}
+
+    portfolio = _select_portfolio(
+        dfs, start_idx_by_symbol, portfolio_size=2, allow_short=True, initial_capital=10000.0, commission_bps=5.0
+    )
+
+    assert [c["symbol"] for c in portfolio] == ["CALM_AND_CONSISTENT", "LOUD_BUT_RISKY"]
+    assert portfolio[0]["risk_adjusted_score"] > portfolio[1]["risk_adjusted_score"]
+
+
+def test_select_portfolio_applies_earnings_overlay_when_enabled(monkeypatch, long_uptrend_df):
+    monkeypatch.setattr(portfolio_module, "recommend", lambda *a, **k: _fake_rec(action="BUY", confidence=50.0))
+
+    def fake_overlay(rec, symbol, **kwargs):
+        boosted = dict(rec)
+        boosted["confidence_pct"] = 90.0
+        boosted["earnings"] = {"available": True, "signal": "bullish"}
+        return boosted
+
+    monkeypatch.setattr(portfolio_module, "apply_earnings_overlay", fake_overlay)
+    portfolio = _select_portfolio(
+        {"AAPL": long_uptrend_df}, {"AAPL": 200}, portfolio_size=1, allow_short=True,
+        initial_capital=10000.0, commission_bps=5.0, min_confidence_pct=60.0, include_earnings=True,
+    )
+    # Raw confidence (50) is below the 60 threshold; only the overlay-boosted
+    # confidence (90) clears it — proves the overlay runs before the filter.
+    assert len(portfolio) == 1
+    assert portfolio[0]["confidence_pct_at_selection"] == 90.0
+    assert portfolio[0]["earnings"] == {"available": True, "signal": "bullish"}
+
+
+def test_select_portfolio_applies_news_overlay_when_enabled(monkeypatch, long_uptrend_df):
+    monkeypatch.setattr(portfolio_module, "recommend", lambda *a, **k: _fake_rec(action="BUY", confidence=80.0))
+
+    def fake_overlay(rec, symbol, **kwargs):
+        boosted = dict(rec)
+        boosted["news"] = {"available": True, "signal": "bearish"}
+        return boosted
+
+    monkeypatch.setattr(portfolio_module, "apply_news_overlay", fake_overlay)
+    portfolio = _select_portfolio(
+        {"AAPL": long_uptrend_df}, {"AAPL": 200}, portfolio_size=1, allow_short=True,
+        initial_capital=10000.0, commission_bps=5.0, include_news=True,
+    )
+    assert portfolio[0]["news"] == {"available": True, "signal": "bearish"}
+
+
+def test_select_portfolio_omits_earnings_news_keys_by_default(monkeypatch, long_uptrend_df):
+    monkeypatch.setattr(portfolio_module, "recommend", lambda *a, **k: _fake_rec(action="BUY", confidence=80.0))
+    portfolio = _select_portfolio(
+        {"AAPL": long_uptrend_df}, {"AAPL": 200}, portfolio_size=1, allow_short=True,
+        initial_capital=10000.0, commission_bps=5.0,
+    )
+    assert "earnings" not in portfolio[0]
+    assert "news" not in portfolio[0]
+
+
+def test_simulate_portfolio_synthetic_earnings_overlay_never_reaches_walk_forward(monkeypatch):
+    """Regression guard: include_earnings must only ever be consulted at
+    portfolio selection (once per candidate symbol), never inside the daily
+    walk-forward loop — calling Finnhub on every simulated day would both
+    leak future earnings data into past decisions and blow through rate
+    limits. Call count should match the number of symbols scanned at
+    selection, not that number times the number of simulated days."""
+    calls = {"n": 0}
+
+    def counting_overlay(rec, symbol, **kwargs):
+        calls["n"] += 1
+        return rec
+
+    monkeypatch.setattr(portfolio_module, "apply_earnings_overlay", counting_overlay)
+    monkeypatch.setattr(portfolio_module, "recommend", lambda *a, **k: _fake_rec(action="BUY", confidence=80.0))
+
+    simulate_portfolio_synthetic(portfolio_size=2, step=1, include_earnings=True)
+
+    num_symbols_scanned = len(portfolio_module.DEFAULT_PORTFOLIO_PROFILES)
+    assert calls["n"] == num_symbols_scanned
 
 
 def test_simulate_portfolio_synthetic_adaptive_learning_flag_is_threaded(monkeypatch, long_uptrend_df):

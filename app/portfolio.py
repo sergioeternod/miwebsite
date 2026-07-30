@@ -12,6 +12,23 @@ conviction right before the simulation begins.
 This directly answers "run a simulated portfolio day by day from date X and
 tell me the profit/loss" — as opposed to `app.simulate` (one symbol, one
 strategy) or `app.opportunities` (a single snapshot in time, not a period).
+
+Portfolio *selection* (`_select_portfolio`) can optionally factor in the
+earnings-surprise and news-sentiment overlays (`app.fundamentals.earnings`,
+`app.fundamentals.news_sentiment` — the same ones `app.opportunities` uses)
+and each candidate's own historical risk stats (Sharpe ratio, max drawdown).
+The day-by-day walk-forward (`_walk_forward_result`) deliberately does
+*not* apply the earnings/news overlays, for two concrete reasons: (1)
+Finnhub's and Alpha Vantage's free endpoints return data relative to *now*
+(the real clock), with no "as of this past date" parameter — pulling them
+into a re-evaluation of, say, 2023-08-15 during a backtest would silently
+leak today's news/earnings into a decision timestamped years ago, a real
+lookahead bug, not a stylistic choice; and (2) even ignoring correctness,
+a multi-year daily walk-forward makes thousands of calls per symbol, which
+blows through both providers' free-tier rate limits almost immediately.
+Both overlays remain exactly what they always were: a live, current-moment
+nudge — sound for *choosing today's portfolio*, not for re-litigating every
+past day of it.
 """
 
 from __future__ import annotations
@@ -23,10 +40,48 @@ from app.backtest.metrics import compute_metrics
 from app.config import EXAMPLE_SYMBOLS, default_commission_bps
 from app.data.providers import get_ohlcv
 from app.data.synthetic import generate_ohlcv
+from app.fundamentals.earnings import apply_earnings_overlay
+from app.fundamentals.news_sentiment import apply_news_overlay
 from app.recommend.engine import recommend
 from app.validation.trade_accuracy import annotate_trade_hindsight, hindsight_summary
 
 MIN_WARMUP_BARS = 120
+
+# Risk-adjusted portfolio selection: a candidate's raw ensemble confidence is
+# scaled by how well its own winning strategy has historically performed on
+# a *risk-adjusted* basis (Sharpe ratio) and how deep its worst historical
+# drawdown was — so a symbol with a loud, high-confidence call but a rough,
+# high-drawdown/low-Sharpe track record doesn't automatically outrank a
+# calmer, more consistent one. This is a multiplier on confidence, not a
+# replacement for it: a technically weak call still can't win on stats alone.
+SHARPE_MULTIPLIER_FLOOR = 0.6
+SHARPE_MULTIPLIER_CEILING = 1.4
+SHARPE_NORMALIZATION_RANGE = 3.0  # Sharpe ratios below -1 or above +2 saturate the multiplier
+DRAWDOWN_PENALTY_SATURATION_PCT = 50.0  # a -50% (or deeper) historical drawdown maxes out the penalty
+DRAWDOWN_MULTIPLIER_FLOOR = 0.5
+
+
+def _risk_multiplier(sharpe_ratio: float | None, max_drawdown_pct: float | None) -> float:
+    """Turns a candidate's own historical Sharpe ratio and max drawdown into
+    a multiplier on its ensemble confidence: `SHARPE_MULTIPLIER_FLOOR` (a bad
+    Sharpe) to `SHARPE_MULTIPLIER_CEILING` (a strong one), further scaled
+    down by `DRAWDOWN_MULTIPLIER_FLOOR` at the deepest historical drawdowns.
+    Missing stats (e.g. a strategy with too few historical trades to compute
+    a Sharpe ratio) are treated as neutral (1.0), not penalized — there's no
+    evidence either way, so it shouldn't count against the candidate."""
+    if sharpe_ratio is None or pd.isna(sharpe_ratio):
+        sharpe_multiplier = 1.0
+    else:
+        sharpe_component = min(max((sharpe_ratio + 1.0) / SHARPE_NORMALIZATION_RANGE, 0.0), 1.0)
+        sharpe_multiplier = SHARPE_MULTIPLIER_FLOOR + (SHARPE_MULTIPLIER_CEILING - SHARPE_MULTIPLIER_FLOOR) * sharpe_component
+
+    if max_drawdown_pct is None or pd.isna(max_drawdown_pct):
+        drawdown_multiplier = 1.0
+    else:
+        drawdown_component = min(abs(max_drawdown_pct) / DRAWDOWN_PENALTY_SATURATION_PCT, 1.0)
+        drawdown_multiplier = 1.0 - (1.0 - DRAWDOWN_MULTIPLIER_FLOOR) * drawdown_component
+
+    return sharpe_multiplier * drawdown_multiplier
 
 # "Learning from old positions": every `step` bars, before deciding the next
 # position, the simulator looks back — causally, only at trades that already
@@ -108,15 +163,25 @@ def _select_portfolio(
     initial_capital: float,
     commission_bps: float | None,
     min_confidence_pct: float = 55.0,
+    include_earnings: bool = False,
+    include_news: bool = False,
 ) -> list[dict]:
-    """Ranks symbols by ensemble confidence using only data strictly before
-    the simulation's start index (no lookahead), and returns the top
-    `portfolio_size` — BUY and SELL/short candidates when shorts are
-    allowed, BUY-only otherwise (there's no point holding a bearish call you
-    can't act on). Candidates below `min_confidence_pct` are excluded
-    outright, same bar the daily walk-forward uses to decide whether to act
-    on a signal — a portfolio built on a coin-flip call isn't a real
-    portfolio, it's noise."""
+    """Ranks symbols using only data strictly before the simulation's start
+    index (no lookahead), and returns the top `portfolio_size` — BUY and
+    SELL/short candidates when shorts are allowed, BUY-only otherwise
+    (there's no point holding a bearish call you can't act on).
+
+    Ranking isn't raw ensemble confidence anymore: each candidate's
+    confidence is first optionally nudged by the earnings/news overlays
+    (`include_earnings`/`include_news` — real-ticker stocks only; see module
+    docstring for why these apply *here* and not inside the day-by-day
+    walk-forward), then scaled by `_risk_multiplier` using that candidate's
+    own historical Sharpe ratio and max drawdown — so a loud, high-confidence
+    call with a rough risk history doesn't automatically outrank a calmer,
+    more consistent one. Candidates below `min_confidence_pct` (checked
+    *after* any overlay nudge) are excluded outright, same bar the daily
+    walk-forward uses to decide whether to act on a signal — a portfolio
+    built on a coin-flip call isn't a real portfolio, it's noise."""
     allowed_actions = {"BUY", "SELL"} if allow_short else {"BUY"}
     candidates = []
     for symbol, df in dfs.items():
@@ -127,11 +192,31 @@ def _select_portfolio(
         rec = recommend(
             window, symbol=symbol, initial_capital=initial_capital, commission_bps=commission_bps, allow_short=allow_short
         )
-        if rec["overall_action"] in allowed_actions and rec["confidence_pct"] >= min_confidence_pct:
-            candidates.append(
-                {"symbol": symbol, "action_at_selection": rec["overall_action"], "confidence_pct_at_selection": rec["confidence_pct"]}
-            )
-    candidates.sort(key=lambda c: c["confidence_pct_at_selection"], reverse=True)
+        if include_earnings:
+            rec = apply_earnings_overlay(rec, symbol)
+        if include_news:
+            rec = apply_news_overlay(rec, symbol)
+
+        if rec["overall_action"] not in allowed_actions or rec["confidence_pct"] < min_confidence_pct:
+            continue
+
+        best_strategy = rec.get("best_historical_strategy", {})
+        risk_multiplier = _risk_multiplier(best_strategy.get("sharpe_ratio"), best_strategy.get("max_drawdown_pct"))
+        candidate = {
+            "symbol": symbol,
+            "action_at_selection": rec["overall_action"],
+            "confidence_pct_at_selection": rec["confidence_pct"],
+            "sharpe_ratio": best_strategy.get("sharpe_ratio"),
+            "max_drawdown_pct": best_strategy.get("max_drawdown_pct"),
+            "risk_adjusted_score": round(rec["confidence_pct"] * risk_multiplier, 2),
+        }
+        if include_earnings:
+            candidate["earnings"] = rec.get("earnings")
+        if include_news:
+            candidate["news"] = rec.get("news")
+        candidates.append(candidate)
+
+    candidates.sort(key=lambda c: c["risk_adjusted_score"], reverse=True)
     return candidates[:portfolio_size]
 
 
@@ -279,6 +364,8 @@ def _run_simulation(
     errors: dict[str, str],
     min_confidence_pct: float = 55.0,
     adaptive_learning: bool = True,
+    include_earnings: bool = False,
+    include_news: bool = False,
 ) -> dict:
     if step < 1:
         raise ValueError("step debe ser >= 1")
@@ -300,7 +387,15 @@ def _run_simulation(
             )
 
     portfolio = _select_portfolio(
-        usable, start_idx_by_symbol, portfolio_size, allow_short, initial_capital, commission_bps, min_confidence_pct
+        usable,
+        start_idx_by_symbol,
+        portfolio_size,
+        allow_short,
+        initial_capital,
+        commission_bps,
+        min_confidence_pct,
+        include_earnings,
+        include_news,
     )
     if not portfolio:
         raise ValueError(
@@ -374,6 +469,8 @@ def simulate_portfolio_real(
     step: int = 1,
     min_confidence_pct: float = 55.0,
     adaptive_learning: bool = True,
+    include_earnings: bool = False,
+    include_news: bool = False,
 ) -> dict:
     """Auto-selects a portfolio (from real symbols, defaulting to the full
     example universe) using only data before `start_date`, then walks
@@ -383,7 +480,13 @@ def simulate_portfolio_real(
     its position on a given day — below it, a BUY/SELL call is treated as a
     HOLD, to avoid overtrading on weak/noisy signals. `adaptive_learning`
     additionally raises that bar on the fly based on the simulator's own
-    recent hindsight track record (see `_walk_forward_result`)."""
+    recent hindsight track record (see `_walk_forward_result`).
+
+    `include_earnings`/`include_news` nudge each candidate's confidence at
+    *selection* time only (Finnhub/Alpha Vantage — real stock tickers only;
+    see the module docstring for why they aren't applied inside the daily
+    walk-forward). Selection always also weighs each candidate's own
+    historical Sharpe ratio and max drawdown, regardless of these flags."""
     symbols = symbols or _default_symbols()
 
     dfs = {}
@@ -406,6 +509,8 @@ def simulate_portfolio_real(
         errors,
         min_confidence_pct,
         adaptive_learning,
+        include_earnings,
+        include_news,
     )
 
 
@@ -421,12 +526,20 @@ def simulate_portfolio_synthetic(
     step: int = 1,
     min_confidence_pct: float = 55.0,
     adaptive_learning: bool = True,
+    include_earnings: bool = False,
+    include_news: bool = False,
 ) -> dict:
     """Same simulation, but over synthetic profiles reaching into 2026 —
     usable with no network access. Real dates only line up exactly with
     `DEFAULT_PORTFOLIO_PROFILES` (~3 years of synthetic warmup ending right
     around 2026-01-01); custom `profiles` need their own `start_date` picked
-    so the requested `start_date` actually falls inside the generated range."""
+    so the requested `start_date` actually falls inside the generated range.
+
+    `include_earnings`/`include_news` still call out to Finnhub/Alpha
+    Vantage for these (fake) profile labels, so — same as
+    `app.opportunities`'s synthetic path — they'll come back "unavailable"
+    rather than do anything useful; the risk-adjusted (Sharpe/drawdown)
+    selection still applies regardless."""
     profiles = profiles or DEFAULT_PORTFOLIO_PROFILES
 
     dfs = {
@@ -445,4 +558,6 @@ def simulate_portfolio_synthetic(
         {},
         min_confidence_pct,
         adaptive_learning,
+        include_earnings,
+        include_news,
     )

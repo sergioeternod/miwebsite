@@ -113,6 +113,14 @@ class PortfolioSimulateRequest(BaseModel):
         True,
         description="Si está activo, una racha de operaciones subóptimas en retrospectiva (ver hindsight) sube el umbral de confianza sobre la marcha",
     )
+    with_earnings: bool = Field(
+        False,
+        description="Al elegir el portafolio, ajusta la confianza con el historial de earnings (Finnhub) — solo afecta acciones individuales, no cripto/forex/commodities/índices",
+    )
+    with_news: bool = Field(
+        False,
+        description="Al elegir el portafolio, ajusta la confianza con el sentimiento de noticias recientes (Alpha Vantage) — solo afecta acciones individuales",
+    )
 
 
 class ValidateRequest(BaseModel):
