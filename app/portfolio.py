@@ -94,12 +94,16 @@ def _select_portfolio(
     allow_short: bool,
     initial_capital: float,
     commission_bps: float | None,
+    min_confidence_pct: float = 55.0,
 ) -> list[dict]:
     """Ranks symbols by ensemble confidence using only data strictly before
     the simulation's start index (no lookahead), and returns the top
     `portfolio_size` — BUY and SELL/short candidates when shorts are
     allowed, BUY-only otherwise (there's no point holding a bearish call you
-    can't act on)."""
+    can't act on). Candidates below `min_confidence_pct` are excluded
+    outright, same bar the daily walk-forward uses to decide whether to act
+    on a signal — a portfolio built on a coin-flip call isn't a real
+    portfolio, it's noise."""
     allowed_actions = {"BUY", "SELL"} if allow_short else {"BUY"}
     candidates = []
     for symbol, df in dfs.items():
@@ -110,7 +114,7 @@ def _select_portfolio(
         rec = recommend(
             window, symbol=symbol, initial_capital=initial_capital, commission_bps=commission_bps, allow_short=allow_short
         )
-        if rec["overall_action"] in allowed_actions:
+        if rec["overall_action"] in allowed_actions and rec["confidence_pct"] >= min_confidence_pct:
             candidates.append(
                 {"symbol": symbol, "action_at_selection": rec["overall_action"], "confidence_pct_at_selection": rec["confidence_pct"]}
             )
@@ -126,11 +130,19 @@ def _walk_forward_result(
     capital: float,
     commission_bps: float | None,
     step: int,
+    min_confidence_pct: float = 55.0,
 ) -> dict:
     """Recomputes the ensemble recommendation every `step` bars from
     `start_idx` onward (using only df.iloc[:t+1] each time — never later
     data), converts each decision into a target position, and evaluates the
     resulting equity curve with the same math as `app.backtest.engine`.
+
+    A BUY/SELL call below `min_confidence_pct` is treated like a HOLD (keeps
+    the current position instead of flipping) — a weak, near-coin-flip signal
+    flipping the position anyway is exactly what turns a noisy/range-bound
+    stretch into overtrading: extra commission drag plus a position that
+    reverses right before the market does. This doesn't change what
+    `recommend()` reports, only whether the simulator acts on it.
 
     `commission_bps=None` resolves once to a realistic default for `symbol`'s
     instrument type — resolved here (not left to `recommend()`/`run_backtest`
@@ -146,11 +158,12 @@ def _walk_forward_result(
             window = df.iloc[: t + 1]
             rec = recommend(window, symbol=symbol, initial_capital=capital, commission_bps=commission_bps, allow_short=allow_short)
             action = rec["overall_action"]
-            if action == "BUY":
-                current = 1
-            elif action == "SELL":
-                current = -1 if allow_short else 0
-            # HOLD: keep `current` unchanged.
+            if rec["confidence_pct"] >= min_confidence_pct:
+                if action == "BUY":
+                    current = 1
+                elif action == "SELL":
+                    current = -1 if allow_short else 0
+            # HOLD, or a BUY/SELL below the confidence threshold: keep `current` unchanged.
         positions[t] = current
 
     sim_df = df.iloc[start_idx:].copy()
@@ -192,6 +205,7 @@ def _run_simulation(
     allow_short: bool,
     step: int,
     errors: dict[str, str],
+    min_confidence_pct: float = 55.0,
 ) -> dict:
     if step < 1:
         raise ValueError("step debe ser >= 1")
@@ -212,18 +226,28 @@ def _run_simulation(
                 "Historial insuficiente antes de la fecha de inicio, o no hay barras después de esa fecha.",
             )
 
-    portfolio = _select_portfolio(usable, start_idx_by_symbol, portfolio_size, allow_short, initial_capital, commission_bps)
+    portfolio = _select_portfolio(
+        usable, start_idx_by_symbol, portfolio_size, allow_short, initial_capital, commission_bps, min_confidence_pct
+    )
     if not portfolio:
         raise ValueError(
             "No se encontraron símbolos con señal BUY"
             + (" o SELL" if allow_short else "")
-            + " antes de la fecha de inicio. Prueba con otro universo, fecha, o habilita posiciones cortas."
+            + f" con al menos {min_confidence_pct}% de confianza antes de la fecha de inicio. "
+            "Prueba con otro universo, fecha, un umbral de confianza más bajo, o habilita posiciones cortas."
         )
 
     capital_per_symbol = round(initial_capital / len(portfolio), 2)
     per_symbol_results = [
         _walk_forward_result(
-            usable[c["symbol"]], start_idx_by_symbol[c["symbol"]], c["symbol"], allow_short, capital_per_symbol, commission_bps, step
+            usable[c["symbol"]],
+            start_idx_by_symbol[c["symbol"]],
+            c["symbol"],
+            allow_short,
+            capital_per_symbol,
+            commission_bps,
+            step,
+            min_confidence_pct,
         )
         for c in portfolio
     ]
@@ -271,11 +295,15 @@ def simulate_portfolio_real(
     commission_bps: float | None = None,
     allow_short: bool = True,
     step: int = 1,
+    min_confidence_pct: float = 55.0,
 ) -> dict:
     """Auto-selects a portfolio (from real symbols, defaulting to the full
     example universe) using only data before `start_date`, then walks
     forward day by day executing the ensemble recommendation's calls,
-    reporting the combined dollar P&L over the period."""
+    reporting the combined dollar P&L over the period. `min_confidence_pct`
+    is the minimum ensemble confidence required to select a symbol or flip
+    its position on a given day — below it, a BUY/SELL call is treated as a
+    HOLD, to avoid overtrading on weak/noisy signals."""
     symbols = symbols or _default_symbols()
 
     dfs = {}
@@ -286,7 +314,9 @@ def simulate_portfolio_real(
         except Exception as exc:  # data provider/network failures are per-symbol, not fatal for the whole scan
             errors[symbol] = str(exc)
 
-    return _run_simulation(dfs, start_date, end_date, portfolio_size, initial_capital, commission_bps, allow_short, step, errors)
+    return _run_simulation(
+        dfs, start_date, end_date, portfolio_size, initial_capital, commission_bps, allow_short, step, errors, min_confidence_pct
+    )
 
 
 def simulate_portfolio_synthetic(
@@ -299,6 +329,7 @@ def simulate_portfolio_synthetic(
     commission_bps: float | None = None,
     allow_short: bool = True,
     step: int = 1,
+    min_confidence_pct: float = 55.0,
 ) -> dict:
     """Same simulation, but over synthetic profiles reaching into 2026 —
     usable with no network access. Real dates only line up exactly with
@@ -311,4 +342,6 @@ def simulate_portfolio_synthetic(
         profile["label"]: generate_ohlcv(regimes=profile["regimes"], start_date=_SYNTHETIC_START_DATE, seed=seed)
         for profile in profiles
     }
-    return _run_simulation(dfs, start_date, end_date, portfolio_size, initial_capital, commission_bps, allow_short, step, {})
+    return _run_simulation(
+        dfs, start_date, end_date, portfolio_size, initial_capital, commission_bps, allow_short, step, {}, min_confidence_pct
+    )

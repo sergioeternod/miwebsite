@@ -57,3 +57,30 @@ def test_atr_nonnegative():
     )
     result = ti.atr(df, window=3)
     assert (result.dropna() >= 0).all()
+
+
+def _make_ohlc(close: pd.Series) -> pd.DataFrame:
+    return pd.DataFrame({"High": close * 1.005, "Low": close * 0.995, "Close": close})
+
+
+def test_adx_is_bounded_0_100():
+    close = pd.Series(np.linspace(100, 200, 80))
+    result = ti.adx(_make_ohlc(close), window=14)
+    valid = result.dropna()
+    assert (valid >= 0).all() and (valid <= 100).all()
+
+
+def test_adx_nan_before_warmup():
+    close = pd.Series(np.linspace(100, 200, 80))
+    result = ti.adx(_make_ohlc(close), window=14)
+    assert result.iloc[:14].isna().all()
+
+
+def test_adx_higher_for_strong_trend_than_choppy_range():
+    rng = np.random.default_rng(3)
+    trending = pd.Series(100 + np.arange(120) * 0.8)
+    choppy = pd.Series(100 + rng.normal(0, 0.3, 120).cumsum() * 0.05)
+
+    trending_adx = ti.adx(_make_ohlc(trending), window=14).iloc[-1]
+    choppy_adx = ti.adx(_make_ohlc(choppy), window=14).iloc[-1]
+    assert trending_adx > choppy_adx

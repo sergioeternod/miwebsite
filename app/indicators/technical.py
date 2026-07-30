@@ -65,3 +65,29 @@ def atr(df: pd.DataFrame, window: int = 14) -> pd.Series:
         axis=1,
     ).max(axis=1)
     return tr.ewm(alpha=1 / window, min_periods=window, adjust=False).mean()
+
+
+def adx(df: pd.DataFrame, window: int = 14) -> pd.Series:
+    """Average Directional Index: trend *strength*, not direction — high
+    values (roughly >25-40) mean a strong trend, low values (roughly <15-20)
+    mean a range-bound/choppy market. Needs about 2×window bars to stabilize
+    (NaN before that), the same warm-up shape as the other Wilder-smoothed
+    indicators here."""
+    high, low, close = df["High"], df["Low"], df["Close"]
+    prev_high, prev_low, prev_close = high.shift(1), low.shift(1), close.shift(1)
+
+    up_move = high - prev_high
+    down_move = prev_low - low
+    plus_dm = up_move.where((up_move > down_move) & (up_move > 0), 0.0)
+    minus_dm = down_move.where((down_move > up_move) & (down_move > 0), 0.0)
+
+    tr = pd.concat([(high - low), (high - prev_close).abs(), (low - prev_close).abs()], axis=1).max(axis=1)
+    smoothed_tr = tr.ewm(alpha=1 / window, min_periods=window, adjust=False).mean()
+    smoothed_plus_dm = plus_dm.ewm(alpha=1 / window, min_periods=window, adjust=False).mean()
+    smoothed_minus_dm = minus_dm.ewm(alpha=1 / window, min_periods=window, adjust=False).mean()
+
+    plus_di = 100 * smoothed_plus_dm / smoothed_tr
+    minus_di = 100 * smoothed_minus_dm / smoothed_tr
+    di_sum = plus_di + minus_di
+    dx = (100 * (plus_di - minus_di).abs() / di_sum).where(di_sum != 0, 0.0)
+    return dx.ewm(alpha=1 / window, min_periods=window, adjust=False).mean()

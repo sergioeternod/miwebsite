@@ -292,6 +292,7 @@ def cmd_portfolio_sim(args: argparse.Namespace) -> None:
         commission_bps=args.commission_bps,
         allow_short=not args.no_short,
         step=args.step,
+        min_confidence_pct=args.min_confidence,
     )
     if args.synthetic:
         report = simulate_portfolio_synthetic(start_date=args.start_date, seed=args.seed, **kwargs)
@@ -526,6 +527,10 @@ def build_parser() -> argparse.ArgumentParser:
     portfolio_sim_parser.add_argument("--no-short", action="store_true", help="Desactiva las posiciones en corto")
     portfolio_sim_parser.add_argument(
         "--step", type=int, default=1, help="Cada cuántos días se recalcula la señal (1 = todos los días; más alto = más rápido)"
+    )
+    portfolio_sim_parser.add_argument(
+        "--min-confidence", type=float, default=55.0,
+        help="Confianza mínima del ensemble (%%) para elegir un símbolo o voltear su posición; por debajo se trata como HOLD",
     )
     portfolio_sim_parser.add_argument("--out", default=None, help="Ruta donde guardar el reporte completo en JSON")
     portfolio_sim_parser.set_defaults(func=cmd_portfolio_sim)

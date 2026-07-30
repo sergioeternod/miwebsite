@@ -303,6 +303,7 @@ def post_simulate_portfolio(request: PortfolioSimulateRequest) -> dict:
         commission_bps=request.commission_bps,
         allow_short=request.allow_short,
         step=request.step,
+        min_confidence_pct=request.min_confidence_pct,
     )
     try:
         if request.synthetic:

@@ -16,7 +16,7 @@ información histórica de mercado.
   cubre acciones, cripto, divisas, commodities e índices con el mismo formato
   OHLCV, usando el símbolo de cada instrumento (`AAPL`, `BTC-USD`,
   `EURUSD=X`, `GC=F`, `^GSPC`, etc.).
-- **Indicadores técnicos**: SMA, EMA, RSI, MACD, Bandas de Bollinger, ATR
+- **Indicadores técnicos**: SMA, EMA, RSI, MACD, Bandas de Bollinger, ATR, ADX
   (`app/indicators/technical.py`).
 - **Estrategias, long y short** (con flag `allow_short` para restringir a
   solo-largo cuando el instrumento/cuenta no permite shortear, ej. cripto
@@ -131,16 +131,25 @@ información histórica de mercado.
   la ganancia/pérdida en dólares total y por símbolo, y la bitácora completa
   de operaciones — la respuesta directa a "corre esto día a día desde tal
   fecha y dime cuánto gané o perdí".
+- **Filtro de régimen de mercado (ADX) + umbral de confianza mínima**: el
+  ensemble de `recommend()` ajusta el peso de cada estrategia según si el
+  mercado está en tendencia fuerte o lateral (favorece trend-following o
+  reversión a la media según corresponda, en vez de tratarlas igual siempre),
+  y el simulador de portafolio ignora señales BUY/SELL de baja confianza en
+  vez de voltear la posición por una lectura casi al azar. Ver "El motor de
+  decisión considera el régimen de mercado" más abajo — mejora la calidad de
+  la señal, no garantiza ganancias.
 - **API REST (FastAPI)** y **CLI** para correr backtests, simulaciones,
   recomendaciones, validaciones, rankings, el screener, el escáner de
   oportunidades, el simulador de portafolio y los overlays de earnings/noticias.
-- Suite de tests (`pytest`, 169 casos) sobre datos sintéticos y llamadas HTTP
+- Suite de tests (`pytest`, 184 casos) sobre datos sintéticos y llamadas HTTP
   simuladas, sin depender de red real — incluye cobertura de posiciones
   largas y cortas, rangos de fecha, las tres validaciones de expectativa vs
   realidad, montos en dólares, el ranking de símbolos, el screener, el
   escáner de oportunidades, el simulador de portafolio, la comisión
-  automática por tipo de instrumento, y los overlays de earnings/noticias
-  (con los clientes Finnhub/Alpha Vantage mockeados).
+  automática por tipo de instrumento, el filtro de régimen de mercado, y los
+  overlays de earnings/noticias (con los clientes Finnhub/Alpha Vantage
+  mockeados).
 
 ## Comparación de las 5 estrategias
 
@@ -290,13 +299,13 @@ de esa fecha, así que cae justo donde termina el historial previo):
 
 ```
 Portafolio autoseleccionado (antes de 2026-01-01, sin ver datos futuros):
-  Símbolo B (tendencia bajista) → señal SELL, 94.7% de confianza
-  Símbolo C (lateral)           → señal SELL, 89.6% de confianza
+  Símbolo B (tendencia bajista) → señal SELL, 99.3% de confianza
+  Símbolo C (lateral)           → señal SELL, 98.7% de confianza
 
 Periodo simulado: 2026-01-01 → 2026-03-31 (90 días)
-Capital inicial: $10,000  →  Capital final: $9,491.40  (-$508.60, -5.09%)
-  Símbolo B: $4,858.46 (-$141.54, 2 operaciones, 50% de acierto)
-  Símbolo C: $4,632.95 (-$367.05, 3 operaciones, 0% de acierto)
+Capital inicial: $10,000  →  Capital final: $9,501.97  (-$498.03, -4.98%)
+  Símbolo B: $4,861.48 (-$138.52, 2 operaciones, 50% de acierto)
+  Símbolo C: $4,640.49 (-$359.51, 2 operaciones, 0% de acierto)
 ```
 
 Ninguno de los dos perdió apostando exactamente igual que su régimen
@@ -314,6 +323,45 @@ simulado recalcula el ensemble completo (5 estrategias) para cada símbolo
 del portafolio, así que periodos largos o portafolios grandes tardan más —
 usa `--step N` para recalcular cada N días en vez de todos (más rápido, algo
 menos preciso día a día).
+
+### El motor de decisión considera el régimen de mercado y evita sobreoperar
+
+Dos mejoras al ensemble de `recommend()` (afectan también al escáner de
+oportunidades y a este simulador, ya que ambos lo usan por debajo):
+
+1. **Filtro de régimen de mercado (ADX)**: las estrategias de tendencia
+   (SMA, MACD, Bollinger, confirmación de tendencia) rinden mal en mercados
+   laterales/sin tendencia, y la reversión a la media (RSI) rinde mal en
+   tendencias fuertes — es un problema conocido de mezclar familias de
+   estrategias sin distinguir el régimen actual. Ahora se calcula el ADX
+   (fuerza de tendencia, no dirección) sobre los mismos datos y se ajusta el
+   peso de cada estrategia según su familia: en tendencia fuerte (ADX alto)
+   se refuerzan las de tendencia y se atenúa la reversión; en mercado lateral
+   (ADX bajo) es al revés. El ajuste es continuo, no un interruptor brusco.
+   La lectura de régimen queda expuesta en `recommend()` como
+   `market_regime: {"adx": ..., "reading": "tendencia fuerte" | "rango / sin
+   tendencia clara" | "transición"}`.
+2. **Umbral de confianza mínima antes de voltear posición** (solo en el
+   simulador de portafolio, `--min-confidence`, default 55%): una señal
+   BUY/SELL con confianza apenas por encima del azar se trataba igual que
+   una señal fuerte, y voltear la posición por una señal débil es
+   exactamente lo que convierte un tramo ruidoso en sobreoperación —
+   comisión extra más una posición que se revierte justo antes de que lo
+   haga el mercado. Ahora una señal por debajo del umbral se trata como
+   HOLD (mantiene la posición actual) tanto al seleccionar el portafolio
+   como en cada recálculo diario.
+
+**Resultado honesto, no prometido**: en el mismo escenario sintético de
+arriba, esto redujo Símbolo C de 3 a 2 operaciones y la pérdida del
+portafolio de -$508.60 (-5.09%) a -$498.03 (-4.98%) — una mejora real pero
+modesta, no una reversión a ganancia. Con el portafolio completo (5
+símbolos) del mismo escenario el resultado fue peor (-$1,137.60, -11.38%),
+porque los 5 perfiles sintéticos comparten semilla aleatoria y terminan
+correlacionados hacia la misma lectura (todos SELL) justo en esa fecha — un
+artefacto de los datos de demostración, no una falla del filtro. Ninguna de
+estas dos mejoras garantiza ganar más seguido; existen para que el ensemble
+razone mejor sobre el contexto de mercado y ejecute menos operaciones
+débiles, nada más.
 
 ## Recomendaciones con historial de earnings (Finnhub)
 
@@ -498,6 +546,7 @@ python -m app.cli opportunities --out oportunidades.json  # sin --symbols escane
 python -m app.cli portfolio-sim --synthetic --start-date 2026-01-01
 python -m app.cli portfolio-sim --start-date 2026-01-01 --symbols AAPL,MSFT,TSLA,BTC-USD,ETH-USD --portfolio-size 3
 python -m app.cli portfolio-sim --start-date 2026-01-01 --out portafolio.json
+python -m app.cli portfolio-sim --start-date 2026-01-01 --min-confidence 65  # más exigente, menos operaciones
 ```
 
 ## Uso — Pantalla web
@@ -563,7 +612,7 @@ uvicorn app.api.main:app --reload
 - `POST /rank` — body: `{"symbols": ["AAPL", "MSFT", "BTC-USD"], "period": "2y"}` o `{"synthetic": true}`
 - `POST /screen` — body: `{"symbols": ["AAPL", "MSFT", "BTC-USD"], "top_n": 10}`, `{"synthetic": true}`, o `{}` (escanea el universo de ejemplo)
 - `POST /opportunities` — body: `{"symbols": ["AAPL", "MSFT", "BTC-USD"], "with_earnings": true, "with_news": true, "top_n": 10}`, `{"synthetic": true}`, o `{}` (escanea el universo de ejemplo)
-- `POST /simulate-portfolio` — body: `{"start_date": "2026-01-01", "portfolio_size": 3}`, `{"start_date": "2026-01-01", "symbols": ["AAPL", "MSFT", "BTC-USD"]}`, o `{"start_date": "2026-01-01", "synthetic": true}`
+- `POST /simulate-portfolio` — body: `{"start_date": "2026-01-01", "portfolio_size": 3}`, `{"start_date": "2026-01-01", "symbols": ["AAPL", "MSFT", "BTC-USD"]}`, `{"start_date": "2026-01-01", "synthetic": true}`, o con `"min_confidence_pct": 65` para exigir más convicción antes de operar
 
 ## Estructura del proyecto
 

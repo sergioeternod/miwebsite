@@ -105,6 +105,10 @@ class PortfolioSimulateRequest(BaseModel):
     )
     allow_short: bool = True
     step: int = Field(1, description="Cada cuántos días se recalcula la señal (1 = todos los días)")
+    min_confidence_pct: float = Field(
+        55.0,
+        description="Confianza mínima del ensemble (%) para elegir un símbolo o voltear su posición; por debajo se trata como HOLD",
+    )
 
 
 class ValidateRequest(BaseModel):

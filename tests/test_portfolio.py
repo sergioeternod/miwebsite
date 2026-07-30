@@ -165,3 +165,72 @@ def test_walk_forward_recommend_never_sees_future_data(monkeypatch, long_uptrend
     _walk_forward_result(long_uptrend_df, start_idx, "SYM", allow_short=True, capital=10_000.0, commission_bps=5.0, step=50)
 
     assert seen_lengths == [start_idx + 1 + i for i in range(0, len(long_uptrend_df) - start_idx, 50)]
+
+
+def test_walk_forward_result_ignores_low_confidence_flips(monkeypatch, long_uptrend_df):
+    """A BUY/SELL call below min_confidence_pct must be treated like a HOLD
+    (stay flat) — this is what stops a noisy/weak signal from flipping the
+    position and racking up commission on trades that shouldn't have
+    happened."""
+    calls = {"n": 0}
+
+    def alternating_low_confidence(window, symbol="", initial_capital=10000.0, commission_bps=5.0, allow_short=True):
+        calls["n"] += 1
+        return {"overall_action": "BUY" if calls["n"] % 2 == 0 else "SELL", "confidence_pct": 40.0}
+
+    monkeypatch.setattr(portfolio_module, "recommend", alternating_low_confidence)
+    result = _walk_forward_result(
+        long_uptrend_df, 200, "SYM", allow_short=True, capital=10_000.0, commission_bps=5.0, step=5, min_confidence_pct=55.0
+    )
+
+    assert result["trades"] == []
+    assert result["equity_curve"].iloc[-1] == pytest.approx(10_000.0)
+
+
+def test_walk_forward_result_acts_when_confidence_meets_lowered_threshold(monkeypatch, long_uptrend_df):
+    monkeypatch.setattr(portfolio_module, "recommend", lambda *a, **k: {"overall_action": "BUY", "confidence_pct": 40.0})
+    result = _walk_forward_result(
+        long_uptrend_df, 200, "SYM", allow_short=True, capital=10_000.0, commission_bps=0.0, step=1, min_confidence_pct=10.0
+    )
+    close = long_uptrend_df["Close"]
+    expected_final = 10_000.0 * (close.iloc[-1] / close.iloc[200])
+    assert result["equity_curve"].iloc[-1] == pytest.approx(expected_final, rel=1e-6)
+
+
+def test_select_portfolio_excludes_candidates_below_min_confidence(monkeypatch, long_uptrend_df):
+    def fake_recommend(window, symbol="", initial_capital=10000.0, commission_bps=5.0, allow_short=True):
+        return {"overall_action": "BUY", "confidence_pct": 30.0 if symbol == "WEAK" else 80.0}
+
+    monkeypatch.setattr(portfolio_module, "recommend", fake_recommend)
+    dfs = {"WEAK": long_uptrend_df, "STRONG": long_uptrend_df}
+    start_idx_by_symbol = {"WEAK": 200, "STRONG": 200}
+
+    portfolio = _select_portfolio(
+        dfs, start_idx_by_symbol, portfolio_size=5, allow_short=True, initial_capital=10000.0, commission_bps=5.0, min_confidence_pct=55.0
+    )
+
+    assert [p["symbol"] for p in portfolio] == ["STRONG"]
+
+
+def test_simulate_portfolio_synthetic_min_confidence_pct_reduces_or_matches_trade_count(monkeypatch):
+    """A stricter (higher) confidence bar should never cause *more* trades
+    than a looser one, all else equal — it can only skip flips, not add them."""
+    calls = {"n": 0}
+
+    def noisy_recommend(window, symbol="", initial_capital=10000.0, commission_bps=5.0, allow_short=True):
+        calls["n"] += 1
+        if calls["n"] == 1:
+            return {"overall_action": "BUY", "confidence_pct": 95.0}  # portfolio-selection call always succeeds
+        action = ["BUY", "SELL", "HOLD"][calls["n"] % 3]
+        confidence = [45.0, 65.0, 85.0][calls["n"] % 3]
+        return {"overall_action": action, "confidence_pct": confidence}
+
+    monkeypatch.setattr(portfolio_module, "recommend", noisy_recommend)
+
+    strict = simulate_portfolio_synthetic(portfolio_size=1, step=10, min_confidence_pct=90.0)
+    calls["n"] = 0  # reset so the second run's first call is also the guaranteed-success selection call
+    loose = simulate_portfolio_synthetic(portfolio_size=1, step=10, min_confidence_pct=0.0)
+
+    strict_trades = strict["per_symbol"][0]["metrics"]["num_trades"]
+    loose_trades = loose["per_symbol"][0]["metrics"]["num_trades"]
+    assert strict_trades <= loose_trades
