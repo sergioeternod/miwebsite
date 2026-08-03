@@ -214,7 +214,7 @@ html = r"""<title>Simulación 3 años — datos reales</title>
     <p class="subtitle" id="subtitle"></p>
 
     <div class="card" id="comparisonCard" style="display:none;">
-      <h2>Antes / después: selección ajustada por riesgo (Sharpe/drawdown)</h2>
+      <h2>Antes / después: modelo original vs. modelo actual (mejoras de riesgo + fix del sesgo short en RSI)</h2>
       <p class="card-sub" id="comparisonSub"></p>
     </div>
 
@@ -288,12 +288,12 @@ if (CTX.oldComparison) {
   sub.innerHTML = "";
   const line1 = document.createElement("div");
   line1.innerHTML =
-    `Antes (ranking por pura confianza del ensemble): portafolio <strong>${old.portfolioSymbols.join(", ")}</strong> → ` +
+    `Antes (modelo original, ranking por pura confianza): portafolio <strong>${old.portfolioSymbols.join(", ")}</strong> → ` +
     `<span style="color:var(--series-red)">${fmtMoney(old.totalPnlAmount)} (${fmtPct(old.totalReturnPct)})</span>`;
   const line2 = document.createElement("div");
   line2.style.marginTop = "4px";
   line2.innerHTML =
-    `Ahora (ranking ajustado por Sharpe/drawdown histórico): portafolio <strong>${CTX.portfolio.map(p => p.symbol).join(", ")}</strong> → ` +
+    `Ahora (modelo actual — riesgo, diversificación, risk parity, stop-loss y fix RSI): portafolio <strong>${CTX.portfolio.map(p => p.symbol).join(", ")}</strong> → ` +
     `<span style="color:${CTX.totalPnlAmount >= 0 ? 'var(--good-text)' : 'var(--series-red)'}">${fmtMoney(CTX.totalPnlAmount)} (${fmtPct(CTX.totalReturnPct)})</span>`;
   sub.appendChild(line1);
   sub.appendChild(line2);

@@ -597,6 +597,16 @@ la estrategia pasa **~64-69% del tiempo plana** (como corresponde a una
 estrategia de setups) y su tiempo en corto cayó de 65-76% a 20-25%.
 Regression test: `test_rsi_reversion_short_exits_at_midline_not_opposite_extreme`.
 
+**Impacto medido en la simulación de 3 años** (mismo periodo y datos que
+las secciones anteriores): de -0.44% a **+20.68%** (+$2,068.25) — la
+primera corrida multi-año en positivo. Con las dos advertencias de
+siempre: casi toda la ganancia vino de una sola posición (el long de oro
+que la trampa short antes impedía tomar — los otros 4 símbolos perdieron
+individualmente), y +20.68% en 3 años sigue muy por debajo de comprar
+^GSPC y no hacer nada (+62%) o el oro solo (+108%) en ese mismo periodo.
+El fix corrige un defecto lógico objetivo; una corrida en positivo no
+demuestra que mejore consistentemente en cualquier periodo.
+
 ## Recomendaciones con historial de earnings (Finnhub)
 
 La recomendación técnica (`recommend`) no sabe nada de si una empresa
