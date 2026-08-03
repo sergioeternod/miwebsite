@@ -30,7 +30,9 @@ información histórica de mercado.
   spot sin margen):
   - `sma_crossover` — seguimiento de tendencia (cruce de medias móviles)
   - `macd_crossover` — seguimiento de tendencia (cruce de MACD/señal)
-  - `rsi_reversion` — reversión a la media (rebote/techo confirmado en RSI)
+  - `rsi_reversion` — reversión a la media (rebote/techo confirmado en RSI,
+    con salida en la línea media — ver la nota de auditoría del sesgo short
+    más abajo)
   - `bollinger_breakout` — ruptura de momentum (banda superior/inferior)
   - `trend_confirmation` — momentum filtrado por tendencia: solo toma la
     señal de MACD cuando coincide con la tendencia de una SMA larga (menos
@@ -567,6 +569,33 @@ universo reducido de símbolos con historial disponible tan atrás).
 Ejecuta `python scripts/multi_period_validation.py` (requiere red, puede
 tardar más de una hora) para reproducir esto con tu propio universo o
 periodos antes de confiar en esto con dinero real.
+
+### Auditoría del sesgo short: la trampa de la salida en el extremo opuesto
+
+Los shorts fueron la fuente de las peores pérdidas en casi todas las
+corridas reales, y el escáner llegó a recomendar 4 SELL de 5 picks en un
+mercado que venía subiendo. La auditoría encontró la causa estructural en
+`rsi_reversion`: entraba en corto cuando el RSI cruzaba hacia abajo el
+nivel 70 (fácil — pasa en cada retroceso de una tendencia alcista), pero
+solo salía del corto cuando el RSI rebotaba desde abajo de 30 — algo que
+en una tendencia alcista sostenida casi nunca ocurre. Una trampa de un
+solo sentido, medida sobre datos reales:
+
+- La estrategia pasaba **65-76% de los días en corto** sobre instrumentos
+  que subieron 25-71% en el periodo (^GSPC, GC=F, MSFT, 2 años).
+- Un solo corto en oro (GC=F) quedó abierto **374 barras (~1.5 años)** y
+  perdió **-46.8%** mientras el oro casi se duplicaba.
+- Y como una posición corta rancia vota "SELL" en el ensemble cada día con
+  el mismo peso que una señal fresca, el sesgo contaminaba al escáner y al
+  simulador completos.
+
+**El fix**: una operación de reversión a la media apuesta a que el precio
+*vuelva a la media* — no a que llegue al extremo opuesto. Ahora ambos
+lados salen cuando el RSI cruza de regreso su línea media (50), además de
+las reversas en los extremos. Con el fix, sobre los mismos datos reales,
+la estrategia pasa **~64-69% del tiempo plana** (como corresponde a una
+estrategia de setups) y su tiempo en corto cayó de 65-76% a 20-25%.
+Regression test: `test_rsi_reversion_short_exits_at_midline_not_opposite_extreme`.
 
 ## Recomendaciones con historial de earnings (Finnhub)
 

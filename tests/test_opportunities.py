@@ -64,7 +64,15 @@ def test_find_opportunities_real_defaults_to_example_universe(monkeypatch, rando
 
 
 def test_find_opportunities_includes_earnings_and_news_when_requested(monkeypatch, random_walk_df):
+    # This test is about the overlay *wiring*, not the ensemble's mood on the
+    # fixture — pin recommend() to a BUY so the entry reliably exists no
+    # matter how the real strategies read the random walk.
     monkeypatch.setattr(opportunities_module, "get_ohlcv", lambda symbol, period="2y", interval="1d": random_walk_df)
+    monkeypatch.setattr(
+        opportunities_module,
+        "recommend",
+        lambda df, symbol="", **k: {"symbol": symbol, "overall_action": "BUY", "confidence_pct": 80.0},
+    )
     monkeypatch.setattr(
         opportunities_module,
         "apply_earnings_overlay",
@@ -77,7 +85,7 @@ def test_find_opportunities_includes_earnings_and_news_when_requested(monkeypatc
     )
     report = find_opportunities_real(["OK"], include_earnings=True, include_news=True)
     entries = report["top_buy"] + report["top_sell"]
-    assert entries, "expected at least one BUY or SELL entry from the random walk fixture"
+    assert entries, "expected at least one BUY or SELL entry from the pinned recommendation"
     assert all("earnings" in e and "news" in e for e in entries)
 
 
