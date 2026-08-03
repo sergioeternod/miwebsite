@@ -10,3 +10,4 @@ scripts/sim_10y_result.json
 scripts/sim_3y_real_result.json
 scripts/sim_3y_real_result_OLD_confidence_ranking.json
 scripts/compare_selection_result.json
+scripts/sim_1m_result.json
