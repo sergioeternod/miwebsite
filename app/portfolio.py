@@ -182,6 +182,40 @@ def _default_symbols() -> list[str]:
     return [entry["symbol"] for symbols in EXAMPLE_SYMBOLS.values() for entry in symbols]
 
 
+def _buy_hold_benchmark(
+    usable: dict[str, pd.DataFrame],
+    start_idx_by_symbol: dict[str, int],
+    capital_by_symbol: dict[str, float],
+    commission_bps: float | None,
+) -> dict:
+    """The honesty yardstick: same symbols, same capital split, bought at the
+    first simulated bar's close and never touched again (one entry commission,
+    long-only regardless of what the model's call was). Every simulation
+    report carries this so an "up 20%" run can't quietly hide that doing
+    nothing would have made more — the gap to this number, not the raw
+    return, is what the daily recalculation actually earned."""
+    per_symbol = {}
+    for symbol, capital in capital_by_symbol.items():
+        df = usable[symbol]
+        window = df.iloc[start_idx_by_symbol[symbol]:]
+        bps = commission_bps if commission_bps is not None else default_commission_bps(symbol)
+        gross = float(window["Close"].iloc[-1]) / float(window["Close"].iloc[0])
+        per_symbol[symbol] = round(capital * gross * (1 - bps / 10000), 2)
+
+    final_equity = round(sum(per_symbol.values()), 2)
+    initial_capital = round(sum(capital_by_symbol.values()), 2)
+    return {
+        "description": (
+            "Mismos símbolos y mismo reparto de capital, comprados (long) al cierre del primer "
+            "día simulado y mantenidos sin operar hasta el final — el punto de comparación pasivo."
+        ),
+        "final_equity": final_equity,
+        "total_pnl_amount": round(final_equity - initial_capital, 2),
+        "total_return_pct": round((final_equity / initial_capital - 1) * 100, 2),
+        "per_symbol": per_symbol,
+    }
+
+
 def _find_start_index(df: pd.DataFrame, start_date: str) -> int:
     return int(df.index.searchsorted(pd.Timestamp(start_date)))
 
@@ -197,6 +231,7 @@ def _select_portfolio(
     include_earnings: bool = False,
     include_news: bool = False,
     max_per_asset_class: int | None = DEFAULT_MAX_PER_ASSET_CLASS,
+    short_confidence_premium: float = 0.0,
 ) -> list[dict]:
     """Ranks symbols using only data strictly before the simulation's start
     index (no lookahead), and returns the top `portfolio_size` — BUY and
@@ -237,7 +272,13 @@ def _select_portfolio(
         if include_news:
             rec = apply_news_overlay(rec, symbol)
 
-        if rec["overall_action"] not in allowed_actions or rec["confidence_pct"] < min_confidence_pct:
+        required_confidence = min_confidence_pct
+        if rec["overall_action"] == "SELL":
+            # Same asymmetry gate the walk-forward applies (see
+            # _walk_forward_result on short_confidence_premium): a short
+            # candidate must clear a higher conviction bar than a long one.
+            required_confidence += short_confidence_premium
+        if rec["overall_action"] not in allowed_actions or rec["confidence_pct"] < required_confidence:
             continue
 
         best_strategy = rec.get("best_historical_strategy", {})
@@ -338,6 +379,7 @@ def _walk_forward_result(
     min_confidence_pct: float = 55.0,
     adaptive_learning: bool = True,
     stop_loss_pct: float | None = DEFAULT_STOP_LOSS_PCT,
+    short_confidence_premium: float = 0.0,
 ) -> dict:
     """Recomputes the ensemble recommendation every `step` bars from
     `start_idx` onward (using only df.iloc[:t+1] each time — never later
@@ -369,6 +411,15 @@ def _walk_forward_result(
     exit rule in this simulator that doesn't wait for `recommend()` to
     change its mind.
 
+    `short_confidence_premium` (default 0, i.e. off) demands that many extra
+    confidence points before acting on a SELL when shorts are enabled —
+    grounded in the measured asymmetry that this engine's shorts lost money
+    in every saved multi-year run while its longs made money in all of them
+    (markets drift upward over long horizons, so a short is a bet against
+    the baseline, not just against the symbol). It only gates *opening or
+    holding into* a short; a SELL under `allow_short=False` (which merely
+    flattens a long, a defensive move) is never premium-gated.
+
     `commission_bps=None` resolves once to a realistic default for `symbol`'s
     instrument type — resolved here (not left to `recommend()`/`run_backtest`
     to resolve internally) because this function also uses it directly for
@@ -395,8 +446,11 @@ def _walk_forward_result(
             if adaptive_learning:
                 closed_so_far = _closed_trades_so_far(df, positions, start_idx, t, commission_bps, capital)
                 effective_min_confidence += _recent_regret_boost(closed_so_far, commission_bps)
+            required_confidence = effective_min_confidence
+            if action == "SELL" and allow_short:
+                required_confidence += short_confidence_premium
             new_current = current
-            if rec["confidence_pct"] >= effective_min_confidence:
+            if rec["confidence_pct"] >= required_confidence:
                 if action == "BUY":
                     new_current = 1
                 elif action == "SELL":
@@ -463,6 +517,7 @@ def _run_simulation(
     max_per_asset_class: int | None = DEFAULT_MAX_PER_ASSET_CLASS,
     risk_parity_sizing: bool = True,
     stop_loss_pct: float | None = DEFAULT_STOP_LOSS_PCT,
+    short_confidence_premium: float = 0.0,
 ) -> dict:
     if step < 1:
         raise ValueError("step debe ser >= 1")
@@ -494,6 +549,7 @@ def _run_simulation(
         include_earnings,
         include_news,
         max_per_asset_class,
+        short_confidence_premium,
     )
     if not portfolio:
         raise ValueError(
@@ -521,6 +577,7 @@ def _run_simulation(
             min_confidence_pct,
             adaptive_learning,
             stop_loss_pct,
+            short_confidence_premium,
         )
         for c in portfolio
     ]
@@ -529,6 +586,7 @@ def _run_simulation(
     final_equity = round(float(portfolio_equity_curve.iloc[-1]), 2)
     num_trading_days = max(len(r["equity_curve"]) for r in per_symbol_results)
     all_trades = [trade for r in per_symbol_results for trade in r["trades"]]
+    benchmark = _buy_hold_benchmark(usable, start_idx_by_symbol, capital_by_symbol, commission_bps)
 
     return {
         "start_date": start_date,
@@ -555,6 +613,10 @@ def _run_simulation(
             {"date": str(d.date()), "equity": round(float(v), 2)} for d, v in portfolio_equity_curve.items()
         ],
         "hindsight_summary": hindsight_summary(all_trades),
+        "benchmark_buy_hold": benchmark,
+        "vs_benchmark_pct_points": round(
+            (final_equity / initial_capital - 1) * 100 - benchmark["total_return_pct"], 2
+        ),
         "errors": errors,
         "disclaimer": DISCLAIMER,
     }
@@ -578,6 +640,7 @@ def simulate_portfolio_real(
     max_per_asset_class: int | None = DEFAULT_MAX_PER_ASSET_CLASS,
     risk_parity_sizing: bool = True,
     stop_loss_pct: float | None = DEFAULT_STOP_LOSS_PCT,
+    short_confidence_premium: float = 0.0,
 ) -> dict:
     """Auto-selects a portfolio (from real symbols, defaulting to the full
     example universe) using only data before `start_date`, then walks
@@ -627,6 +690,7 @@ def simulate_portfolio_real(
         max_per_asset_class,
         risk_parity_sizing,
         stop_loss_pct,
+        short_confidence_premium,
     )
 
 
@@ -647,6 +711,7 @@ def simulate_portfolio_synthetic(
     max_per_asset_class: int | None = None,
     risk_parity_sizing: bool = True,
     stop_loss_pct: float | None = DEFAULT_STOP_LOSS_PCT,
+    short_confidence_premium: float = 0.0,
 ) -> dict:
     """Same simulation, but over synthetic profiles reaching into 2026 —
     usable with no network access. Real dates only line up exactly with
@@ -688,4 +753,5 @@ def simulate_portfolio_synthetic(
         max_per_asset_class,
         risk_parity_sizing,
         stop_loss_pct,
+        short_confidence_premium,
     )

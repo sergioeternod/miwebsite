@@ -133,6 +133,10 @@ class PortfolioSimulateRequest(BaseModel):
         15.0,
         description="Cierra una posición si pierde más de este % desde que se abrió, sin importar la señal técnica. None para desactivarlo",
     )
+    short_confidence_premium: float = Field(
+        0.0,
+        description="Puntos de confianza extra que un SELL necesita (sobre min_confidence_pct) para abrir un corto — los longs no lo pagan. 0 = sin asimetría",
+    )
 
 
 class ValidateRequest(BaseModel):

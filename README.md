@@ -607,6 +607,30 @@ individualmente), y +20.68% en 3 años sigue muy por debajo de comprar
 El fix corrige un defecto lógico objetivo; una corrida en positivo no
 demuestra que mejore consistentemente en cualquier periodo.
 
+### Benchmark buy & hold en cada reporte, y asimetría long/short medida
+
+Dos adiciones que salen directo de la evidencia anterior:
+
+1. **`benchmark_buy_hold` en todo reporte del simulador de portafolio**:
+   mismos símbolos, mismo reparto de capital, comprados al cierre del
+   primer día simulado y nunca tocados (una comisión de entrada). El campo
+   `vs_benchmark_pct_points` da la diferencia en puntos porcentuales — si
+   es negativa, todo el recálculo diario rindió menos que no hacer nada.
+   Está siempre visible porque un "+20%" que pierde contra la pasividad no
+   es un logro, y sin este número al lado es fácil autoengañarse.
+2. **`short_confidence_premium`** (`--short-premium`, default 0 =
+   desactivado): puntos de confianza extra que un SELL necesita para abrir
+   un corto — los longs no lo pagan, y un SELL defensivo (cerrar un long
+   cuando los shorts están deshabilitados) tampoco. Fundamento medido: en
+   las tres corridas reales de 3 años guardadas, los longs ganaron dinero
+   en todas (+$2,259 / +$2,495 / +$3,841) y los shorts perdieron en todas
+   (-$5,165 / -$2,535 / -$1,773), con win rates de 28-39% incluso a
+   confianza de 90%+ — un corto apuesta contra la deriva alcista de largo
+   plazo del mercado, no solo contra el símbolo. El default se queda en 0
+   hasta validar un valor concreto en varios periodos; las tres corridas
+   comparten la misma ventana 2023-2026, así que la evidencia todavía
+   puede ser específica de una era alcista.
+
 ## Recomendaciones con historial de earnings (Finnhub)
 
 La recomendación técnica (`recommend`) no sabe nada de si una empresa

@@ -697,3 +697,115 @@ def test_walk_forward_result_no_stop_loss_when_disabled(monkeypatch):
     close_final = close.iloc[-1]
     expected_final = 10_000.0 * (close_final / close.iloc[199])
     assert result["equity_curve"].iloc[-1] == pytest.approx(expected_final, rel=1e-6)
+
+
+# ---------------------------------------------------------------------------
+# Buy & hold benchmark
+# ---------------------------------------------------------------------------
+
+
+def test_buy_hold_benchmark_math(long_uptrend_df):
+    from app.portfolio import _buy_hold_benchmark
+
+    start_idx = 200
+    capital = 1_000.0
+    bench = _buy_hold_benchmark(
+        {"SYM": long_uptrend_df}, {"SYM": start_idx}, {"SYM": capital}, commission_bps=0.0
+    )
+    close = long_uptrend_df["Close"]
+    expected = round(capital * float(close.iloc[-1]) / float(close.iloc[start_idx]), 2)
+    assert bench["per_symbol"]["SYM"] == pytest.approx(expected)
+    assert bench["final_equity"] == pytest.approx(expected)
+    assert bench["total_return_pct"] == pytest.approx((expected / capital - 1) * 100, abs=0.01)
+
+
+def test_buy_hold_benchmark_charges_one_entry_commission(long_uptrend_df):
+    from app.portfolio import _buy_hold_benchmark
+
+    free = _buy_hold_benchmark({"SYM": long_uptrend_df}, {"SYM": 200}, {"SYM": 1_000.0}, commission_bps=0.0)
+    fee = _buy_hold_benchmark({"SYM": long_uptrend_df}, {"SYM": 200}, {"SYM": 1_000.0}, commission_bps=100.0)
+    assert fee["final_equity"] == pytest.approx(free["final_equity"] * (1 - 0.01), rel=1e-6)
+
+
+def test_simulate_portfolio_synthetic_report_includes_benchmark(monkeypatch):
+    monkeypatch.setattr(portfolio_module, "recommend", lambda *a, **k: _fake_rec(action="BUY", confidence=80.0))
+    report = simulate_portfolio_synthetic(portfolio_size=2, step=30)
+
+    bench = report["benchmark_buy_hold"]
+    assert set(bench["per_symbol"]) == {p["symbol"] for p in report["portfolio"]}
+    assert bench["final_equity"] == pytest.approx(sum(bench["per_symbol"].values()), abs=0.05)
+    assert report["vs_benchmark_pct_points"] == pytest.approx(
+        report["total_return_pct"] - bench["total_return_pct"], abs=0.05
+    )
+
+
+# ---------------------------------------------------------------------------
+# Short confidence premium
+# ---------------------------------------------------------------------------
+
+
+def test_walk_forward_short_premium_blocks_marginal_sells(monkeypatch, long_uptrend_df):
+    monkeypatch.setattr(portfolio_module, "recommend", lambda *a, **k: {"overall_action": "SELL", "confidence_pct": 60.0})
+
+    gated = _walk_forward_result(
+        long_uptrend_df, 200, "SYM", allow_short=True, capital=10_000.0, commission_bps=0.0, step=5,
+        min_confidence_pct=55.0, short_confidence_premium=10.0,
+    )
+    ungated = _walk_forward_result(
+        long_uptrend_df, 200, "SYM", allow_short=True, capital=10_000.0, commission_bps=0.0, step=5,
+        min_confidence_pct=55.0, short_confidence_premium=0.0,
+    )
+
+    assert gated["trades"] == []  # 60 < 55 + 10: the short never opens
+    assert ungated["trades"] != []  # 60 >= 55: without the premium it does
+
+
+def test_walk_forward_short_premium_does_not_gate_buys(monkeypatch, long_uptrend_df):
+    monkeypatch.setattr(portfolio_module, "recommend", lambda *a, **k: {"overall_action": "BUY", "confidence_pct": 60.0})
+    result = _walk_forward_result(
+        long_uptrend_df, 200, "SYM", allow_short=True, capital=10_000.0, commission_bps=0.0, step=5,
+        min_confidence_pct=55.0, short_confidence_premium=50.0,
+    )
+    assert result["trades"] != []  # a BUY at 60 never pays the short premium
+
+
+def test_walk_forward_short_premium_does_not_gate_defensive_sell_when_shorts_disabled(monkeypatch, long_uptrend_df):
+    """With allow_short=False a SELL just flattens the long — a defensive
+    move that must not be premium-gated."""
+    calls = {"n": 0}
+
+    def buy_then_sell(window, *a, **k):
+        calls["n"] += 1
+        if calls["n"] == 1:
+            return {"overall_action": "BUY", "confidence_pct": 90.0}
+        return {"overall_action": "SELL", "confidence_pct": 60.0}
+
+    monkeypatch.setattr(portfolio_module, "recommend", buy_then_sell)
+    result = _walk_forward_result(
+        long_uptrend_df, 200, "SYM", allow_short=False, capital=10_000.0, commission_bps=0.0, step=5,
+        min_confidence_pct=55.0, short_confidence_premium=50.0, adaptive_learning=False,
+    )
+    closed = [t for t in result["trades"] if not t.get("open")]
+    assert closed, "the SELL at 60 must have closed the long despite the 50-point short premium"
+
+
+def test_select_portfolio_short_premium_filters_sell_candidates(monkeypatch, long_uptrend_df):
+    def fake_recommend(window, symbol="", **k):
+        action = "SELL" if symbol == "BEARISH" else "BUY"
+        return _fake_rec(action=action, confidence=60.0)
+
+    monkeypatch.setattr(portfolio_module, "recommend", fake_recommend)
+    dfs = {"BEARISH": long_uptrend_df, "BULLISH": long_uptrend_df}
+    start_idx_by_symbol = {s: 200 for s in dfs}
+
+    gated = _select_portfolio(
+        dfs, start_idx_by_symbol, portfolio_size=2, allow_short=True, initial_capital=10_000.0,
+        commission_bps=5.0, min_confidence_pct=55.0, short_confidence_premium=10.0,
+    )
+    ungated = _select_portfolio(
+        dfs, start_idx_by_symbol, portfolio_size=2, allow_short=True, initial_capital=10_000.0,
+        commission_bps=5.0, min_confidence_pct=55.0,
+    )
+
+    assert [c["symbol"] for c in gated] == ["BULLISH"]
+    assert {c["symbol"] for c in ungated} == {"BEARISH", "BULLISH"}

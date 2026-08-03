@@ -309,6 +309,7 @@ def post_simulate_portfolio(request: PortfolioSimulateRequest) -> dict:
         include_news=request.with_news,
         risk_parity_sizing=request.risk_parity_sizing,
         stop_loss_pct=request.stop_loss_pct,
+        short_confidence_premium=request.short_confidence_premium,
     )
     if request.max_per_asset_class is not None:
         # Omit otherwise so each path's own smart default applies (2 for

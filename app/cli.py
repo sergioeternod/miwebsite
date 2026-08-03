@@ -298,6 +298,7 @@ def cmd_portfolio_sim(args: argparse.Namespace) -> None:
         include_news=args.with_news,
         risk_parity_sizing=not args.equal_weight,
         stop_loss_pct=None if args.no_stop_loss else args.stop_loss_pct,
+        short_confidence_premium=args.short_premium,
     )
     if args.max_per_asset_class is not None:
         # Omit otherwise so each path's own smart default applies (2 for
@@ -336,6 +337,8 @@ def cmd_portfolio_sim(args: argparse.Namespace) -> None:
             for p in report["per_symbol"]
         ],
         "hindsight_summary": report["hindsight_summary"],
+        "benchmark_buy_hold": report["benchmark_buy_hold"],
+        "vs_benchmark_pct_points": report["vs_benchmark_pct_points"],
         "errors": report["errors"],
     }
     if args.out:
@@ -571,6 +574,10 @@ def build_parser() -> argparse.ArgumentParser:
     )
     portfolio_sim_parser.add_argument(
         "--no-stop-loss", action="store_true", help="Desactiva el stop-loss por posición",
+    )
+    portfolio_sim_parser.add_argument(
+        "--short-premium", type=float, default=0.0,
+        help="Puntos de confianza extra que un SELL necesita (sobre --min-confidence) para abrir un corto — los longs no lo pagan. 0 = sin asimetría (default)",
     )
     portfolio_sim_parser.add_argument("--out", default=None, help="Ruta donde guardar el reporte completo en JSON")
     portfolio_sim_parser.set_defaults(func=cmd_portfolio_sim)
