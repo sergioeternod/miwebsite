@@ -368,6 +368,42 @@ def _stop_loss_triggered(price_today: float, entry_price: float, direction: int,
     return move_in_position_direction_pct <= -stop_loss_pct
 
 
+# Risk-regime position scaling: crashes weren't predictable in this engine's
+# own record (verified empirically — the eve of the Aug-2024 drop read HOLD
+# with RSI already reacting, and the Jan-2026 peak read HOLD 80.6% with zero
+# warning), but *rising realized volatility* is measurable the moment it
+# appears. This indicator doesn't try to call the top; it shrinks how much a
+# hit hurts: when recent (short-window) volatility runs above the longer-term
+# baseline, position exposure is scaled down proportionally, recovering to
+# full size when volatility normalizes.
+VOL_REGIME_SHORT_WINDOW = 20  # ~1 trading month of daily bars
+VOL_REGIME_LONG_WINDOW = 100  # ~5 trading months: the "normal" baseline
+VOL_REGIME_MIN_EXPOSURE = 0.25  # never fully exits — this dampens, the signal/stop-loss decide exits
+
+
+def _vol_regime_exposure(close: pd.Series) -> pd.Series:
+    """Per-bar exposure fraction in [`VOL_REGIME_MIN_EXPOSURE`, 1.0]:
+    `long_window_vol / short_window_vol`, capped at 1.0 — so calm or
+    calming markets trade at full size and a volatility spike cuts size
+    roughly in proportion to how far current vol exceeds its baseline.
+
+    Causal by construction: each bar's value comes from `rolling()` windows
+    ending at that bar, so bar t's exposure uses only closes up to t — the
+    same no-lookahead guarantee as the rest of the walk-forward. Bars
+    without enough history (and degenerate zero-vol stretches) default to
+    full exposure (1.0): no evidence of elevated risk isn't evidence of
+    risk."""
+    returns = close.pct_change()
+    # ddof=0 (population std) so windows of different lengths measuring the
+    # *same* underlying volatility produce the same number — with the default
+    # ddof=1, the shorter window reads systematically higher and a perfectly
+    # steady market would get (slightly) penalized for nothing.
+    short_vol = returns.rolling(VOL_REGIME_SHORT_WINDOW).std(ddof=0)
+    long_vol = returns.rolling(VOL_REGIME_LONG_WINDOW).std(ddof=0)
+    ratio = (long_vol / short_vol).replace([float("inf"), float("-inf")], 1.0)
+    return ratio.clip(lower=VOL_REGIME_MIN_EXPOSURE, upper=1.0).fillna(1.0)
+
+
 def _walk_forward_result(
     df: pd.DataFrame,
     start_idx: int,
@@ -380,6 +416,7 @@ def _walk_forward_result(
     adaptive_learning: bool = True,
     stop_loss_pct: float | None = DEFAULT_STOP_LOSS_PCT,
     short_confidence_premium: float = 0.0,
+    risk_regime_sizing: bool = False,
 ) -> dict:
     """Recomputes the ensemble recommendation every `step` bars from
     `start_idx` onward (using only df.iloc[:t+1] each time — never later
@@ -419,6 +456,14 @@ def _walk_forward_result(
     the baseline, not just against the symbol). It only gates *opening or
     holding into* a short; a SELL under `allow_short=False` (which merely
     flattens a long, a defensive move) is never premium-gated.
+
+    `risk_regime_sizing` (default off, pending validation) applies
+    `_vol_regime_exposure` to the position: same entries and exits, but the
+    dollar exposure of whatever position is held shrinks while short-term
+    realized volatility runs above its longer-term baseline. Commissions
+    are charged on changes in *effective* exposure (position × scale), so
+    the gradual re-scaling itself pays trading costs rather than being
+    modeled as free.
 
     `commission_bps=None` resolves once to a realistic default for `symbol`'s
     instrument type — resolved here (not left to `recommend()`/`run_backtest`
@@ -465,8 +510,16 @@ def _walk_forward_result(
     sim_df["position"] = pd.Series(positions, index=df.index).iloc[start_idx:]
 
     daily_returns = sim_df["Close"].pct_change().fillna(0)
-    position_shifted = sim_df["position"].shift(1).fillna(0)
-    trade_changes = sim_df["position"].diff().abs().fillna(0)
+    if risk_regime_sizing:
+        # `_vol_regime_exposure` is causal (rolling windows ending at each
+        # bar), so computing it over the full df and slicing is identical to
+        # recomputing it inside the day loop — just far cheaper.
+        exposure = _vol_regime_exposure(df["Close"]).iloc[start_idx:]
+        effective_position = sim_df["position"] * exposure
+    else:
+        effective_position = sim_df["position"].astype(float)
+    position_shifted = effective_position.shift(1).fillna(0)
+    trade_changes = effective_position.diff().abs().fillna(0)
     commission_rate = commission_bps / 10000
     period_returns = position_shifted * daily_returns - trade_changes * commission_rate
     equity_curve = capital * (1 + period_returns).cumprod()
@@ -478,12 +531,19 @@ def _walk_forward_result(
     for trade in trades:
         trade["symbol"] = symbol
 
+    holding_bars = sim_df["position"] != 0
+    if risk_regime_sizing and bool(holding_bars.any()):
+        avg_exposure_pct = round(float(exposure[holding_bars].mean()) * 100, 1)
+    else:
+        avg_exposure_pct = 100.0
+
     return {
         "symbol": symbol,
         "equity_curve": equity_curve,
         "trades": trades,
         "metrics": metrics,
         "hindsight_summary": hindsight_summary(trades),
+        "risk_regime_avg_exposure_pct": avg_exposure_pct,
     }
 
 
@@ -518,6 +578,7 @@ def _run_simulation(
     risk_parity_sizing: bool = True,
     stop_loss_pct: float | None = DEFAULT_STOP_LOSS_PCT,
     short_confidence_premium: float = 0.0,
+    risk_regime_sizing: bool = False,
 ) -> dict:
     if step < 1:
         raise ValueError("step debe ser >= 1")
@@ -578,6 +639,7 @@ def _run_simulation(
             adaptive_learning,
             stop_loss_pct,
             short_confidence_premium,
+            risk_regime_sizing,
         )
         for c in portfolio
     ]
@@ -598,6 +660,7 @@ def _run_simulation(
         "final_equity": final_equity,
         "total_pnl_amount": round(final_equity - initial_capital, 2),
         "total_return_pct": round((final_equity / initial_capital - 1) * 100, 2),
+        "risk_regime_sizing": risk_regime_sizing,
         "per_symbol": [
             {
                 "symbol": r["symbol"],
@@ -606,6 +669,7 @@ def _run_simulation(
                 "metrics": r["metrics"],
                 "trades": r["trades"],
                 "hindsight_summary": r["hindsight_summary"],
+                "risk_regime_avg_exposure_pct": r["risk_regime_avg_exposure_pct"],
             }
             for r in per_symbol_results
         ],
@@ -641,6 +705,7 @@ def simulate_portfolio_real(
     risk_parity_sizing: bool = True,
     stop_loss_pct: float | None = DEFAULT_STOP_LOSS_PCT,
     short_confidence_premium: float = 0.0,
+    risk_regime_sizing: bool = False,
 ) -> dict:
     """Auto-selects a portfolio (from real symbols, defaulting to the full
     example universe) using only data before `start_date`, then walks
@@ -662,7 +727,11 @@ def simulate_portfolio_real(
     sizes each position inversely to its own historical volatility instead
     of splitting capital equally (see `_risk_parity_weights`).
     `stop_loss_pct` is a hard per-position exit independent of the
-    technical signal (`None` to disable — see `_walk_forward_result`)."""
+    technical signal (`None` to disable — see `_walk_forward_result`).
+    `risk_regime_sizing` scales position exposure down while short-term
+    realized volatility runs above its longer-term baseline (see
+    `_vol_regime_exposure`) — off by default pending multi-window
+    validation."""
     symbols = symbols or _default_symbols()
 
     dfs = {}
@@ -691,6 +760,7 @@ def simulate_portfolio_real(
         risk_parity_sizing,
         stop_loss_pct,
         short_confidence_premium,
+        risk_regime_sizing,
     )
 
 
@@ -712,6 +782,7 @@ def simulate_portfolio_synthetic(
     risk_parity_sizing: bool = True,
     stop_loss_pct: float | None = DEFAULT_STOP_LOSS_PCT,
     short_confidence_premium: float = 0.0,
+    risk_regime_sizing: bool = False,
 ) -> dict:
     """Same simulation, but over synthetic profiles reaching into 2026 —
     usable with no network access. Real dates only line up exactly with
@@ -754,4 +825,5 @@ def simulate_portfolio_synthetic(
         risk_parity_sizing,
         stop_loss_pct,
         short_confidence_premium,
+        risk_regime_sizing,
     )

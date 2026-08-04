@@ -140,6 +140,10 @@ class PortfolioSimulateRequest(BaseModel):
         0.0,
         description="Puntos de confianza extra que un SELL necesita (sobre min_confidence_pct) para abrir un corto — los longs no lo pagan. 0 = sin asimetría",
     )
+    risk_regime_sizing: bool = Field(
+        False,
+        description="Reduce el tamaño de las posiciones mientras la volatilidad realizada reciente (20 barras) supera su línea base de largo plazo (100 barras) — no predice caídas, achica cuánto pegan. Desactivado por defecto, pendiente de validación multi-ventana",
+    )
 
 
 class ValidateRequest(BaseModel):

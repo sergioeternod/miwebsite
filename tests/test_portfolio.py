@@ -809,3 +809,128 @@ def test_select_portfolio_short_premium_filters_sell_candidates(monkeypatch, lon
 
     assert [c["symbol"] for c in gated] == ["BULLISH"]
     assert {c["symbol"] for c in ungated} == {"BEARISH", "BULLISH"}
+
+
+# ---------------------------------------------------------------------------
+# Risk-regime position sizing (realized-volatility exposure scaling)
+# ---------------------------------------------------------------------------
+
+
+def _alternating_returns_close(pcts: list[float], start: float = 100.0) -> pd.Series:
+    """Builds a close series from a list of per-bar % returns."""
+    closes = [start]
+    for pct in pcts:
+        closes.append(closes[-1] * (1 + pct / 100))
+    return pd.Series(closes)
+
+
+def test_vol_regime_exposure_full_when_vol_is_constant():
+    from app.portfolio import _vol_regime_exposure
+
+    # Alternating +1%/-1% forever: short-window and long-window realized vol
+    # are identical, so the ratio is exactly 1 -> full exposure.
+    close = _alternating_returns_close([1.0, -1.0] * 150)
+    exposure = _vol_regime_exposure(close)
+    assert np.allclose(exposure, 1.0)
+
+
+def test_vol_regime_exposure_stays_within_bounds():
+    from app.portfolio import VOL_REGIME_MIN_EXPOSURE, _vol_regime_exposure
+
+    rng = np.random.default_rng(7)
+    close = pd.Series(100 * np.cumprod(1 + rng.normal(0, 0.02, 400)))
+    exposure = _vol_regime_exposure(close)
+    assert (exposure >= VOL_REGIME_MIN_EXPOSURE).all()
+    assert (exposure <= 1.0).all()
+
+
+def test_vol_regime_exposure_drops_after_vol_spike():
+    from app.portfolio import _vol_regime_exposure
+
+    calm = [0.3, -0.3] * 100  # 200 calm bars
+    wild = [4.0, -4.0] * 15  # 30 bars at ~13x the calm volatility
+    close = _alternating_returns_close(calm + wild)
+    exposure = _vol_regime_exposure(close)
+    assert exposure.iloc[150] == pytest.approx(1.0)  # calm stretch trades at full size
+    # By the end, the 20-bar window is all-wild while the 100-bar baseline
+    # still mixes in 70 calm bars: exposure ~ sqrt((30*4^2+70*0.3^2)/100)/4 ~ 0.55.
+    assert exposure.iloc[-1] < 0.6  # spike cuts exposure to roughly half
+
+
+def test_vol_regime_exposure_full_on_flat_series():
+    from app.portfolio import _vol_regime_exposure
+
+    # Zero volatility everywhere -> degenerate 0/0 ratios must not produce
+    # NaN/inf exposure; "no evidence of risk" defaults to full size.
+    exposure = _vol_regime_exposure(pd.Series([100.0] * 300))
+    assert (exposure == 1.0).all()
+
+
+def test_vol_regime_exposure_is_causal():
+    from app.portfolio import _vol_regime_exposure
+
+    rng = np.random.default_rng(11)
+    returns = rng.normal(0, 0.015, 400)
+    close_full = pd.Series(100 * np.cumprod(1 + returns))
+    # Same history up to bar 250, then a violently different future.
+    altered = returns.copy()
+    altered[250:] = 0.08
+    close_altered = pd.Series(100 * np.cumprod(1 + altered))
+
+    exp_full = _vol_regime_exposure(close_full)
+    exp_altered = _vol_regime_exposure(close_altered)
+    # Exposure at every bar up to 250 must be identical: bar t uses only
+    # closes up to t, so the future can't reach back.
+    pd.testing.assert_series_equal(exp_full.iloc[:250], exp_altered.iloc[:250])
+
+
+def test_walk_forward_risk_regime_softens_a_volatile_crash(monkeypatch):
+    """Buy once, hold forever (stop-loss disabled), then a high-volatility
+    crash: the regime-sized arm must lose less than the full-size arm,
+    because rising realized vol shrank its exposure on the way down."""
+    calm = [0.2, -0.2] * 100  # 200 calm bars
+    crash = [-5.0, 1.0] * 20  # 40 bars: violent, net-down
+    close = _alternating_returns_close(calm + crash)
+    df = _make_ohlcv(close)
+
+    def buy_once_then_hold(window, *a, **k):
+        action = "BUY" if len(window) == 201 else "HOLD"
+        return {"overall_action": action, "confidence_pct": 80.0}
+
+    monkeypatch.setattr(portfolio_module, "recommend", buy_once_then_hold)
+
+    common = dict(allow_short=False, capital=10_000.0, commission_bps=0.0, step=1, stop_loss_pct=None)
+    scaled = _walk_forward_result(df, 200, "SYM", risk_regime_sizing=True, **common)
+    full_size = _walk_forward_result(df, 200, "SYM", risk_regime_sizing=False, **common)
+
+    assert scaled["equity_curve"].iloc[-1] > full_size["equity_curve"].iloc[-1]
+    assert scaled["risk_regime_avg_exposure_pct"] < 100.0
+    assert full_size["risk_regime_avg_exposure_pct"] == 100.0
+
+
+def test_walk_forward_risk_regime_matches_full_size_in_calm_market(monkeypatch, long_uptrend_df):
+    """In a market whose volatility never rises above its own baseline, the
+    regime filter must be a no-op — same equity curve to the cent."""
+    monkeypatch.setattr(
+        portfolio_module, "recommend", lambda *a, **k: {"overall_action": "BUY", "confidence_pct": 80.0}
+    )
+    close = _alternating_returns_close([0.5, -0.5] * 150)
+    df = _make_ohlcv(close)
+    common = dict(allow_short=False, capital=10_000.0, commission_bps=2.0, step=1)
+    scaled = _walk_forward_result(df, 200, "SYM", risk_regime_sizing=True, **common)
+    full_size = _walk_forward_result(df, 200, "SYM", risk_regime_sizing=False, **common)
+    pd.testing.assert_series_equal(scaled["equity_curve"], full_size["equity_curve"])
+
+
+def test_simulate_portfolio_synthetic_reports_risk_regime_flag(monkeypatch):
+    monkeypatch.setattr(portfolio_module, "recommend", lambda *a, **k: _fake_rec(action="BUY", confidence=80.0))
+
+    off = simulate_portfolio_synthetic(start_date="2026-01-01", portfolio_size=2)
+    on = simulate_portfolio_synthetic(start_date="2026-01-01", portfolio_size=2, risk_regime_sizing=True)
+
+    assert off["risk_regime_sizing"] is False
+    assert on["risk_regime_sizing"] is True
+    for entry in off["per_symbol"]:
+        assert entry["risk_regime_avg_exposure_pct"] == 100.0
+    for entry in on["per_symbol"]:
+        assert 25.0 <= entry["risk_regime_avg_exposure_pct"] <= 100.0

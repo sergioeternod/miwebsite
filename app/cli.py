@@ -300,6 +300,7 @@ def cmd_portfolio_sim(args: argparse.Namespace) -> None:
         risk_parity_sizing=not args.equal_weight,
         stop_loss_pct=None if args.no_stop_loss else args.stop_loss_pct,
         short_confidence_premium=args.short_premium,
+        risk_regime_sizing=args.risk_regime,
     )
     if args.max_per_asset_class is not None:
         # Omit otherwise so each path's own smart default applies (2 for
@@ -596,6 +597,10 @@ def build_parser() -> argparse.ArgumentParser:
     portfolio_sim_parser.add_argument(
         "--short-premium", type=float, default=0.0,
         help="Puntos de confianza extra que un SELL necesita (sobre --min-confidence) para abrir un corto — los longs no lo pagan. 0 = sin asimetría (default)",
+    )
+    portfolio_sim_parser.add_argument(
+        "--risk-regime", action="store_true",
+        help="Reduce el tamaño de las posiciones mientras la volatilidad realizada reciente supera su línea base de largo plazo (desactivado por defecto, pendiente de validación multi-ventana)",
     )
     portfolio_sim_parser.add_argument("--out", default=None, help="Ruta donde guardar el reporte completo en JSON")
     portfolio_sim_parser.set_defaults(func=cmd_portfolio_sim)
