@@ -1,0 +1,35 @@
+{
+  "elapsed_seconds": 827.8,
+  "num_periods": 1,
+  "num_long_only_better": 1,
+  "avg_return_pct_delta_long_only_minus_shorts": 56.15,
+  "results": [
+    {
+      "period": "2007-07-30 (+3y)",
+      "with_shorts": {
+        "portfolio": [
+          "AMZN",
+          "USDJPY=X",
+          "NVDA",
+          "CL=F",
+          "^GSPC"
+        ],
+        "final_equity": 5735.66,
+        "total_pnl_amount": -4264.34,
+        "total_return_pct": -42.64
+      },
+      "long_only": {
+        "portfolio": [
+          "NVDA",
+          "^GSPC",
+          "AAPL",
+          "CL=F"
+        ],
+        "final_equity": 11350.86,
+        "total_pnl_amount": 1350.86,
+        "total_return_pct": 13.51
+      },
+      "long_only_better": true
+    }
+  ]
+}
