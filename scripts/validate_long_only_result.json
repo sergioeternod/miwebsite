@@ -1,0 +1,146 @@
+{
+  "elapsed_seconds": 4383.0,
+  "num_periods": 5,
+  "num_long_only_better": 5,
+  "avg_return_pct_delta_long_only_minus_shorts": 51.3,
+  "results": [
+    {
+      "period": "2014-07-30 -> 2017-07-30",
+      "with_shorts": {
+        "portfolio": [
+          "EURUSD=X",
+          "^GSPC",
+          "MSFT",
+          "^IXIC",
+          "SI=F"
+        ],
+        "final_equity": 8304.04,
+        "total_pnl_amount": -1695.96,
+        "total_return_pct": -16.96
+      },
+      "long_only": {
+        "portfolio": [
+          "MSFT",
+          "^IXIC",
+          "AMZN",
+          "USDMXN=X"
+        ],
+        "final_equity": 16853.1,
+        "total_pnl_amount": 6853.1,
+        "total_return_pct": 68.53
+      },
+      "long_only_better": true
+    },
+    {
+      "period": "2017-07-30 -> 2020-07-30",
+      "with_shorts": {
+        "portfolio": [
+          "AAPL",
+          "^GSPC",
+          "TSLA",
+          "^IXIC",
+          "USDMXN=X"
+        ],
+        "final_equity": 10771.83,
+        "total_pnl_amount": 771.83,
+        "total_return_pct": 7.72
+      },
+      "long_only": {
+        "portfolio": [
+          "^IXIC",
+          "NVDA",
+          "^DJI",
+          "AAPL",
+          "EURUSD=X"
+        ],
+        "final_equity": 14321.48,
+        "total_pnl_amount": 4321.48,
+        "total_return_pct": 43.21
+      },
+      "long_only_better": true
+    },
+    {
+      "period": "2019-07-30 -> 2022-07-30",
+      "with_shorts": {
+        "portfolio": [
+          "GBPUSD=X",
+          "GC=F",
+          "MSFT",
+          "^GSPC",
+          "EURUSD=X"
+        ],
+        "final_equity": 8763.72,
+        "total_pnl_amount": -1236.28,
+        "total_return_pct": -12.36
+      },
+      "long_only": {
+        "portfolio": [
+          "NVDA",
+          "MSFT",
+          "GC=F",
+          "^GSPC",
+          "^DJI"
+        ],
+        "final_equity": 14698.45,
+        "total_pnl_amount": 4698.45,
+        "total_return_pct": 46.98
+      },
+      "long_only_better": true
+    },
+    {
+      "period": "2021-07-30 -> 2024-07-30",
+      "with_shorts": {
+        "portfolio": [
+          "^GSPC",
+          "^DJI",
+          "MSFT",
+          "USDMXN=X",
+          "EURUSD=X"
+        ],
+        "final_equity": 8107.42,
+        "total_pnl_amount": -1892.58,
+        "total_return_pct": -18.93
+      },
+      "long_only": {
+        "portfolio": [
+          "^GSPC",
+          "^DJI",
+          "CL=F",
+          "MSFT",
+          "AAPL"
+        ],
+        "final_equity": 12366.63,
+        "total_pnl_amount": 2366.63,
+        "total_return_pct": 23.67
+      },
+      "long_only_better": true
+    },
+    {
+      "period": "2023-07-30 -> 2026-07-30",
+      "with_shorts": {
+        "portfolio": [
+          "USDMXN=X",
+          "GC=F",
+          "^GSPC",
+          "GBPUSD=X",
+          "ETH-USD"
+        ],
+        "final_equity": 11498.88,
+        "total_pnl_amount": 1498.88,
+        "total_return_pct": 14.99
+      },
+      "long_only": {
+        "portfolio": [
+          "USDMXN=X",
+          "^DJI",
+          "AAPL",
+          "NVDA"
+        ],
+        "final_equity": 14858.58,
+        "total_pnl_amount": 4858.58,
+        "total_return_pct": 48.59
+      },
+      "long_only_better": true
+    }
+  ]
+}

@@ -63,6 +63,13 @@ def run_arm(usable, start_idx_by_symbol, allow_short):
 
 
 if __name__ == "__main__":
+    import sys
+
+    # Optional: pass start dates as argv to test other windows (e.g. the
+    # 2007-2010 financial-crisis stress window) without editing the file.
+    if len(sys.argv) > 1:
+        PERIODS = [{"label": f"{d} (+3y)", "start_date": d} for d in sys.argv[1:]]
+
     t0 = time.time()
     all_results = []
     for period in PERIODS:
@@ -109,7 +116,8 @@ if __name__ == "__main__":
         "avg_return_pct_delta_long_only_minus_shorts": avg_delta,
         "results": all_results,
     }
-    with open("scripts/validate_long_only_result.json", "w", encoding="utf-8") as f:
+    out_name = "scripts/validate_long_only_result.json" if len(sys.argv) <= 1 else "scripts/validate_long_only_extra_result.json"
+    with open(out_name, "w", encoding="utf-8") as f:
         json.dump(summary, f, indent=2, ensure_ascii=False, default=str)
     print(f"\n=== RESUMEN: long-only gana en {num_long_only_better}/{len(all_results)} periodos, delta promedio {avg_delta} pp ===")
     print(f"elapsed_seconds={elapsed:.1f}")

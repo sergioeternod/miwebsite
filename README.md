@@ -653,6 +653,34 @@ Dos adiciones que salen directo de la evidencia anterior:
    comparten la misma ventana 2023-2026, así que la evidencia todavía
    puede ser específica de una era alcista.
 
+### Experimento long-only: 5/5 ventanas a favor de eliminar los shorts
+
+La asimetría medida (longs rentables en todas las corridas guardadas,
+shorts perdiendo en todas) pedía el experimento más audaz primero: el
+mismo modelo completo, misma pila de riesgo, pero con `allow_short=False`
+— el caso límite de `short_confidence_premium` → infinito. Resultado sobre
+las mismas 5 ventanas de 3 años (`scripts/validate_long_only.py`):
+
+| Periodo | Con shorts | Long-only |
+|---|---|---|
+| 2014-2017 | -16.96% | **+68.53%** |
+| 2017-2020 | +7.72% | **+43.21%** |
+| 2019-2022 (boom cripto) | -12.36% | **+46.98%** |
+| 2021-2024 | -18.93% | **+23.67%** |
+| 2023-2026 | +14.99% | **+48.59%** |
+
+**Long-only ganó en 5 de 5, delta promedio +51.3 pp**, y es la primera
+configuración positiva en todas las ventanas (promedio ≈ +46% por
+trienio). También resolvió el punto ciego persistente de 2019-2022. Los
+shorts no eran una pierna débil del modelo: eran su ancla.
+
+La advertencia que impide declarar victoria todavía: las 5 ventanas viven
+en 2014-2026, una era mayormente alcista para activos de riesgo —
+long-only pudo ganar en parte porque la época favorecía comprar. El
+script acepta fechas por argv (`python scripts/validate_long_only.py
+2007-07-30`) precisamente para poder someterlo a una ventana con crash de
+verdad (2007-2010, crisis financiera) antes de cambiar cualquier default.
+
 ### Registro de señales hacia adelante (`track`): la única evidencia sin retrovisor
 
 Todas las validaciones anteriores son backtests — calculadas después de los
