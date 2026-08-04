@@ -291,7 +291,7 @@ def cmd_portfolio_sim(args: argparse.Namespace) -> None:
         portfolio_size=args.portfolio_size,
         initial_capital=args.capital,
         commission_bps=args.commission_bps,
-        allow_short=not args.no_short,
+        allow_short=args.with_shorts and not args.no_short,
         step=args.step,
         min_confidence_pct=args.min_confidence,
         adaptive_learning=not args.no_adaptive_learning,
@@ -554,7 +554,11 @@ def build_parser() -> argparse.ArgumentParser:
     portfolio_sim_parser.add_argument("--commission-bps", type=float, default=None,
         help="Basis points por operación; si se omite usa un promedio realista según el tipo de instrumento (acciones, cripto, forex, etc.)",
     )
-    portfolio_sim_parser.add_argument("--no-short", action="store_true", help="Desactiva las posiciones en corto")
+    portfolio_sim_parser.add_argument(
+        "--with-shorts", action="store_true",
+        help="Habilita posiciones en corto (desactivadas por defecto: perdieron contra long-only en 6 de 6 ventanas históricas validadas, incluida 2007-2010)",
+    )
+    portfolio_sim_parser.add_argument("--no-short", action="store_true", help="Fuerza solo-largo (ya es el default; se mantiene por compatibilidad)")
     portfolio_sim_parser.add_argument(
         "--step", type=int, default=1, help="Cada cuántos días se recalcula la señal (1 = todos los días; más alto = más rápido)"
     )

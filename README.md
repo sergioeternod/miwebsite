@@ -674,12 +674,25 @@ configuración positiva en todas las ventanas (promedio ≈ +46% por
 trienio). También resolvió el punto ciego persistente de 2019-2022. Los
 shorts no eran una pierna débil del modelo: eran su ancla.
 
-La advertencia que impide declarar victoria todavía: las 5 ventanas viven
-en 2014-2026, una era mayormente alcista para activos de riesgo —
-long-only pudo ganar en parte porque la época favorecía comprar. El
-script acepta fechas por argv (`python scripts/validate_long_only.py
-2007-07-30`) precisamente para poder someterlo a una ventana con crash de
-verdad (2007-2010, crisis financiera) antes de cambiar cualquier default.
+La objeción obvia — "las 5 ventanas viven en 2014-2026, una era alcista;
+long-only gana porque la época favorecía comprar" — se sometió a la prueba
+de fuego: la ventana **2007-2010**, con la crisis financiera y un desplome
+de ~55% del S&P adentro (`python scripts/validate_long_only.py
+2007-07-30`). Resultado: con shorts **-42.64%**, long-only **+13.51%**.
+La clave es que long-only no significa "siempre comprado" sino "comprado
+o en efectivo": el umbral de confianza, el stop-loss y el aprendizaje
+adaptativo sacaron al modelo del mercado durante el colapso, mientras que
+el brazo con shorts se hundió igual que siempre.
+
+**Con 6 de 6 ventanas a favor (incluida una era de crash), el simulador
+de portafolio ahora es long-only por defecto** (`allow_short=False` en
+`simulate_portfolio_real`/`simulate_portfolio_synthetic` y en la API;
+`--with-shorts` en la CLI para reactivarlos). El resto de los comandos
+(`backtest`, `recommend`, `opportunities`) conservan los shorts
+disponibles — la evidencia es específica del simulador de portafolio, y
+el escáner sigue reportando el lado SELL como información. Y la
+advertencia de siempre, que ninguna racha de validaciones elimina: 6
+ventanas históricas no garantizan la séptima.
 
 ### Registro de señales hacia adelante (`track`): la única evidencia sin retrovisor
 

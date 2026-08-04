@@ -103,7 +103,10 @@ class PortfolioSimulateRequest(BaseModel):
     commission_bps: float | None = Field(
         None, description="Basis points por operación; si se omite usa un promedio realista según el tipo de instrumento (acciones, cripto, forex, etc.)"
     )
-    allow_short: bool = True
+    allow_short: bool = Field(
+        False,
+        description="Posiciones en corto desactivadas por defecto: perdieron contra long-only en 6 de 6 ventanas históricas validadas (incluida 2007-2010)",
+    )
     step: int = Field(1, description="Cada cuántos días se recalcula la señal (1 = todos los días)")
     min_confidence_pct: float = Field(
         55.0,
