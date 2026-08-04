@@ -570,6 +570,28 @@ Ejecuta `python scripts/multi_period_validation.py` (requiere red, puede
 tardar más de una hora) para reproducir esto con tu propio universo o
 periodos antes de confiar en esto con dinero real.
 
+**Re-validación tras el fix del sesgo short en RSI** (sección siguiente):
+la misma comparación de 5 periodos, ahora con la estrategia RSI corregida
+en *ambos* brazos (lo que cambia entre "original" y "mejorado" es solo la
+pila de gestión de riesgo — selección ajustada + límite por clase + risk
+parity + stop-loss):
+
+| Periodo | Original (RSI ya corregido) | Con las 4 mejoras | ¿Mejoró? |
+|---|---|---|---|
+| 2014-07-30 → 2017-07-30 | -23.00% | **-16.96%** | Sí |
+| 2017-07-30 → 2020-07-30 | -0.19% | **+7.72%** | Sí |
+| 2019-07-30 → 2022-07-30 | +4.47% | **-12.36%** | No |
+| 2021-07-30 → 2024-07-30 | -47.51% | **-18.93%** | Sí |
+| 2023-07-30 → 2026-07-30 | +0.78% | **+14.99%** | Sí |
+
+**4 de 5 mejoraron, delta promedio +7.98 pp** — más consistente que antes
+del fix (3/5, +4.99 pp). Los dos matices que siguen en pie: (1) en
+términos absolutos el modelo completo sigue perdiendo dinero en 3 de las
+5 ventanas (promedio ≈ -5%) — mejor gestión de riesgo no lo convierte en
+una máquina de ganar, solo pierde menos y de vez en cuando gana; y (2)
+2019-2022 sigue siendo el punto ciego persistente: la pila conservadora
+se pierde el boom cripto/tech cada vez que ese régimen aparece.
+
 ### Auditoría del sesgo short: la trampa de la salida en el extremo opuesto
 
 Los shorts fueron la fuente de las peores pérdidas en casi todas las

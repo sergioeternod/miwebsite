@@ -1,64 +1,64 @@
 {
-  "elapsed_seconds": 4008.9,
+  "elapsed_seconds": 3621.2,
   "num_periods_tested": 5,
-  "num_periods_improved": 3,
-  "avg_return_pct_delta": 4.99,
+  "num_periods_improved": 4,
+  "avg_return_pct_delta": 7.98,
   "results": [
     {
       "period": "2014-07-30 -> 2017-07-30 (era cripto temprana)",
       "start_date": "2014-07-30",
       "old_portfolio": [
-        "NVDA",
         "MSFT",
         "AAPL",
-        "USDMXN=X",
-        "^DJI"
+        "^GSPC",
+        "SI=F",
+        "EURUSD=X"
       ],
       "old_result": {
-        "final_equity": 9378.3,
-        "total_pnl_amount": -621.7,
-        "total_return_pct": -6.22
+        "final_equity": 7699.8,
+        "total_pnl_amount": -2300.2,
+        "total_return_pct": -23.0
       },
       "new_portfolio": [
-        "CL=F",
-        "^DJI",
-        "USDMXN=X",
+        "EURUSD=X",
+        "^GSPC",
         "MSFT",
-        "NVDA"
+        "^IXIC",
+        "SI=F"
       ],
       "new_result": {
-        "final_equity": 8824.13,
-        "total_pnl_amount": -1175.87,
-        "total_return_pct": -11.76
+        "final_equity": 8304.03,
+        "total_pnl_amount": -1695.97,
+        "total_return_pct": -16.96
       },
-      "improved": false
+      "improved": true
     },
     {
       "period": "2017-07-30 -> 2020-07-30 (bajista/mixto)",
       "start_date": "2017-07-30",
       "old_portfolio": [
-        "CL=F",
+        "AAPL",
         "^IXIC",
-        "GC=F",
         "^DJI",
-        "^GSPC"
+        "^GSPC",
+        "USDMXN=X"
       ],
       "old_result": {
-        "final_equity": 5615.86,
-        "total_pnl_amount": -4384.14,
-        "total_return_pct": -43.84
+        "final_equity": 9981.04,
+        "total_pnl_amount": -18.96,
+        "total_return_pct": -0.19
       },
       "new_portfolio": [
         "AAPL",
-        "TSLA",
-        "GC=F",
         "^GSPC",
-        "^IXIC"
+        "TSLA",
+        "^IXIC",
+        "USDMXN=X"
       ],
       "new_result": {
-        "final_equity": 9750.84,
-        "total_pnl_amount": -249.16,
-        "total_return_pct": -2.49
+        "final_equity": 10771.82,
+        "total_pnl_amount": 771.82,
+        "total_return_pct": 7.72
       },
       "improved": true
     },
@@ -66,28 +66,28 @@
       "period": "2019-07-30 -> 2022-07-30 (covid + recuperación + inicio bajista 2022)",
       "start_date": "2019-07-30",
       "old_portfolio": [
+        "ETH-USD",
         "MSFT",
         "NVDA",
-        "TSLA",
-        "ETH-USD",
-        "GC=F"
+        "GC=F",
+        "^GSPC"
       ],
       "old_result": {
-        "final_equity": 13527.89,
-        "total_pnl_amount": 3527.89,
-        "total_return_pct": 35.28
+        "final_equity": 10446.58,
+        "total_pnl_amount": 446.58,
+        "total_return_pct": 4.47
       },
       "new_portfolio": [
-        "USDMXN=X",
+        "GBPUSD=X",
         "GC=F",
         "MSFT",
-        "EURUSD=X",
-        "NVDA"
+        "^GSPC",
+        "EURUSD=X"
       ],
       "new_result": {
-        "final_equity": 8185.79,
-        "total_pnl_amount": -1814.21,
-        "total_return_pct": -18.14
+        "final_equity": 8763.72,
+        "total_pnl_amount": -1236.28,
+        "total_return_pct": -12.36
       },
       "improved": false
     },
@@ -96,27 +96,27 @@
       "start_date": "2021-07-30",
       "old_portfolio": [
         "CL=F",
-        "^DJI",
-        "GBPUSD=X",
+        "MSFT",
         "^GSPC",
-        "MSFT"
+        "^DJI",
+        "SI=F"
       ],
       "old_result": {
-        "final_equity": 6784.48,
-        "total_pnl_amount": -3215.52,
-        "total_return_pct": -32.16
+        "final_equity": 5249.41,
+        "total_pnl_amount": -4750.59,
+        "total_return_pct": -47.51
       },
       "new_portfolio": [
-        "USDJPY=X",
-        "GBPUSD=X",
         "^GSPC",
         "^DJI",
-        "MSFT"
+        "MSFT",
+        "USDMXN=X",
+        "EURUSD=X"
       ],
       "new_result": {
-        "final_equity": 8359.96,
-        "total_pnl_amount": -1640.04,
-        "total_return_pct": -16.4
+        "final_equity": 8107.43,
+        "total_pnl_amount": -1892.57,
+        "total_return_pct": -18.93
       },
       "improved": true
     },
@@ -124,28 +124,28 @@
       "period": "2023-07-30 -> 2026-07-30 (ya corrida antes)",
       "start_date": "2023-07-30",
       "old_portfolio": [
-        "CL=F",
-        "SI=F",
+        "USDMXN=X",
         "ETH-USD",
-        "BTC-USD",
-        "^GSPC"
+        "GC=F",
+        "^GSPC",
+        "GBPUSD=X"
       ],
       "old_result": {
-        "final_equity": 7060.72,
-        "total_pnl_amount": -2939.28,
-        "total_return_pct": -29.39
+        "final_equity": 10077.79,
+        "total_pnl_amount": 77.79,
+        "total_return_pct": 0.78
       },
       "new_portfolio": [
+        "USDMXN=X",
+        "GC=F",
         "^GSPC",
-        "SI=F",
-        "EURUSD=X",
-        "CL=F",
-        "^DJI"
+        "GBPUSD=X",
+        "ETH-USD"
       ],
       "new_result": {
-        "final_equity": 9740.79,
-        "total_pnl_amount": -259.21,
-        "total_return_pct": -2.59
+        "final_equity": 11498.88,
+        "total_pnl_amount": 1498.88,
+        "total_return_pct": 14.99
       },
       "improved": true
     }
