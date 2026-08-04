@@ -13,3 +13,4 @@ scripts/compare_selection_result.json
 scripts/sim_1m_result.json
 scripts/sim_3y_before_rsi_fix.json
 scripts/run_24m_monthly_result.json
+scripts/*.log
