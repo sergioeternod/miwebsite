@@ -653,6 +653,31 @@ Dos adiciones que salen directo de la evidencia anterior:
    comparten la misma ventana 2023-2026, así que la evidencia todavía
    puede ser específica de una era alcista.
 
+### Registro de señales hacia adelante (`track`): la única evidencia sin retrovisor
+
+Todas las validaciones anteriores son backtests — calculadas después de los
+hechos, sobre ventanas que también se usaron para ajustar el modelo, así
+que cada mejora adicional "validada" ahí carga un riesgo creciente de
+sobreajuste. El comando `track` construye el único tipo de evidencia
+inmune a eso: señales anotadas *antes* de que exista el resultado.
+
+```bash
+python -m app.cli track log                  # registra las señales BUY/SELL de hoy en signals_log.jsonl
+python -m app.cli track report --horizon 10  # califica las señales pasadas contra lo que hizo el precio después
+```
+
+- `track log` guarda el escaneo del día (deduplicado por fecha de mercado)
+  en un JSONL pensado para commitearse al repositorio — las sesiones que lo
+  escriben corren en contenedores efímeros, y un log sin commitear muere
+  con el contenedor.
+- `track report` califica cada señal que ya tiene `--horizon` barras de
+  historia posterior: un BUY acierta si el precio subió, un SELL si bajó.
+  Reporta hit rate y retorno promedio por lado; las señales muy recientes
+  quedan `pending` en vez de calificarse a medias.
+- Un modelo que se ve bien en backtests y mediocre en su propio registro
+  hacia adelante está sobreajustado — este archivo es donde ese veredicto
+  se acumula, un día de mercado a la vez.
+
 ## Recomendaciones con historial de earnings (Finnhub)
 
 La recomendación técnica (`recommend`) no sabe nada de si una empresa

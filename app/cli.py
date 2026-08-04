@@ -39,6 +39,7 @@ from app.recommend.engine import recommend
 from app.screener import screen_real_symbols, screen_synthetic
 from app.simulate import simulate_symbol, simulate_synthetic
 from app.strategies import STRATEGY_REGISTRY, all_strategies, build_strategy
+from app.tracking import evaluate_signals, log_scan
 from app.validation.report import validate_symbol, validate_synthetic
 
 
@@ -346,6 +347,19 @@ def cmd_portfolio_sim(args: argparse.Namespace) -> None:
     _print_json(summary)
 
 
+def cmd_track(args: argparse.Namespace) -> None:
+    if args.action == "log":
+        symbols = [s.strip() for s in args.symbols.split(",") if s.strip()] if args.symbols else None
+        report = find_opportunities_real(
+            symbols, period=args.period, interval=args.interval, top_n=args.top_n
+        )
+        result = log_scan(report, path=args.log_file)
+        _print_json(result)
+    else:  # report
+        result = evaluate_signals(path=args.log_file, horizon_bars=args.horizon)
+        _print_json(result)
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="Trading signals CLI")
     subparsers = parser.add_subparsers(dest="command", required=True)
@@ -581,6 +595,19 @@ def build_parser() -> argparse.ArgumentParser:
     )
     portfolio_sim_parser.add_argument("--out", default=None, help="Ruta donde guardar el reporte completo en JSON")
     portfolio_sim_parser.set_defaults(func=cmd_portfolio_sim)
+
+    track_parser = subparsers.add_parser(
+        "track",
+        help="Registro de señales hacia adelante: 'log' guarda las señales de hoy, 'report' califica las pasadas contra lo que hizo el precio después",
+    )
+    track_parser.add_argument("action", choices=["log", "report"], help="log = registrar el escaneo de hoy; report = calificar señales pasadas")
+    track_parser.add_argument("--log-file", default="signals_log.jsonl", help="Archivo JSONL del registro (comitéalo a git: el contenedor es efímero)")
+    track_parser.add_argument("--symbols", default=None, help="Universo a escanear al registrar; si se omite usa el universo de ejemplo")
+    track_parser.add_argument("--period", default="2y")
+    track_parser.add_argument("--interval", default="1d")
+    track_parser.add_argument("--top-n", type=int, default=3, help="Cuántas señales por lado (compra/venta) registrar")
+    track_parser.add_argument("--horizon", type=int, default=10, help="Barras de mercado hacia adelante para calificar cada señal")
+    track_parser.set_defaults(func=cmd_track)
 
     return parser
 
