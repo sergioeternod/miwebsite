@@ -45,6 +45,20 @@ SIMULATED_YEARS = 3
 REBALANCE_MONTHS = 3
 
 if __name__ == "__main__":
+    import sys
+
+    # Robustness sweep support: pass an interval (in months) as argv to
+    # re-run the same 9-window comparison with it. The PRE-REGISTERED rule
+    # for reading a sweep, decided before seeing any number: if every
+    # interval beats the no-rebalance baseline, "re-selecting helps" is a
+    # robust conclusion and the default stays 3 for its independent reasons
+    # (earnings cycle, indicator horizons, rotation-cost amortization); if
+    # ONLY 3 months wins, yesterday's result was parameter luck and the
+    # default's credibility gets downgraded — not celebrated. The sweep is
+    # never used to pick the highest-scoring interval as a new default.
+    if len(sys.argv) > 1:
+        REBALANCE_MONTHS = int(sys.argv[1])
+
     t0 = time.time()
     all_results = []
     for start_date, label, baseline_return in PERIODS:
@@ -109,7 +123,12 @@ if __name__ == "__main__":
         "avg_return_delta_pp_vs_baseline": avg_delta,
         "results": all_results,
     }
-    with open("scripts/validate_rebalance_result.json", "w", encoding="utf-8") as f:
+    out_name = (
+        "scripts/validate_rebalance_result.json"
+        if REBALANCE_MONTHS == 3
+        else f"scripts/validate_rebalance_result_{REBALANCE_MONTHS}m.json"
+    )
+    with open(out_name, "w", encoding="utf-8") as f:
         json.dump(summary, f, indent=2, ensure_ascii=False, default=str)
     print(f"\n=== RESUMEN: rebalanceo trimestral le gana al modelo actual en {beats_baseline}/{len(ran)} ventanas (delta promedio {avg_delta} pp) y al buy & hold en {beats_benchmark}/{len(ran)} ===", flush=True)
     print(f"elapsed_seconds={elapsed:.1f}", flush=True)
