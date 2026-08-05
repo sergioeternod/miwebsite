@@ -1,0 +1,46 @@
+{
+  "elapsed_seconds": 787.6,
+  "num_periods_run": 3,
+  "num_positive_return": 3,
+  "num_beat_benchmark": 0,
+  "results": [
+    {
+      "period": "2004-07-30 -> 2007-07-30",
+      "portfolio": [
+        "AAPL"
+      ],
+      "final_equity": 81659.35,
+      "total_return_pct": 716.59,
+      "max_drawdown_pct": -40.3,
+      "benchmark_buy_hold_return_pct": 774.47,
+      "vs_benchmark_pct_points": -57.88
+    },
+    {
+      "period": "2010-07-30 -> 2013-07-30",
+      "portfolio": [
+        "USDJPY=X",
+        "GBPUSD=X",
+        "^DJI",
+        "CL=F"
+      ],
+      "final_equity": 11231.69,
+      "total_return_pct": 12.32,
+      "max_drawdown_pct": -12.08,
+      "benchmark_buy_hold_return_pct": 15.2,
+      "vs_benchmark_pct_points": -2.88
+    },
+    {
+      "period": "2012-07-30 -> 2015-07-30",
+      "portfolio": [
+        "AMZN",
+        "EURUSD=X",
+        "NVDA"
+      ],
+      "final_equity": 12315.69,
+      "total_return_pct": 23.16,
+      "max_drawdown_pct": -14.56,
+      "benchmark_buy_hold_return_pct": 27.81,
+      "vs_benchmark_pct_points": -4.65
+    }
+  ]
+}

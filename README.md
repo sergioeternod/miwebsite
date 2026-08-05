@@ -743,6 +743,41 @@ La advertencia de sobreajuste aplica con más fuerza que nunca: estas son
 las mismas ventanas sobre las que se ha venido afinando el modelo, y el
 juez final es el registro hacia adelante de la siguiente sección.
 
+### Ventanas vírgenes: el modelo congelado en periodos que nunca vio
+
+Todas las validaciones anteriores comparten un defecto acumulativo: usan
+las mismas 6 ventanas que también guiaron cada mejora, así que cada ronda
+"aprobada" ahí erosiona su valor como evidencia. Esta prueba
+(`scripts/validate_frozen_windows.py`) congela el modelo exactamente como
+se entrega hoy y lo corre en tres ventanas que jamás participaron en
+ninguna decisión de diseño:
+
+| Periodo | Portafolio elegido | Modelo | Buy & hold | vs benchmark |
+|---|---|---|---|---|
+| 2004-2007 | AAPL (solo 1 candidato) | +716.59% (DD -40.3%) | +774.47% | -57.9 pp |
+| 2010-2013 | USDJPY, GBPUSD, ^DJI, CL=F | +12.32% (DD -12.1%) | +15.20% | -2.9 pp |
+| 2012-2015 | AMZN, EURUSD, NVDA | +23.16% (DD -14.6%) | +27.81% | -4.6 pp |
+
+Dos lecturas, ambas importantes:
+
+1. **No hay colapso fuera de muestra**: retorno positivo en 3/3, drawdowns
+   moderados en las ventanas diversificadas, y el mismo carácter que
+   muestra en las ventanas afinadas. Un modelo sobreajustado se desploma
+   cuando pisa terreno nuevo; este no lo hizo.
+2. **Tampoco hay alfa**: le ganó al buy & hold en 0/3 — el mismo gap de
+   unos puntos que ya asomaba en las ventanas conocidas (y -57.9 pp en
+   2004-2007, donde eligió un solo símbolo, AAPL en plena era pre-iPhone,
+   y cualquier salida temporal del mercado costó carísimo). El patrón es
+   consistente: el modelo gana dinero y amortigua golpes, pero en mercados
+   alcistas cobra su prima de seguro en retorno.
+
+Conclusión honesta: la pila defensiva es robusta, no sobreajustada — y el
+siguiente frente no es otro indicador, sino cerrar el gap estructural
+contra el benchmark (candidato principal: re-selección periódica del
+portafolio en vez de casarse 3 años con la foto del día uno). La ventana
+2004-2007 también dejó una lección de concentración: con un solo candidato
+BUY ≥55%, todo el capital quedó en una acción.
+
 ### Registro de señales hacia adelante (`track`): la única evidencia sin retrovisor
 
 Todas las validaciones anteriores son backtests — calculadas después de los
