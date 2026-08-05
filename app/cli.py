@@ -301,6 +301,7 @@ def cmd_portfolio_sim(args: argparse.Namespace) -> None:
         stop_loss_pct=None if args.no_stop_loss else args.stop_loss_pct,
         short_confidence_premium=args.short_premium,
         risk_regime_sizing=not args.no_risk_regime,
+        rebalance_months=args.rebalance_months,
     )
     if args.max_per_asset_class is not None:
         # Omit otherwise so each path's own smart default applies (2 for
@@ -605,6 +606,10 @@ def build_parser() -> argparse.ArgumentParser:
     portfolio_sim_parser.add_argument(
         "--no-risk-regime", action="store_true",
         help="Desactiva el ajuste de tamaño por régimen de volatilidad (activo por defecto: redujo el drawdown máximo en 6 de 6 ventanas históricas validadas con delta de retorno promedio +1.17 pp)",
+    )
+    portfolio_sim_parser.add_argument(
+        "--rebalance-months", type=int, default=None,
+        help="Re-selecciona el portafolio cada N meses calendario en vez de mantener 3 años la foto del día uno (desactivado por defecto, pendiente de validación; la rotación cobra 2x la comisión del símbolo entrante)",
     )
     portfolio_sim_parser.add_argument("--out", default=None, help="Ruta donde guardar el reporte completo en JSON")
     portfolio_sim_parser.set_defaults(func=cmd_portfolio_sim)

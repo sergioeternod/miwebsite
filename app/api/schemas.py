@@ -144,6 +144,10 @@ class PortfolioSimulateRequest(BaseModel):
         True,
         description="Reduce el tamaño de las posiciones mientras la volatilidad realizada reciente (20 barras) supera su línea base de largo plazo (100 barras) — no predice caídas, achica cuánto pegan. Activo por defecto: redujo el drawdown máximo en 6 de 6 ventanas históricas validadas (incl. 2007-2010) con delta de retorno promedio +1.17 pp (retorno por ventana mixto, 3/6)",
     )
+    rebalance_months: int | None = Field(
+        None,
+        description="Re-selecciona el portafolio cada N meses calendario (con datos solo hasta cada frontera, sin lookahead; la rotación cobra 2x la comisión del símbolo entrante). None = una sola selección al inicio, el comportamiento clásico. Desactivado por defecto, pendiente de validación",
+    )
 
 
 class ValidateRequest(BaseModel):

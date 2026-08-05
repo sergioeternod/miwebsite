@@ -579,9 +579,19 @@ def _run_simulation(
     stop_loss_pct: float | None = DEFAULT_STOP_LOSS_PCT,
     short_confidence_premium: float = 0.0,
     risk_regime_sizing: bool = False,
+    rebalance_months: int | None = None,
 ) -> dict:
     if step < 1:
         raise ValueError("step debe ser >= 1")
+    if rebalance_months is not None:
+        if rebalance_months < 1:
+            raise ValueError("rebalance_months debe ser >= 1")
+        return _run_rebalanced_simulation(
+            dfs, start_date, end_date, portfolio_size, initial_capital, commission_bps,
+            allow_short, step, errors, min_confidence_pct, adaptive_learning,
+            include_earnings, include_news, max_per_asset_class, risk_parity_sizing,
+            stop_loss_pct, short_confidence_premium, risk_regime_sizing, rebalance_months,
+        )
 
     if end_date:
         dfs = {symbol: df[df.index <= pd.Timestamp(end_date)] for symbol, df in dfs.items()}
@@ -686,6 +696,231 @@ def _run_simulation(
     }
 
 
+def _run_rebalanced_simulation(
+    dfs: dict[str, pd.DataFrame],
+    start_date: str,
+    end_date: str | None,
+    portfolio_size: int,
+    initial_capital: float,
+    commission_bps: float | None,
+    allow_short: bool,
+    step: int,
+    errors: dict[str, str],
+    min_confidence_pct: float,
+    adaptive_learning: bool,
+    include_earnings: bool,
+    include_news: bool,
+    max_per_asset_class: int | None,
+    risk_parity_sizing: bool,
+    stop_loss_pct: float | None,
+    short_confidence_premium: float,
+    risk_regime_sizing: bool,
+    rebalance_months: int,
+) -> dict:
+    """Same day-by-day walk-forward, but instead of marrying the portfolio
+    chosen on day one for the whole period, the selection is redone every
+    `rebalance_months` calendar months — using, as always, only data
+    available up to that boundary (each segment's dataframes are truncated
+    at the *next* boundary, so neither selection nor walk-forward can peek
+    past their own segment). The capital that comes out of one segment is
+    what goes into the next.
+
+    Honesty details that keep this from flattering itself:
+
+    - Rotation isn't free: at every boundary after the first, each incoming
+      symbol's allocation is charged twice its per-trade commission (exit
+      the old book + enter the new one) — even if the model happened to be
+      sitting in cash, because overestimating costs is the safe direction
+      to be wrong in.
+    - The earnings/news overlays are only ever applied to the *first*
+      selection (and only if requested): Finnhub/Alpha Vantage return data
+      relative to the real clock, so applying them at a historical
+      rebalance boundary would leak today's information into a past-dated
+      decision — the same lookahead rule the daily walk-forward follows.
+    - A boundary where no candidate clears the confidence bar puts the
+      whole portfolio in cash for that segment (capital unchanged) rather
+      than forcing a pick; only an empty *first* selection raises, matching
+      the non-rebalanced simulator.
+    - Adaptive learning's hindsight window restarts with each segment (each
+      segment is its own walk-forward call); it never reaches across a
+      rebalance into another symbol's history."""
+    if end_date:
+        dfs = {symbol: df[df.index <= pd.Timestamp(end_date)] for symbol, df in dfs.items()}
+    non_empty = {s: df for s, df in dfs.items() if len(df)}
+    if not non_empty:
+        raise ValueError("No hay datos disponibles para ningún símbolo.")
+    last_date = max(df.index[-1] for df in non_empty.values())
+
+    boundaries = [pd.Timestamp(start_date)]
+    while boundaries[-1] + pd.DateOffset(months=rebalance_months) <= last_date:
+        boundaries.append(boundaries[-1] + pd.DateOffset(months=rebalance_months))
+
+    # Same "insufficient history at the overall start" bookkeeping as the
+    # non-rebalanced path — relative to the overall start date, so the
+    # errors dict means the same thing in both modes.
+    overall_start_idx = {symbol: _find_start_index(df, start_date) for symbol, df in non_empty.items()}
+    for symbol in dfs:
+        if symbol not in non_empty or not (MIN_WARMUP_BARS <= overall_start_idx[symbol] < len(non_empty[symbol]) - 1):
+            errors.setdefault(
+                symbol,
+                "Historial insuficiente antes de la fecha de inicio, o no hay barras después de esa fecha.",
+            )
+
+    capital = initial_capital
+    segments = []
+    curves = []
+    all_trades = []
+    initial_portfolio = None
+    initial_capital_by_symbol = None
+
+    for k, boundary in enumerate(boundaries):
+        seg_end = boundaries[k + 1] if k + 1 < len(boundaries) else None
+        seg_dfs = {
+            symbol: (df[df.index < seg_end] if seg_end is not None else df)
+            for symbol, df in non_empty.items()
+        }
+        start_idx_by_symbol = {symbol: _find_start_index(df, str(boundary.date())) for symbol, df in seg_dfs.items()}
+        usable = {
+            symbol: df
+            for symbol, df in seg_dfs.items()
+            if MIN_WARMUP_BARS <= start_idx_by_symbol[symbol] < len(df) - 1
+        }
+
+        portfolio = _select_portfolio(
+            usable,
+            start_idx_by_symbol,
+            portfolio_size,
+            allow_short,
+            capital,
+            commission_bps,
+            min_confidence_pct,
+            include_earnings and k == 0,
+            include_news and k == 0,
+            max_per_asset_class,
+            short_confidence_premium,
+        )
+        if k == 0 and not portfolio:
+            raise ValueError(
+                "No se encontraron símbolos con señal BUY"
+                + (" o SELL" if allow_short else "")
+                + f" con al menos {min_confidence_pct}% de confianza antes de la fecha de inicio. "
+                "Prueba con otro universo, fecha, un umbral de confianza más bajo, o habilita posiciones cortas."
+            )
+
+        segment = {"start_date": str(boundary.date()), "capital_start": round(capital, 2)}
+
+        if not portfolio:
+            seg_dates = sorted({d for df in usable.values() for d in df.index[df.index >= boundary]})
+            if seg_dates:
+                curves.append(pd.Series(float(capital), index=pd.DatetimeIndex(seg_dates)))
+                segment["end_date"] = str(seg_dates[-1].date())
+            segment.update(
+                {
+                    "portfolio": [],
+                    "capital_end": round(capital, 2),
+                    "return_pct": 0.0,
+                    "note": "Sin candidatos que superen el umbral de confianza — el segmento se pasa en efectivo.",
+                }
+            )
+            segments.append(segment)
+            continue
+
+        if risk_parity_sizing:
+            weights = _risk_parity_weights(portfolio)
+        else:
+            weights = {c["symbol"]: 1.0 / len(portfolio) for c in portfolio}
+        capital_by_symbol = {}
+        for symbol, weight in weights.items():
+            allocation = capital * weight
+            if k > 0:
+                bps = commission_bps if commission_bps is not None else default_commission_bps(symbol)
+                allocation *= 1 - 2 * bps / 10000  # rotation cost: exit old + enter new
+            capital_by_symbol[symbol] = round(allocation, 2)
+
+        per_symbol_results = [
+            _walk_forward_result(
+                usable[c["symbol"]],
+                start_idx_by_symbol[c["symbol"]],
+                c["symbol"],
+                allow_short,
+                capital_by_symbol[c["symbol"]],
+                commission_bps,
+                step,
+                min_confidence_pct,
+                adaptive_learning,
+                stop_loss_pct,
+                short_confidence_premium,
+                risk_regime_sizing,
+            )
+            for c in portfolio
+        ]
+        seg_curve = _combine_equity_curves(per_symbol_results, capital_by_symbol)
+        seg_final = float(seg_curve.iloc[-1])
+        curves.append(seg_curve)
+        for r in per_symbol_results:
+            all_trades.extend(r["trades"])
+
+        segment.update(
+            {
+                "end_date": str(seg_curve.index[-1].date()),
+                "portfolio": [c["symbol"] for c in portfolio],
+                "capital_by_symbol": capital_by_symbol,
+                "capital_end": round(seg_final, 2),
+                "return_pct": round((seg_final / capital - 1) * 100, 2),
+                "per_symbol": [
+                    {
+                        "symbol": r["symbol"],
+                        "final_equity": round(float(r["equity_curve"].iloc[-1]), 2),
+                        "pnl_amount": round(float(r["equity_curve"].iloc[-1]) - capital_by_symbol[r["symbol"]], 2),
+                        "num_trades": len(r["trades"]),
+                        "risk_regime_avg_exposure_pct": r["risk_regime_avg_exposure_pct"],
+                    }
+                    for r in per_symbol_results
+                ],
+            }
+        )
+        segments.append(segment)
+
+        if k == 0:
+            initial_portfolio = portfolio
+            initial_capital_by_symbol = capital_by_symbol
+        capital = seg_final
+
+    portfolio_equity_curve = pd.concat(curves)
+    final_equity = round(float(capital), 2)
+
+    # The passive yardstick stays the same as the non-rebalanced report:
+    # the *initial* selection bought on day one and never touched — that's
+    # what "doing nothing" actually means for the whole period.
+    benchmark_dfs = {symbol: non_empty[symbol] for symbol in initial_capital_by_symbol}
+    benchmark = _buy_hold_benchmark(benchmark_dfs, overall_start_idx, initial_capital_by_symbol, commission_bps)
+
+    return {
+        "start_date": start_date,
+        "end_date": str(portfolio_equity_curve.index[-1].date()),
+        "num_trading_days": len(portfolio_equity_curve),
+        "initial_capital": initial_capital,
+        "capital_by_symbol": initial_capital_by_symbol,
+        "portfolio": initial_portfolio,
+        "final_equity": final_equity,
+        "total_pnl_amount": round(final_equity - initial_capital, 2),
+        "total_return_pct": round((final_equity / initial_capital - 1) * 100, 2),
+        "rebalance_months": rebalance_months,
+        "segments": segments,
+        "risk_regime_sizing": risk_regime_sizing,
+        "portfolio_equity_curve": [
+            {"date": str(d.date()), "equity": round(float(v), 2)} for d, v in portfolio_equity_curve.items()
+        ],
+        "hindsight_summary": hindsight_summary(all_trades),
+        "benchmark_buy_hold": benchmark,
+        "vs_benchmark_pct_points": round(
+            (final_equity / initial_capital - 1) * 100 - benchmark["total_return_pct"], 2
+        ),
+        "errors": errors,
+        "disclaimer": DISCLAIMER,
+    }
+
+
 def simulate_portfolio_real(
     start_date: str,
     end_date: str | None = None,
@@ -706,6 +941,7 @@ def simulate_portfolio_real(
     stop_loss_pct: float | None = DEFAULT_STOP_LOSS_PCT,
     short_confidence_premium: float = 0.0,
     risk_regime_sizing: bool = True,
+    rebalance_months: int | None = None,
 ) -> dict:
     """Auto-selects a portfolio (from real symbols, defaulting to the full
     example universe) using only data before `start_date`, then walks
@@ -734,7 +970,11 @@ def simulate_portfolio_real(
     windows (incl. 2007-2010), it reduced max drawdown in 6/6 with a
     slightly positive average return delta (+1.17 pp; per-window returns
     were mixed, 3/6 — it trades a little upside in calm bull stretches for
-    a smaller hit in turbulent ones)."""
+    a smaller hit in turbulent ones). `rebalance_months` (default `None`,
+    off pending validation) re-runs the portfolio selection every that many
+    calendar months instead of holding day one's picks for the whole
+    period — see `_run_rebalanced_simulation` for the no-lookahead and
+    rotation-cost details."""
     symbols = symbols or _default_symbols()
 
     dfs = {}
@@ -764,6 +1004,7 @@ def simulate_portfolio_real(
         stop_loss_pct,
         short_confidence_premium,
         risk_regime_sizing,
+        rebalance_months,
     )
 
 
@@ -786,6 +1027,7 @@ def simulate_portfolio_synthetic(
     stop_loss_pct: float | None = DEFAULT_STOP_LOSS_PCT,
     short_confidence_premium: float = 0.0,
     risk_regime_sizing: bool = True,
+    rebalance_months: int | None = None,
 ) -> dict:
     """Same simulation, but over synthetic profiles reaching into 2026 —
     usable with no network access. Real dates only line up exactly with
@@ -829,4 +1071,5 @@ def simulate_portfolio_synthetic(
         stop_loss_pct,
         short_confidence_premium,
         risk_regime_sizing,
+        rebalance_months,
     )

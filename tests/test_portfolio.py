@@ -937,3 +937,121 @@ def test_simulate_portfolio_synthetic_reports_risk_regime_flag(monkeypatch):
         assert entry["risk_regime_avg_exposure_pct"] == 100.0
     for entry in on["per_symbol"]:
         assert 25.0 <= entry["risk_regime_avg_exposure_pct"] <= 100.0
+
+
+# ---------------------------------------------------------------------------
+# Periodic portfolio re-selection (rebalance_months)
+# ---------------------------------------------------------------------------
+
+
+def _run_sim(dfs, start_date="2023-06-01", **kwargs):
+    defaults = dict(
+        end_date=None, portfolio_size=3, initial_capital=9_000.0, commission_bps=0.0,
+        allow_short=False, step=1, errors={},
+    )
+    defaults.update(kwargs)
+    return portfolio_module._run_simulation(dfs, start_date, **defaults)
+
+
+def test_rebalanced_sim_chains_capital_across_segments(monkeypatch, long_uptrend_df):
+    monkeypatch.setattr(portfolio_module, "recommend", lambda *a, **k: _fake_rec(action="BUY", confidence=80.0))
+    close = pd.Series(np.linspace(100, 300, 500))
+    dfs = {"A": _make_ohlcv(close), "B": _make_ohlcv(close * 1.5)}
+
+    report = _run_sim(dfs, rebalance_months=3)
+
+    assert report["rebalance_months"] == 3
+    segments = report["segments"]
+    assert len(segments) >= 2  # 500 daily bars from 2023-01-01 span several quarters
+    for prev, nxt in zip(segments, segments[1:]):
+        assert nxt["capital_start"] == prev["capital_end"]
+        assert nxt["start_date"] > prev["start_date"]
+    assert report["final_equity"] == segments[-1]["capital_end"]
+    assert report["benchmark_buy_hold"]["total_return_pct"] is not None
+
+
+def test_rebalanced_sim_flat_market_zero_commission_preserves_capital(monkeypatch):
+    """Flat prices + zero commission: no matter how many rebalances happen,
+    equity must come out exactly equal to what went in — any drift here
+    would mean the segment chaining itself invents or destroys money."""
+    monkeypatch.setattr(portfolio_module, "recommend", lambda *a, **k: _fake_rec(action="BUY", confidence=80.0))
+    close = pd.Series([100.0] * 500)
+    dfs = {"A": _make_ohlcv(close), "B": _make_ohlcv(close)}
+
+    report = _run_sim(dfs, rebalance_months=3)
+
+    assert report["final_equity"] == pytest.approx(9_000.0)
+    for segment in report["segments"]:
+        assert segment["return_pct"] == pytest.approx(0.0)
+
+
+def test_rebalanced_sim_goes_to_cash_when_no_candidates(monkeypatch):
+    """Selection stops finding candidates after a date -> later segments sit
+    fully in cash (capital unchanged), instead of forcing a pick or dying."""
+    cutoff = pd.Timestamp("2023-08-20")
+
+    def buy_early_then_nothing(window, *a, **k):
+        if window.index[-1] < cutoff:
+            return _fake_rec(action="BUY", confidence=80.0)
+        return _fake_rec(action="HOLD", confidence=80.0)
+
+    monkeypatch.setattr(portfolio_module, "recommend", buy_early_then_nothing)
+    close = pd.Series([100.0] * 500)
+    dfs = {"A": _make_ohlcv(close)}
+
+    report = _run_sim(dfs, rebalance_months=3, portfolio_size=1)
+
+    cash_segments = [s for s in report["segments"] if not s["portfolio"]]
+    assert cash_segments, "las fronteras posteriores al cutoff deben quedar en efectivo"
+    for segment in cash_segments:
+        assert segment["capital_end"] == segment["capital_start"]
+        assert "note" in segment
+    assert report["final_equity"] == pytest.approx(9_000.0)
+
+
+def test_rebalanced_sim_selection_never_sees_past_segment_end(monkeypatch):
+    """Every recommend() call during a rebalanced run — selection at each
+    boundary and every walk-forward day — must only ever see data from
+    before its own segment's end. A window reaching past the boundary its
+    decision belongs to would be lookahead."""
+    seen_windows = []
+
+    def recording_recommend(window, *a, **k):
+        seen_windows.append(window.index[-1])
+        return _fake_rec(action="BUY", confidence=80.0)
+
+    monkeypatch.setattr(portfolio_module, "recommend", recording_recommend)
+    close = pd.Series(np.linspace(100, 200, 500))
+    dfs = {"A": _make_ohlcv(close)}
+
+    report = _run_sim(dfs, rebalance_months=3, portfolio_size=1)
+
+    last_data_date = dfs["A"].index[-1]
+    assert max(seen_windows) <= last_data_date
+    # The report's own end date must equal the data's end — i.e. the run
+    # covered everything without any segment silently truncating the tail.
+    assert report["end_date"] == str(last_data_date.date())
+
+
+def test_rebalance_none_keeps_classic_report_shape(monkeypatch, long_uptrend_df):
+    monkeypatch.setattr(portfolio_module, "recommend", lambda *a, **k: _fake_rec(action="BUY", confidence=80.0))
+    report = _run_sim({"A": long_uptrend_df}, portfolio_size=1)
+    assert "segments" not in report
+    assert "rebalance_months" not in report
+
+
+def test_rebalanced_sim_charges_rotation_cost_after_first_boundary(monkeypatch):
+    monkeypatch.setattr(portfolio_module, "recommend", lambda *a, **k: _fake_rec(action="BUY", confidence=80.0))
+    close = pd.Series([100.0] * 500)
+    dfs = {"A": _make_ohlcv(close)}
+
+    report = _run_sim(dfs, rebalance_months=3, portfolio_size=1, commission_bps=100.0)
+
+    segments = [s for s in report["segments"] if s["portfolio"]]
+    assert len(segments) >= 2
+    # First segment: no rotation charge (parity with the classic simulator).
+    assert segments[0]["capital_by_symbol"]["A"] == pytest.approx(9_000.0)
+    # Each later boundary: allocation = incoming capital * (1 - 2*1%).
+    for prev, nxt in zip(segments, segments[1:]):
+        assert nxt["capital_by_symbol"]["A"] == pytest.approx(prev["capital_end"] * 0.98, abs=0.02)
+    assert report["final_equity"] < 9_000.0
