@@ -1,0 +1,280 @@
+{
+  "elapsed_seconds": 3339.8,
+  "num_periods": 6,
+  "num_risk_regime_better_return": 3,
+  "num_risk_regime_smaller_drawdown": 6,
+  "avg_return_delta_pp": 1.17,
+  "avg_drawdown_delta_pp": 2.87,
+  "results": [
+    {
+      "period": "2007-07-30 -> 2010-07-30 (crisis)",
+      "baseline": {
+        "portfolio": [
+          "NVDA",
+          "^GSPC",
+          "AAPL",
+          "CL=F"
+        ],
+        "final_equity": 11350.86,
+        "total_pnl_amount": 1350.86,
+        "total_return_pct": 13.51,
+        "max_drawdown_pct": -37.9,
+        "avg_exposure_pct_by_symbol": {
+          "NVDA": 100.0,
+          "^GSPC": 100.0,
+          "AAPL": 100.0,
+          "CL=F": 100.0
+        }
+      },
+      "risk_regime": {
+        "portfolio": [
+          "NVDA",
+          "^GSPC",
+          "AAPL",
+          "CL=F"
+        ],
+        "final_equity": 11866.29,
+        "total_pnl_amount": 1866.29,
+        "total_return_pct": 18.66,
+        "max_drawdown_pct": -35.41,
+        "avg_exposure_pct_by_symbol": {
+          "NVDA": 93.7,
+          "^GSPC": 93.5,
+          "AAPL": 95.4,
+          "CL=F": 94.5
+        }
+      },
+      "return_delta_pp": 5.15,
+      "drawdown_delta_pp": 2.49,
+      "risk_regime_better_return": true,
+      "risk_regime_smaller_drawdown": true
+    },
+    {
+      "period": "2014-07-30 -> 2017-07-30",
+      "baseline": {
+        "portfolio": [
+          "MSFT",
+          "^IXIC",
+          "AMZN",
+          "USDMXN=X"
+        ],
+        "final_equity": 16853.11,
+        "total_pnl_amount": 6853.11,
+        "total_return_pct": 68.53,
+        "max_drawdown_pct": -8.76,
+        "avg_exposure_pct_by_symbol": {
+          "MSFT": 100.0,
+          "^IXIC": 100.0,
+          "AMZN": 100.0,
+          "USDMXN=X": 100.0
+        }
+      },
+      "risk_regime": {
+        "portfolio": [
+          "MSFT",
+          "^IXIC",
+          "AMZN",
+          "USDMXN=X"
+        ],
+        "final_equity": 16359.96,
+        "total_pnl_amount": 6359.96,
+        "total_return_pct": 63.6,
+        "max_drawdown_pct": -6.94,
+        "avg_exposure_pct_by_symbol": {
+          "MSFT": 92.6,
+          "^IXIC": 93.3,
+          "AMZN": 93.2,
+          "USDMXN=X": 92.8
+        }
+      },
+      "return_delta_pp": -4.93,
+      "drawdown_delta_pp": 1.82,
+      "risk_regime_better_return": false,
+      "risk_regime_smaller_drawdown": true
+    },
+    {
+      "period": "2017-07-30 -> 2020-07-30",
+      "baseline": {
+        "portfolio": [
+          "^IXIC",
+          "NVDA",
+          "^DJI",
+          "AAPL",
+          "EURUSD=X"
+        ],
+        "final_equity": 14321.48,
+        "total_pnl_amount": 4321.48,
+        "total_return_pct": 43.21,
+        "max_drawdown_pct": -25.04,
+        "avg_exposure_pct_by_symbol": {
+          "^IXIC": 100.0,
+          "NVDA": 100.0,
+          "^DJI": 100.0,
+          "AAPL": 100.0,
+          "EURUSD=X": 100.0
+        }
+      },
+      "risk_regime": {
+        "portfolio": [
+          "^IXIC",
+          "NVDA",
+          "^DJI",
+          "AAPL",
+          "EURUSD=X"
+        ],
+        "final_equity": 15446.3,
+        "total_pnl_amount": 5446.3,
+        "total_return_pct": 54.46,
+        "max_drawdown_pct": -16.96,
+        "avg_exposure_pct_by_symbol": {
+          "^IXIC": 90.5,
+          "NVDA": 92.4,
+          "^DJI": 90.3,
+          "AAPL": 91.1,
+          "EURUSD=X": 95.1
+        }
+      },
+      "return_delta_pp": 11.25,
+      "drawdown_delta_pp": 8.08,
+      "risk_regime_better_return": true,
+      "risk_regime_smaller_drawdown": true
+    },
+    {
+      "period": "2019-07-30 -> 2022-07-30",
+      "baseline": {
+        "portfolio": [
+          "NVDA",
+          "MSFT",
+          "GC=F",
+          "^GSPC",
+          "^DJI"
+        ],
+        "final_equity": 14698.45,
+        "total_pnl_amount": 4698.45,
+        "total_return_pct": 46.98,
+        "max_drawdown_pct": -26.37,
+        "avg_exposure_pct_by_symbol": {
+          "NVDA": 100.0,
+          "MSFT": 100.0,
+          "GC=F": 100.0,
+          "^GSPC": 100.0,
+          "^DJI": 100.0
+        }
+      },
+      "risk_regime": {
+        "portfolio": [
+          "NVDA",
+          "MSFT",
+          "GC=F",
+          "^GSPC",
+          "^DJI"
+        ],
+        "final_equity": 15135.04,
+        "total_pnl_amount": 5135.04,
+        "total_return_pct": 51.35,
+        "max_drawdown_pct": -24.35,
+        "avg_exposure_pct_by_symbol": {
+          "NVDA": 92.3,
+          "MSFT": 92.3,
+          "GC=F": 94.3,
+          "^GSPC": 92.5,
+          "^DJI": 93.2
+        }
+      },
+      "return_delta_pp": 4.37,
+      "drawdown_delta_pp": 2.02,
+      "risk_regime_better_return": true,
+      "risk_regime_smaller_drawdown": true
+    },
+    {
+      "period": "2021-07-30 -> 2024-07-30",
+      "baseline": {
+        "portfolio": [
+          "^GSPC",
+          "^DJI",
+          "CL=F",
+          "MSFT",
+          "AAPL"
+        ],
+        "final_equity": 12366.63,
+        "total_pnl_amount": 2366.63,
+        "total_return_pct": 23.67,
+        "max_drawdown_pct": -25.33,
+        "avg_exposure_pct_by_symbol": {
+          "^GSPC": 100.0,
+          "^DJI": 100.0,
+          "CL=F": 100.0,
+          "MSFT": 100.0,
+          "AAPL": 100.0
+        }
+      },
+      "risk_regime": {
+        "portfolio": [
+          "^GSPC",
+          "^DJI",
+          "CL=F",
+          "MSFT",
+          "AAPL"
+        ],
+        "final_equity": 12058.98,
+        "total_pnl_amount": 2058.98,
+        "total_return_pct": 20.59,
+        "max_drawdown_pct": -23.79,
+        "avg_exposure_pct_by_symbol": {
+          "^GSPC": 94.0,
+          "^DJI": 94.9,
+          "CL=F": 95.3,
+          "MSFT": 94.7,
+          "AAPL": 93.1
+        }
+      },
+      "return_delta_pp": -3.08,
+      "drawdown_delta_pp": 1.54,
+      "risk_regime_better_return": false,
+      "risk_regime_smaller_drawdown": true
+    },
+    {
+      "period": "2023-07-30 -> 2026-07-30",
+      "baseline": {
+        "portfolio": [
+          "USDMXN=X",
+          "^DJI",
+          "AAPL",
+          "NVDA"
+        ],
+        "final_equity": 14858.58,
+        "total_pnl_amount": 4858.58,
+        "total_return_pct": 48.59,
+        "max_drawdown_pct": -14.02,
+        "avg_exposure_pct_by_symbol": {
+          "USDMXN=X": 100.0,
+          "^DJI": 100.0,
+          "AAPL": 100.0,
+          "NVDA": 100.0
+        }
+      },
+      "risk_regime": {
+        "portfolio": [
+          "USDMXN=X",
+          "^DJI",
+          "AAPL",
+          "NVDA"
+        ],
+        "final_equity": 14285.2,
+        "total_pnl_amount": 4285.2,
+        "total_return_pct": 42.85,
+        "max_drawdown_pct": -12.76,
+        "avg_exposure_pct_by_symbol": {
+          "USDMXN=X": 91.9,
+          "^DJI": 93.7,
+          "AAPL": 92.6,
+          "NVDA": 93.6
+        }
+      },
+      "return_delta_pp": -5.74,
+      "drawdown_delta_pp": 1.26,
+      "risk_regime_better_return": false,
+      "risk_regime_smaller_drawdown": true
+    }
+  ]
+}

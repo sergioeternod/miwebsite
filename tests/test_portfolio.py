@@ -925,8 +925,11 @@ def test_walk_forward_risk_regime_matches_full_size_in_calm_market(monkeypatch, 
 def test_simulate_portfolio_synthetic_reports_risk_regime_flag(monkeypatch):
     monkeypatch.setattr(portfolio_module, "recommend", lambda *a, **k: _fake_rec(action="BUY", confidence=80.0))
 
-    off = simulate_portfolio_synthetic(start_date="2026-01-01", portfolio_size=2)
-    on = simulate_portfolio_synthetic(start_date="2026-01-01", portfolio_size=2, risk_regime_sizing=True)
+    off = simulate_portfolio_synthetic(start_date="2026-01-01", portfolio_size=2, risk_regime_sizing=False)
+    # Default ON: validated across 6 historical windows — smaller max
+    # drawdown in 6/6, avg return delta +1.17 pp (see
+    # scripts/validate_risk_regime_result.json).
+    on = simulate_portfolio_synthetic(start_date="2026-01-01", portfolio_size=2)
 
     assert off["risk_regime_sizing"] is False
     assert on["risk_regime_sizing"] is True

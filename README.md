@@ -694,6 +694,55 @@ el escáner sigue reportando el lado SELL como información. Y la
 advertencia de siempre, que ninguna racha de validaciones elimina: 6
 ventanas históricas no garantizan la séptima.
 
+### Indicador de régimen de riesgo: menos exposición cuando la volatilidad sube
+
+El origen de este indicador fue una pregunta directa: ¿se pudieron prever
+las caídas de agosto-septiembre 2024 o de marzo-abril 2026? La respuesta
+empírica fue no — la víspera del pico de enero 2026 el modelo leía HOLD
+con 80.6% de confianza y ADX 10.6, cero aviso. Lo que sí es medible en el
+momento en que aparece es la *volatilidad realizada creciente*. El
+indicador (`_vol_regime_exposure` en `app/portfolio.py`) no intenta
+predecir el golpe: achica cuánto pega.
+
+Mecánica: en cada barra se compara la volatilidad realizada reciente (20
+barras, ~1 mes) contra su línea base de largo plazo (100 barras, ~5
+meses). Si la reciente supera la base, la exposición de la posición se
+reduce en proporción (`base/reciente`), acotada entre 25% y 100% — nunca
+sale del todo; salir sigue siendo trabajo de la señal técnica y del
+stop-loss. Es causal por construcción (ventanas rolling que terminan en
+cada barra; hay un test que altera el futuro de la serie y verifica que
+la exposición pasada no cambia), y los reajustes de tamaño pagan comisión
+sobre el cambio de exposición efectiva — no se modelan gratis.
+
+Validación en las 6 ventanas históricas (mismo modelo long-only, única
+diferencia el indicador; `scripts/validate_risk_regime.py`, resultado
+completo en `scripts/validate_risk_regime_result.json`):
+
+| Periodo | Retorno sin/con | Max drawdown sin/con |
+|---|---|---|
+| 2007-2010 (crisis) | +13.51% / **+18.66%** | -37.90% / **-35.41%** |
+| 2014-2017 | **+68.53%** / +63.60% | -8.76% / **-6.94%** |
+| 2017-2020 (COVID) | +43.21% / **+54.46%** | -25.04% / **-16.96%** |
+| 2019-2022 | +46.98% / **+51.35%** | -26.37% / **-24.35%** |
+| 2021-2024 | **+23.67%** / +20.59% | -25.33% / **-23.79%** |
+| 2023-2026 | **+48.59%** / +42.85% | -14.02% / **-12.76%** |
+
+El veredicto honesto tiene dos caras. En su métrica de diseño —reducir el
+golpe— ganó **6 de 6**: el drawdown máximo bajó en todas las ventanas
+(delta promedio +2.87 pp, hasta +8.08 pp en la del COVID). En retorno
+quedó 3/6: gana justo en las ventanas con crash adentro (2007-2010,
+COVID, 2019-2022) y cede unos puntos en las alcistas tranquilas (es el
+costo del seguro: menos exposición también en los rebotes). El delta de
+retorno promedio quedó **+1.17 pp** — el seguro, históricamente, salió
+gratis o mejor.
+
+**Con 6/6 en reducción de drawdown y retorno promedio no negativo, el
+indicador queda activo por defecto en el simulador de portafolio**
+(`risk_regime_sizing=True`; `--no-risk-regime` en la CLI para apagarlo).
+La advertencia de sobreajuste aplica con más fuerza que nunca: estas son
+las mismas ventanas sobre las que se ha venido afinando el modelo, y el
+juez final es el registro hacia adelante de la siguiente sección.
+
 ### Registro de señales hacia adelante (`track`): la única evidencia sin retrovisor
 
 Todas las validaciones anteriores son backtests — calculadas después de los

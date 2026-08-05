@@ -705,7 +705,7 @@ def simulate_portfolio_real(
     risk_parity_sizing: bool = True,
     stop_loss_pct: float | None = DEFAULT_STOP_LOSS_PCT,
     short_confidence_premium: float = 0.0,
-    risk_regime_sizing: bool = False,
+    risk_regime_sizing: bool = True,
 ) -> dict:
     """Auto-selects a portfolio (from real symbols, defaulting to the full
     example universe) using only data before `start_date`, then walks
@@ -730,8 +730,11 @@ def simulate_portfolio_real(
     technical signal (`None` to disable — see `_walk_forward_result`).
     `risk_regime_sizing` scales position exposure down while short-term
     realized volatility runs above its longer-term baseline (see
-    `_vol_regime_exposure`) — off by default pending multi-window
-    validation."""
+    `_vol_regime_exposure`) — on by default: validated across 6 historical
+    windows (incl. 2007-2010), it reduced max drawdown in 6/6 with a
+    slightly positive average return delta (+1.17 pp; per-window returns
+    were mixed, 3/6 — it trades a little upside in calm bull stretches for
+    a smaller hit in turbulent ones)."""
     symbols = symbols or _default_symbols()
 
     dfs = {}
@@ -782,7 +785,7 @@ def simulate_portfolio_synthetic(
     risk_parity_sizing: bool = True,
     stop_loss_pct: float | None = DEFAULT_STOP_LOSS_PCT,
     short_confidence_premium: float = 0.0,
-    risk_regime_sizing: bool = False,
+    risk_regime_sizing: bool = True,
 ) -> dict:
     """Same simulation, but over synthetic profiles reaching into 2026 —
     usable with no network access. Real dates only line up exactly with

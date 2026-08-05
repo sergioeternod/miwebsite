@@ -141,8 +141,8 @@ class PortfolioSimulateRequest(BaseModel):
         description="Puntos de confianza extra que un SELL necesita (sobre min_confidence_pct) para abrir un corto — los longs no lo pagan. 0 = sin asimetría",
     )
     risk_regime_sizing: bool = Field(
-        False,
-        description="Reduce el tamaño de las posiciones mientras la volatilidad realizada reciente (20 barras) supera su línea base de largo plazo (100 barras) — no predice caídas, achica cuánto pegan. Desactivado por defecto, pendiente de validación multi-ventana",
+        True,
+        description="Reduce el tamaño de las posiciones mientras la volatilidad realizada reciente (20 barras) supera su línea base de largo plazo (100 barras) — no predice caídas, achica cuánto pegan. Activo por defecto: redujo el drawdown máximo en 6 de 6 ventanas históricas validadas (incl. 2007-2010) con delta de retorno promedio +1.17 pp (retorno por ventana mixto, 3/6)",
     )
 
 
