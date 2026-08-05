@@ -778,6 +778,54 @@ portafolio en vez de casarse 3 años con la foto del día uno). La ventana
 2004-2007 también dejó una lección de concentración: con un solo candidato
 BUY ≥55%, todo el capital quedó en una acción.
 
+### Re-selección trimestral: la primera configuración que le gana al buy & hold
+
+El diagnóstico de las ventanas vírgenes apuntaba a un sospechoso
+estructural: el portafolio se elegía el día uno y no se revisaba en 3
+años. `rebalance_months` re-corre la selección cada N meses calendario —
+con datos solo hasta cada frontera (cada segmento trunca sus dataframes
+en su propio límite, así ni la selección ni el walk-forward pueden
+asomarse), cobrando en cada rotación 2× la comisión del símbolo entrante
+(incluso si el modelo estaba en efectivo — preferimos sobrestimar
+costos), y pasando el segmento completo a efectivo si ninguna candidata
+supera el umbral. Los overlays de earnings/noticias solo aplican a la
+primera selección: aplicarlos en fronteras históricas sería lookahead.
+
+Validación trimestral (`scripts/validate_rebalance.py`) sobre las 9
+ventanas — las 6 de la era de ajuste y las 3 vírgenes:
+
+| Periodo | Sin rebalanceo | Trimestral | Buy & hold | vs benchmark |
+|---|---|---|---|---|
+| 2004-2007 (virgen) | +716.59% | +90.65% | +774.47% | -683.8 pp |
+| 2007-2010 (crisis) | +18.66% | **+64.19%** (DD -11%) | -9.34% | **+73.5 pp** |
+| 2010-2013 (virgen) | +12.32% | **+32.68%** | +15.20% | **+17.5 pp** |
+| 2012-2015 (virgen) | +23.16% | **+39.12%** | +27.81% | **+11.3 pp** |
+| 2014-2017 | +63.60% | +62.59% | +68.50% | -5.9 pp |
+| 2017-2020 (COVID) | +54.46% | **+67.39%** | +52.32% | **+15.1 pp** |
+| 2019-2022 | +51.35% | **+100.45%** | +59.43% | **+41.0 pp** |
+| 2021-2024 | +20.59% | **+44.98%** | +32.98% | **+12.0 pp** |
+| 2023-2026 | +42.85% | **+44.71%** | +52.52% | -7.8 pp |
+
+**Trimestral le ganó al modelo sin rebalanceo en 7 de 9 y al buy & hold
+en 6 de 9 — la primera configuración de este proyecto que vence al
+benchmark de forma amplia**, incluyendo las 3 ventanas vírgenes que nunca
+se usaron para afinar nada y la crisis de 2008 (+64% mientras el buy &
+hold perdía). El "delta promedio" crudo es -50.8 pp, pero es un artefacto
+de un solo outlier: en 2004-2007 el brazo sin rebalanceo había
+concentrado el 100% del capital en AAPL en la era pre-iPhone (+716% de
+chiripa); el rebalanceo diversificó esa apuesta — que es exactamente lo
+que se le pide — y "solo" ganó +90%. Excluyendo ese outlier, el delta
+promedio es **+21.0 pp por ventana**; la mediana con todo incluido es
++15.96 pp.
+
+**`rebalance_months=3` es ahora el default del simulador de portafolio**
+(`--no-rebalance` o `--rebalance-months N` en la CLI para cambiarlo). No
+se barrieron otros intervalos (1, 6, 12 meses) a propósito: 3 meses fue
+la hipótesis pre-registrada, y ponerse a barrer parámetros sobre las
+mismas ventanas sería volver al sobreajuste que las ventanas vírgenes
+acaban de descartar. Advertencia intacta: 9 ventanas históricas no
+garantizan la décima.
+
 ### Registro de señales hacia adelante (`track`): la única evidencia sin retrovisor
 
 Todas las validaciones anteriores son backtests — calculadas después de los

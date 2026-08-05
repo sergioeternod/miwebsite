@@ -136,7 +136,7 @@ def test_combine_equity_curves_uses_each_symbols_own_capital():
 def test_simulate_portfolio_synthetic_end_to_end_small(monkeypatch):
     # Keep this fast: mock recommend() so no real strategy backtests run.
     monkeypatch.setattr(portfolio_module, "recommend", lambda *a, **k: {"overall_action": "BUY", "confidence_pct": 80.0})
-    report = simulate_portfolio_synthetic(portfolio_size=2, step=30)
+    report = simulate_portfolio_synthetic(portfolio_size=2, step=30, rebalance_months=None)
 
     assert report["start_date"] == "2026-01-01"
     assert len(report["portfolio"]) == 2
@@ -255,9 +255,9 @@ def test_simulate_portfolio_synthetic_min_confidence_pct_reduces_or_matches_trad
 
     monkeypatch.setattr(portfolio_module, "recommend", noisy_recommend)
 
-    strict = simulate_portfolio_synthetic(portfolio_size=1, step=10, min_confidence_pct=90.0)
+    strict = simulate_portfolio_synthetic(portfolio_size=1, step=10, min_confidence_pct=90.0, rebalance_months=None)
     calls["n"] = 0  # reset so the second run's first call is also the guaranteed-success selection call
-    loose = simulate_portfolio_synthetic(portfolio_size=1, step=10, min_confidence_pct=0.0)
+    loose = simulate_portfolio_synthetic(portfolio_size=1, step=10, min_confidence_pct=0.0, rebalance_months=None)
 
     strict_trades = strict["per_symbol"][0]["metrics"]["num_trades"]
     loose_trades = loose["per_symbol"][0]["metrics"]["num_trades"]
@@ -389,10 +389,23 @@ def test_walk_forward_result_adaptive_learning_off_matches_fixed_threshold(monke
 
 def test_simulate_portfolio_synthetic_includes_hindsight_summary(monkeypatch):
     monkeypatch.setattr(portfolio_module, "recommend", lambda *a, **k: {"overall_action": "BUY", "confidence_pct": 80.0})
-    report = simulate_portfolio_synthetic(portfolio_size=2, step=30)
+    report = simulate_portfolio_synthetic(portfolio_size=2, step=30, rebalance_months=None)
 
     assert "hindsight_summary" in report
     assert all("hindsight_summary" in p for p in report["per_symbol"])
+
+
+def test_simulate_portfolio_synthetic_default_is_quarterly_rebalance(monkeypatch):
+    """The public default is quarterly re-selection — validated across 9
+    windows (7/9 vs the no-rebalance model, 6/9 vs buy & hold; see
+    scripts/validate_rebalance_result.json)."""
+    monkeypatch.setattr(portfolio_module, "recommend", lambda *a, **k: {"overall_action": "BUY", "confidence_pct": 80.0})
+    report = simulate_portfolio_synthetic(portfolio_size=2, step=30)
+
+    assert report["rebalance_months"] == 3
+    assert report["segments"]
+    assert "hindsight_summary" in report
+    assert "benchmark_buy_hold" in report
 
 
 def _fake_rec(action="BUY", confidence=80.0, sharpe_ratio=None, max_drawdown_pct=None):
@@ -925,11 +938,11 @@ def test_walk_forward_risk_regime_matches_full_size_in_calm_market(monkeypatch, 
 def test_simulate_portfolio_synthetic_reports_risk_regime_flag(monkeypatch):
     monkeypatch.setattr(portfolio_module, "recommend", lambda *a, **k: _fake_rec(action="BUY", confidence=80.0))
 
-    off = simulate_portfolio_synthetic(start_date="2026-01-01", portfolio_size=2, risk_regime_sizing=False)
+    off = simulate_portfolio_synthetic(start_date="2026-01-01", portfolio_size=2, risk_regime_sizing=False, rebalance_months=None)
     # Default ON: validated across 6 historical windows — smaller max
     # drawdown in 6/6, avg return delta +1.17 pp (see
     # scripts/validate_risk_regime_result.json).
-    on = simulate_portfolio_synthetic(start_date="2026-01-01", portfolio_size=2)
+    on = simulate_portfolio_synthetic(start_date="2026-01-01", portfolio_size=2, rebalance_months=None)
 
     assert off["risk_regime_sizing"] is False
     assert on["risk_regime_sizing"] is True
