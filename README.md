@@ -819,12 +819,41 @@ promedio es **+21.0 pp por ventana**; la mediana con todo incluido es
 +15.96 pp.
 
 **`rebalance_months=3` es ahora el default del simulador de portafolio**
-(`--no-rebalance` o `--rebalance-months N` en la CLI para cambiarlo). No
-se barrieron otros intervalos (1, 6, 12 meses) a propósito: 3 meses fue
-la hipótesis pre-registrada, y ponerse a barrer parámetros sobre las
-mismas ventanas sería volver al sobreajuste que las ventanas vírgenes
-acaban de descartar. Advertencia intacta: 9 ventanas históricas no
-garantizan la décima.
+(`--no-rebalance` o `--rebalance-months N` en la CLI para cambiarlo).
+Advertencia intacta: 9 ventanas históricas no garantizan la décima.
+
+#### Barrido de robustez del intervalo: ¿ayuda re-seleccionar, o tuvimos suerte con "3"?
+
+Elegir el intervalo barriendo parámetros y quedándose con el que más da
+es el sobreajuste clásico. En su lugar se corrió un barrido de
+*robustez* (1, 6 y 12 meses sobre las mismas 9 ventanas) con la regla de
+interpretación **escrita y commiteada antes de ver ningún número** (está
+en `scripts/validate_rebalance.py`): si todos los intervalos ganan, la
+conclusión es robusta y el default se queda en 3 por sus razones
+independientes; si solo 3 gana, fue suerte del parámetro y se degrada la
+confianza; y el barrido jamás se usa para coronar al de mayor puntaje.
+
+| Intervalo | vs modelo sin rebalanceo | vs buy & hold |
+|---|---|---|
+| 1 mes | 3/9 | 3/9 |
+| **3 meses (default)** | **7/9** | **6/9** |
+| 6 meses | 6/9 | 5/9 |
+| 12 meses | 5/9 | 6/9 |
+
+El veredicto quedó entre los dos extremos de la regla, y se reporta tal
+cual: **la mejora es robusta en el rango trimestral-anual** (3, 6 y 12
+meses ganan por mayoría contra el modelo sin rebalanceo y rondan 5-6/9
+contra el benchmark), pero **el rebalanceo mensual falla claramente**
+(3/9, con un -15.4% en 2023-2026 donde todos los demás ganan). La falla
+mensual tiene mecánica, no misterio: los indicadores del ensemble miran
+ventanas de 20-100 barras, así que a 30 días apenas hay información
+nueva que digerir, y rotar 12 veces al año multiplica el costo de
+2× comisión mientras persigue ruido. Conclusión: "re-seleccionar ayuda"
+no depende de haber atinado al 3 — pero tampoco es gratis a cualquier
+frecuencia. El default se queda en 3 meses por las razones
+pre-registradas (ciclo de earnings, horizonte de los indicadores,
+amortización de rotación), no por haber sido también el pico del barrido
+— esa coincidencia no se usa como argumento.
 
 ### Registro de señales hacia adelante (`track`): la única evidencia sin retrovisor
 

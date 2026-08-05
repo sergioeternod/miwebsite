@@ -1,0 +1,314 @@
+{
+  "elapsed_seconds": 3222.1,
+  "rebalance_months": 12,
+  "num_periods_run": 9,
+  "num_beats_baseline": 5,
+  "num_beats_benchmark": 6,
+  "avg_return_delta_pp_vs_baseline": -42.21,
+  "results": [
+    {
+      "period": "2004-2007 (virgen)",
+      "rebalanced_return_pct": 164.99,
+      "rebalanced_max_drawdown_pct": -23.28,
+      "baseline_return_pct": 716.59,
+      "return_delta_pp": -551.6,
+      "benchmark_return_pct": 774.47,
+      "vs_benchmark_pct_points": -609.48,
+      "num_segments": 4,
+      "num_cash_segments": 2,
+      "segment_portfolios": [
+        [
+          "AAPL"
+        ],
+        [
+          "^IXIC",
+          "AAPL",
+          "^GSPC",
+          "AMZN"
+        ],
+        [],
+        []
+      ]
+    },
+    {
+      "period": "2007-2010 (crisis)",
+      "rebalanced_return_pct": 9.01,
+      "rebalanced_max_drawdown_pct": -17.94,
+      "baseline_return_pct": 18.66,
+      "return_delta_pp": -9.65,
+      "benchmark_return_pct": -9.34,
+      "vs_benchmark_pct_points": 18.35,
+      "num_segments": 4,
+      "num_cash_segments": 1,
+      "segment_portfolios": [
+        [
+          "NVDA",
+          "^GSPC",
+          "AAPL",
+          "CL=F"
+        ],
+        [
+          "USDMXN=X",
+          "USDJPY=X"
+        ],
+        [
+          "GBPUSD=X",
+          "^IXIC",
+          "AAPL",
+          "MSFT"
+        ],
+        []
+      ]
+    },
+    {
+      "period": "2010-2013 (virgen)",
+      "rebalanced_return_pct": 31.61,
+      "rebalanced_max_drawdown_pct": -15.67,
+      "baseline_return_pct": 12.32,
+      "return_delta_pp": 19.29,
+      "benchmark_return_pct": 15.2,
+      "vs_benchmark_pct_points": 16.41,
+      "num_segments": 4,
+      "num_cash_segments": 1,
+      "segment_portfolios": [
+        [
+          "USDJPY=X",
+          "GBPUSD=X",
+          "^DJI",
+          "CL=F"
+        ],
+        [
+          "AAPL",
+          "MSFT",
+          "^IXIC",
+          "^DJI"
+        ],
+        [
+          "EURUSD=X",
+          "^DJI",
+          "^GSPC",
+          "AAPL",
+          "MSFT"
+        ],
+        []
+      ]
+    },
+    {
+      "period": "2012-2015 (virgen)",
+      "rebalanced_return_pct": 39.01,
+      "rebalanced_max_drawdown_pct": -9.61,
+      "baseline_return_pct": 23.16,
+      "return_delta_pp": 15.85,
+      "benchmark_return_pct": 27.81,
+      "vs_benchmark_pct_points": 11.2,
+      "num_segments": 4,
+      "num_cash_segments": 0,
+      "segment_portfolios": [
+        [
+          "AMZN",
+          "EURUSD=X",
+          "NVDA"
+        ],
+        [
+          "TSLA",
+          "SI=F",
+          "^DJI"
+        ],
+        [
+          "AAPL",
+          "EURUSD=X",
+          "USDMXN=X",
+          "MSFT",
+          "^IXIC"
+        ],
+        [
+          "USDMXN=X",
+          "BTC-USD"
+        ]
+      ]
+    },
+    {
+      "period": "2014-2017",
+      "rebalanced_return_pct": 165.85,
+      "rebalanced_max_drawdown_pct": -8.57,
+      "baseline_return_pct": 63.6,
+      "return_delta_pp": 102.25,
+      "benchmark_return_pct": 68.5,
+      "vs_benchmark_pct_points": 97.35,
+      "num_segments": 4,
+      "num_cash_segments": 1,
+      "segment_portfolios": [
+        [
+          "MSFT",
+          "^IXIC",
+          "AMZN",
+          "USDMXN=X"
+        ],
+        [
+          "USDMXN=X",
+          "NVDA",
+          "AMZN",
+          "BTC-USD"
+        ],
+        [
+          "USDMXN=X",
+          "NVDA",
+          "^IXIC",
+          "AAPL"
+        ],
+        []
+      ]
+    },
+    {
+      "period": "2017-2020 (COVID)",
+      "rebalanced_return_pct": 50.05,
+      "rebalanced_max_drawdown_pct": -15.19,
+      "baseline_return_pct": 54.46,
+      "return_delta_pp": -4.41,
+      "benchmark_return_pct": 52.32,
+      "vs_benchmark_pct_points": -2.27,
+      "num_segments": 4,
+      "num_cash_segments": 0,
+      "segment_portfolios": [
+        [
+          "^IXIC",
+          "NVDA",
+          "^DJI",
+          "AAPL",
+          "EURUSD=X"
+        ],
+        [
+          "MSFT",
+          "AMZN",
+          "^DJI",
+          "^GSPC",
+          "BTC-USD"
+        ],
+        [
+          "NVDA",
+          "GBPUSD=X",
+          "MSFT",
+          "^DJI",
+          "^GSPC"
+        ],
+        [
+          "ETH-USD",
+          "BTC-USD"
+        ]
+      ]
+    },
+    {
+      "period": "2019-2022",
+      "rebalanced_return_pct": 74.26,
+      "rebalanced_max_drawdown_pct": -23.47,
+      "baseline_return_pct": 51.35,
+      "return_delta_pp": 22.91,
+      "benchmark_return_pct": 59.43,
+      "vs_benchmark_pct_points": 14.83,
+      "num_segments": 4,
+      "num_cash_segments": 0,
+      "segment_portfolios": [
+        [
+          "NVDA",
+          "MSFT",
+          "GC=F",
+          "^GSPC",
+          "^DJI"
+        ],
+        [
+          "GC=F",
+          "CL=F",
+          "^GSPC",
+          "ETH-USD",
+          "^DJI"
+        ],
+        [
+          "^GSPC",
+          "^DJI",
+          "EURUSD=X",
+          "CL=F",
+          "MSFT"
+        ],
+        [
+          "ETH-USD",
+          "SOL-USD"
+        ]
+      ]
+    },
+    {
+      "period": "2021-2024",
+      "rebalanced_return_pct": 9.25,
+      "rebalanced_max_drawdown_pct": -20.44,
+      "baseline_return_pct": 20.59,
+      "return_delta_pp": -11.34,
+      "benchmark_return_pct": 32.98,
+      "vs_benchmark_pct_points": -23.73,
+      "num_segments": 4,
+      "num_cash_segments": 0,
+      "segment_portfolios": [
+        [
+          "^GSPC",
+          "^DJI",
+          "CL=F",
+          "MSFT",
+          "AAPL"
+        ],
+        [
+          "AAPL",
+          "EURUSD=X",
+          "^IXIC",
+          "MSFT",
+          "ETH-USD"
+        ],
+        [
+          "USDMXN=X",
+          "^DJI",
+          "GBPUSD=X",
+          "AAPL",
+          "^GSPC"
+        ],
+        [
+          "GBPUSD=X",
+          "SOL-USD",
+          "USDJPY=X",
+          "XRP-USD"
+        ]
+      ]
+    },
+    {
+      "period": "2023-2026",
+      "rebalanced_return_pct": 79.65,
+      "rebalanced_max_drawdown_pct": -35.14,
+      "baseline_return_pct": 42.85,
+      "return_delta_pp": 36.8,
+      "benchmark_return_pct": 52.52,
+      "vs_benchmark_pct_points": 27.13,
+      "num_segments": 4,
+      "num_cash_segments": 0,
+      "segment_portfolios": [
+        [
+          "USDMXN=X",
+          "^DJI",
+          "AAPL",
+          "NVDA"
+        ],
+        [
+          "XRP-USD",
+          "SOL-USD",
+          "AMZN"
+        ],
+        [
+          "USDJPY=X",
+          "USDMXN=X",
+          "MSFT",
+          "ETH-USD",
+          "AMZN"
+        ],
+        [
+          "USDJPY=X",
+          "GBPUSD=X"
+        ]
+      ]
+    }
+  ]
+}
