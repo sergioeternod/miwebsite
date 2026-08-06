@@ -1011,7 +1011,7 @@ def simulate_portfolio_real(
     short_confidence_premium: float = 0.0,
     risk_regime_sizing: bool = True,
     rebalance_months: int | None = 3,
-    equity_regime_tilt: bool = False,
+    equity_regime_tilt: bool = True,
 ) -> dict:
     """Auto-selects a portfolio (from real symbols, defaulting to the full
     example universe) using only data before `start_date`, then walks
@@ -1050,9 +1050,15 @@ def simulate_portfolio_real(
     AAPL pre-iPhone — a fluke diversification is *supposed* to give up)
     and 2014-2017 (-1 pp). See `_run_rebalanced_simulation` for the
     no-lookahead and rotation-cost details. `equity_regime_tilt` (default
-    off pending validation) narrows each (re)selection to stocks/indexes
-    while the S&P 500 trades above its 200-bar moving average — see
-    `_equity_risk_on`."""
+    on) narrows each (re)selection to stocks/indexes while the S&P 500
+    trades above its 200-bar moving average — see `_equity_risk_on`.
+    Validated across the 9 windows per the pre-registered rule in
+    scripts/validate_equity_tilt.py: beat the untilted default in 6/9
+    (avg +17.2 pp, median +16 pp) and the S&P 500 itself in 8/9, while
+    keeping the crisis-era protection (2007-2010: +38.6% vs the index's
+    -25.3%). Honest costs, measured: average max drawdown deepens ~4 pp
+    (worst case 2023-2026: -40.7%), and it lost to the untilted default
+    in 3 windows including that one."""
     symbols = symbols or _default_symbols()
 
     dfs = {}
@@ -1107,7 +1113,7 @@ def simulate_portfolio_synthetic(
     short_confidence_premium: float = 0.0,
     risk_regime_sizing: bool = True,
     rebalance_months: int | None = 3,
-    equity_regime_tilt: bool = False,
+    equity_regime_tilt: bool = True,
 ) -> dict:
     """Same simulation, but over synthetic profiles reaching into 2026 —
     usable with no network access. Real dates only line up exactly with

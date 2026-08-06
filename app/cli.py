@@ -302,7 +302,7 @@ def cmd_portfolio_sim(args: argparse.Namespace) -> None:
         short_confidence_premium=args.short_premium,
         risk_regime_sizing=not args.no_risk_regime,
         rebalance_months=None if args.no_rebalance else args.rebalance_months,
-        equity_regime_tilt=args.equity_tilt,
+        equity_regime_tilt=not args.no_equity_tilt,
     )
     if args.max_per_asset_class is not None:
         # Omit otherwise so each path's own smart default applies (2 for
@@ -618,7 +618,11 @@ def build_parser() -> argparse.ArgumentParser:
     )
     portfolio_sim_parser.add_argument(
         "--equity-tilt", action="store_true",
-        help="Cuando el S&P 500 está sobre su media de 200 días en una (re)selección, restringe el universo a acciones e índices — 100%% accionario en mercados alcistas, universo defensivo completo en los demás (desactivado por defecto, pendiente de validación)",
+        help="Restringe el universo a acciones e índices cuando el S&P 500 está sobre su media de 200 días (ya es el default; se mantiene por compatibilidad)",
+    )
+    portfolio_sim_parser.add_argument(
+        "--no-equity-tilt", action="store_true",
+        help="Desactiva el tilt accionario (activo por defecto: le ganó al modelo sin tilt en 6 de 9 ventanas validadas, +17.2 pp promedio, y al S&P 500 en 8 de 9; a cambio profundiza el drawdown promedio ~4 pp)",
     )
     portfolio_sim_parser.add_argument("--out", default=None, help="Ruta donde guardar el reporte completo en JSON")
     portfolio_sim_parser.set_defaults(func=cmd_portfolio_sim)

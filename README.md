@@ -855,6 +855,54 @@ pre-registradas (ciclo de earnings, horizonte de los indicadores,
 amortización de rotación), no por haber sido también el pico del barrido
 — esa coincidencia no se usa como argumento.
 
+### Tilt de régimen accionario: 100% acciones cuando el mercado está en tendencia
+
+La gráfica de los últimos 12 meses dejó una verdad incómoda: el modelo
+hizo +7.6% mientras los índices puros hacían +22-26%, y el lastre fueron
+divisas y oro — que casi no se movieron — en un año donde lo único que
+pagaba era estar en acciones. La vara del usuario es explícita: ganarle
+a los índices principales.
+
+El `equity_regime_tilt` es la respuesta clásica y causal: en cada
+(re)selección, si el S&P 500 cotiza **sobre su media móvil de 200 días**
+(dato conocible ese día; test de causalidad incluido), el universo de
+candidatos se restringe a acciones e índices y se libera el tope por
+clase — 100% accionario en mercados alcistas. Debajo de la media, vuelve
+el universo defensivo completo. Validación en las 9 ventanas, contra dos
+varas (`scripts/validate_equity_tilt.py`, regla pre-registrada en el
+docstring antes de ver números):
+
+| Periodo | Sin tilt | Con tilt | S&P 500 | tilt vs S&P |
+|---|---|---|---|---|
+| 2004-2007 (virgen) | **+90.7%** | +76.0% | +33.8% | **+42.2 pp** |
+| 2007-2010 (crisis) | **+64.2%** | +38.6% | -25.3% | **+63.9 pp** |
+| 2010-2013 (virgen) | +32.7% | **+69.9%** | +53.1% | **+16.9 pp** |
+| 2012-2015 (virgen) | +39.1% | **+89.3%** | +52.2% | **+37.0 pp** |
+| 2014-2017 | +62.6% | **+143.1%** | +25.5% | **+117.6 pp** |
+| 2017-2020 (COVID) | +67.4% | **+83.4%** | +31.4% | **+52.0 pp** |
+| 2019-2022 | +100.5% | **+113.4%** | +37.1% | **+76.3 pp** |
+| 2021-2024 | +45.0% | **+66.7%** | +23.7% | **+43.0 pp** |
+| 2023-2026 | **+44.7%** | +21.7% | +62.1% | -40.4 pp |
+
+**El tilt le ganó al default sin tilt en 6 de 9 ventanas (+17.2 pp
+promedio, mediana +16.0) y al S&P 500 directo en 8 de 9** — con márgenes
+de +17 a +118 pp. El candado de la regla pre-registrada también se
+cumplió: en la crisis 2007-2010 el filtro de 200 días sacó al modelo de
+acciones (solo 6 de 13 fronteras leyeron risk-on) y conservó +38.6%
+contra -25.3% del índice — menos que el modelo sin tilt (+64.2%), pero
+lejos de regalar la protección. **Con eso, el tilt queda activo por
+defecto** (`--no-equity-tilt` para apagarlo).
+
+Los costos, sin maquillaje: el drawdown promedio se profundiza ~4 pp
+(los picos accionarios concentrados pegan más), y la peor ventana es
+justo la más reciente — 2023-2026, donde el tilt quedó -23 pp bajo el
+modelo sin tilt y -40 pp bajo el índice, con un drawdown de -40.7%: la
+media de 200 días lo mantuvo 100% en acciones durante la corrección de
+2026 (el filtro es lento por diseño) y la rotación trimestral vendió
+caro el latigazo. Ese es el trato completo: más retorno esperado y
+ganarle al índice casi siempre, a cambio de caídas más profundas cuando
+el régimen cambia rápido. 9 ventanas no garantizan la décima.
+
 ### Registro de señales hacia adelante (`track`): la única evidencia sin retrovisor
 
 Todas las validaciones anteriores son backtests — calculadas después de los

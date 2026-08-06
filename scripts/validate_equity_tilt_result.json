@@ -1,0 +1,1183 @@
+{
+  "elapsed_seconds": 3509.4,
+  "num_periods_run": 9,
+  "num_beats_baseline": 6,
+  "num_beats_sp500": 8,
+  "results": [
+    {
+      "period": "2004-2007 (virgen)",
+      "tilt_return_pct": 75.97,
+      "tilt_max_drawdown_pct": -29.06,
+      "baseline_return_pct": 90.65,
+      "baseline_max_drawdown_pct": -22.82,
+      "return_delta_pp": -14.68,
+      "sp500_return_pct": 33.78,
+      "vs_sp500_pp": 42.19,
+      "num_segments": 13,
+      "num_risk_on_segments": 10,
+      "segment_portfolios": [
+        {
+          "start": "2004-07-30",
+          "risk_on": false,
+          "portfolio": [
+            "AAPL"
+          ]
+        },
+        {
+          "start": "2004-10-30",
+          "risk_on": true,
+          "portfolio": [
+            "AAPL",
+            "^IXIC",
+            "^GSPC"
+          ]
+        },
+        {
+          "start": "2005-01-30",
+          "risk_on": true,
+          "portfolio": [
+            "AAPL",
+            "NVDA"
+          ]
+        },
+        {
+          "start": "2005-04-30",
+          "risk_on": true,
+          "portfolio": []
+        },
+        {
+          "start": "2005-07-30",
+          "risk_on": true,
+          "portfolio": [
+            "^IXIC",
+            "AAPL",
+            "^GSPC",
+            "AMZN"
+          ]
+        },
+        {
+          "start": "2005-10-30",
+          "risk_on": false,
+          "portfolio": [
+            "USDJPY=X",
+            "MSFT",
+            "AAPL"
+          ]
+        },
+        {
+          "start": "2006-01-30",
+          "risk_on": true,
+          "portfolio": [
+            "NVDA",
+            "MSFT",
+            "^IXIC",
+            "AAPL"
+          ]
+        },
+        {
+          "start": "2006-04-30",
+          "risk_on": true,
+          "portfolio": [
+            "AAPL",
+            "^IXIC"
+          ]
+        },
+        {
+          "start": "2006-07-30",
+          "risk_on": true,
+          "portfolio": []
+        },
+        {
+          "start": "2006-10-30",
+          "risk_on": true,
+          "portfolio": [
+            "^IXIC",
+            "^GSPC",
+            "AAPL",
+            "^DJI",
+            "NVDA"
+          ]
+        },
+        {
+          "start": "2007-01-30",
+          "risk_on": true,
+          "portfolio": [
+            "^IXIC"
+          ]
+        },
+        {
+          "start": "2007-04-30",
+          "risk_on": true,
+          "portfolio": [
+            "NVDA",
+            "^IXIC",
+            "AAPL",
+            "^GSPC",
+            "MSFT"
+          ]
+        },
+        {
+          "start": "2007-07-30",
+          "risk_on": null,
+          "portfolio": []
+        }
+      ]
+    },
+    {
+      "period": "2007-2010 (crisis)",
+      "tilt_return_pct": 38.6,
+      "tilt_max_drawdown_pct": -19.44,
+      "baseline_return_pct": 64.19,
+      "baseline_max_drawdown_pct": -10.98,
+      "return_delta_pp": -25.59,
+      "sp500_return_pct": -25.26,
+      "vs_sp500_pp": 63.86,
+      "num_segments": 13,
+      "num_risk_on_segments": 6,
+      "segment_portfolios": [
+        {
+          "start": "2007-07-30",
+          "risk_on": true,
+          "portfolio": [
+            "NVDA",
+            "^GSPC",
+            "AAPL",
+            "AMZN"
+          ]
+        },
+        {
+          "start": "2007-10-30",
+          "risk_on": true,
+          "portfolio": [
+            "MSFT",
+            "NVDA",
+            "AAPL",
+            "^GSPC",
+            "AMZN"
+          ]
+        },
+        {
+          "start": "2008-01-30",
+          "risk_on": false,
+          "portfolio": [
+            "SI=F",
+            "GC=F",
+            "^DJI"
+          ]
+        },
+        {
+          "start": "2008-04-30",
+          "risk_on": false,
+          "portfolio": [
+            "USDMXN=X",
+            "USDJPY=X",
+            "^IXIC",
+            "AAPL",
+            "CL=F"
+          ]
+        },
+        {
+          "start": "2008-07-30",
+          "risk_on": false,
+          "portfolio": [
+            "USDMXN=X",
+            "USDJPY=X"
+          ]
+        },
+        {
+          "start": "2008-10-30",
+          "risk_on": false,
+          "portfolio": [
+            "USDMXN=X",
+            "^DJI"
+          ]
+        },
+        {
+          "start": "2009-01-30",
+          "risk_on": false,
+          "portfolio": [
+            "USDMXN=X",
+            "NVDA"
+          ]
+        },
+        {
+          "start": "2009-04-30",
+          "risk_on": false,
+          "portfolio": [
+            "^IXIC",
+            "MSFT",
+            "AAPL",
+            "CL=F"
+          ]
+        },
+        {
+          "start": "2009-07-30",
+          "risk_on": true,
+          "portfolio": [
+            "^IXIC",
+            "AAPL",
+            "MSFT",
+            "NVDA",
+            "AMZN"
+          ]
+        },
+        {
+          "start": "2009-10-30",
+          "risk_on": true,
+          "portfolio": [
+            "MSFT",
+            "^IXIC",
+            "AMZN",
+            "AAPL"
+          ]
+        },
+        {
+          "start": "2010-01-30",
+          "risk_on": true,
+          "portfolio": [
+            "^IXIC",
+            "MSFT",
+            "AAPL"
+          ]
+        },
+        {
+          "start": "2010-04-30",
+          "risk_on": true,
+          "portfolio": [
+            "AAPL",
+            "MSFT",
+            "^IXIC",
+            "AMZN"
+          ]
+        },
+        {
+          "start": "2010-07-30",
+          "risk_on": null,
+          "portfolio": []
+        }
+      ]
+    },
+    {
+      "period": "2010-2013 (virgen)",
+      "tilt_return_pct": 69.91,
+      "tilt_max_drawdown_pct": -15.59,
+      "baseline_return_pct": 32.68,
+      "baseline_max_drawdown_pct": -14.31,
+      "return_delta_pp": 37.23,
+      "sp500_return_pct": 53.05,
+      "vs_sp500_pp": 16.86,
+      "num_segments": 13,
+      "num_risk_on_segments": 11,
+      "segment_portfolios": [
+        {
+          "start": "2010-07-30",
+          "risk_on": false,
+          "portfolio": [
+            "USDJPY=X",
+            "GBPUSD=X",
+            "^DJI",
+            "CL=F"
+          ]
+        },
+        {
+          "start": "2010-10-30",
+          "risk_on": true,
+          "portfolio": [
+            "MSFT",
+            "^IXIC",
+            "AAPL",
+            "NVDA",
+            "AMZN"
+          ]
+        },
+        {
+          "start": "2011-01-30",
+          "risk_on": true,
+          "portfolio": [
+            "NVDA",
+            "AAPL",
+            "MSFT",
+            "^DJI",
+            "^IXIC"
+          ]
+        },
+        {
+          "start": "2011-04-30",
+          "risk_on": true,
+          "portfolio": [
+            "^DJI",
+            "^IXIC",
+            "^GSPC",
+            "AMZN",
+            "TSLA"
+          ]
+        },
+        {
+          "start": "2011-07-30",
+          "risk_on": true,
+          "portfolio": [
+            "AAPL",
+            "MSFT",
+            "AMZN",
+            "^IXIC",
+            "^DJI"
+          ]
+        },
+        {
+          "start": "2011-10-30",
+          "risk_on": true,
+          "portfolio": [
+            "^GSPC",
+            "^IXIC",
+            "AAPL",
+            "^DJI",
+            "TSLA"
+          ]
+        },
+        {
+          "start": "2012-01-30",
+          "risk_on": true,
+          "portfolio": [
+            "AAPL",
+            "^GSPC",
+            "^IXIC",
+            "MSFT",
+            "^DJI"
+          ]
+        },
+        {
+          "start": "2012-04-30",
+          "risk_on": true,
+          "portfolio": [
+            "^GSPC",
+            "AAPL",
+            "^IXIC"
+          ]
+        },
+        {
+          "start": "2012-07-30",
+          "risk_on": true,
+          "portfolio": [
+            "^DJI",
+            "^GSPC",
+            "AAPL",
+            "^IXIC",
+            "MSFT"
+          ]
+        },
+        {
+          "start": "2012-10-30",
+          "risk_on": true,
+          "portfolio": [
+            "^DJI",
+            "^GSPC"
+          ]
+        },
+        {
+          "start": "2013-01-30",
+          "risk_on": true,
+          "portfolio": [
+            "^DJI",
+            "^GSPC",
+            "^IXIC",
+            "MSFT",
+            "NVDA"
+          ]
+        },
+        {
+          "start": "2013-04-30",
+          "risk_on": true,
+          "portfolio": [
+            "^IXIC",
+            "^GSPC",
+            "MSFT",
+            "^DJI",
+            "TSLA"
+          ]
+        },
+        {
+          "start": "2013-07-30",
+          "risk_on": null,
+          "portfolio": []
+        }
+      ]
+    },
+    {
+      "period": "2012-2015 (virgen)",
+      "tilt_return_pct": 89.25,
+      "tilt_max_drawdown_pct": -13.54,
+      "baseline_return_pct": 39.12,
+      "baseline_max_drawdown_pct": -10.72,
+      "return_delta_pp": 50.13,
+      "sp500_return_pct": 52.21,
+      "vs_sp500_pp": 37.04,
+      "num_segments": 13,
+      "num_risk_on_segments": 12,
+      "segment_portfolios": [
+        {
+          "start": "2012-07-30",
+          "risk_on": true,
+          "portfolio": [
+            "AMZN",
+            "NVDA"
+          ]
+        },
+        {
+          "start": "2012-10-30",
+          "risk_on": true,
+          "portfolio": []
+        },
+        {
+          "start": "2013-01-30",
+          "risk_on": true,
+          "portfolio": [
+            "^DJI",
+            "^GSPC",
+            "TSLA",
+            "NVDA"
+          ]
+        },
+        {
+          "start": "2013-04-30",
+          "risk_on": true,
+          "portfolio": [
+            "MSFT",
+            "TSLA",
+            "NVDA"
+          ]
+        },
+        {
+          "start": "2013-07-30",
+          "risk_on": true,
+          "portfolio": [
+            "TSLA",
+            "^DJI"
+          ]
+        },
+        {
+          "start": "2013-10-30",
+          "risk_on": true,
+          "portfolio": [
+            "AAPL",
+            "^IXIC",
+            "AMZN",
+            "^GSPC",
+            "TSLA"
+          ]
+        },
+        {
+          "start": "2014-01-30",
+          "risk_on": true,
+          "portfolio": [
+            "TSLA",
+            "^IXIC",
+            "NVDA"
+          ]
+        },
+        {
+          "start": "2014-04-30",
+          "risk_on": true,
+          "portfolio": [
+            "AAPL",
+            "NVDA"
+          ]
+        },
+        {
+          "start": "2014-07-30",
+          "risk_on": true,
+          "portfolio": [
+            "AAPL",
+            "MSFT",
+            "^IXIC",
+            "TSLA",
+            "AMZN"
+          ]
+        },
+        {
+          "start": "2014-10-30",
+          "risk_on": true,
+          "portfolio": [
+            "AAPL"
+          ]
+        },
+        {
+          "start": "2015-01-30",
+          "risk_on": true,
+          "portfolio": []
+        },
+        {
+          "start": "2015-04-30",
+          "risk_on": true,
+          "portfolio": [
+            "AMZN",
+            "TSLA",
+            "MSFT",
+            "AAPL"
+          ]
+        },
+        {
+          "start": "2015-07-30",
+          "risk_on": null,
+          "portfolio": [
+            "USDMXN=X",
+            "BTC-USD"
+          ]
+        }
+      ]
+    },
+    {
+      "period": "2014-2017",
+      "tilt_return_pct": 143.09,
+      "tilt_max_drawdown_pct": -14.57,
+      "baseline_return_pct": 62.59,
+      "baseline_max_drawdown_pct": -15.08,
+      "return_delta_pp": 80.5,
+      "sp500_return_pct": 25.48,
+      "vs_sp500_pp": 117.61,
+      "num_segments": 13,
+      "num_risk_on_segments": 11,
+      "segment_portfolios": [
+        {
+          "start": "2014-07-30",
+          "risk_on": true,
+          "portfolio": [
+            "MSFT",
+            "^IXIC",
+            "AMZN",
+            "AAPL"
+          ]
+        },
+        {
+          "start": "2014-10-30",
+          "risk_on": true,
+          "portfolio": []
+        },
+        {
+          "start": "2015-01-30",
+          "risk_on": true,
+          "portfolio": []
+        },
+        {
+          "start": "2015-04-30",
+          "risk_on": true,
+          "portfolio": [
+            "TSLA",
+            "MSFT"
+          ]
+        },
+        {
+          "start": "2015-07-30",
+          "risk_on": true,
+          "portfolio": [
+            "NVDA",
+            "AMZN"
+          ]
+        },
+        {
+          "start": "2015-10-30",
+          "risk_on": true,
+          "portfolio": [
+            "MSFT",
+            "NVDA",
+            "AAPL",
+            "AMZN"
+          ]
+        },
+        {
+          "start": "2016-01-30",
+          "risk_on": false,
+          "portfolio": [
+            "^DJI",
+            "USDMXN=X",
+            "^GSPC"
+          ]
+        },
+        {
+          "start": "2016-04-30",
+          "risk_on": true,
+          "portfolio": []
+        },
+        {
+          "start": "2016-07-30",
+          "risk_on": true,
+          "portfolio": [
+            "NVDA",
+            "^IXIC",
+            "AAPL",
+            "TSLA"
+          ]
+        },
+        {
+          "start": "2016-10-30",
+          "risk_on": true,
+          "portfolio": [
+            "NVDA"
+          ]
+        },
+        {
+          "start": "2017-01-30",
+          "risk_on": true,
+          "portfolio": [
+            "NVDA",
+            "AAPL",
+            "^IXIC",
+            "TSLA",
+            "AMZN"
+          ]
+        },
+        {
+          "start": "2017-04-30",
+          "risk_on": true,
+          "portfolio": [
+            "^IXIC",
+            "MSFT",
+            "AMZN",
+            "TSLA"
+          ]
+        },
+        {
+          "start": "2017-07-30",
+          "risk_on": null,
+          "portfolio": []
+        }
+      ]
+    },
+    {
+      "period": "2017-2020 (COVID)",
+      "tilt_return_pct": 83.4,
+      "tilt_max_drawdown_pct": -19.11,
+      "baseline_return_pct": 67.39,
+      "baseline_max_drawdown_pct": -17.83,
+      "return_delta_pp": 16.01,
+      "sp500_return_pct": 31.41,
+      "vs_sp500_pp": 51.99,
+      "num_segments": 13,
+      "num_risk_on_segments": 9,
+      "segment_portfolios": [
+        {
+          "start": "2017-07-30",
+          "risk_on": true,
+          "portfolio": [
+            "^IXIC",
+            "NVDA",
+            "^DJI",
+            "AAPL",
+            "AMZN"
+          ]
+        },
+        {
+          "start": "2017-10-30",
+          "risk_on": true,
+          "portfolio": [
+            "^DJI",
+            "NVDA",
+            "MSFT",
+            "AAPL",
+            "^IXIC"
+          ]
+        },
+        {
+          "start": "2018-01-30",
+          "risk_on": true,
+          "portfolio": [
+            "^DJI",
+            "^IXIC",
+            "AMZN",
+            "^GSPC",
+            "NVDA"
+          ]
+        },
+        {
+          "start": "2018-04-30",
+          "risk_on": true,
+          "portfolio": [
+            "MSFT"
+          ]
+        },
+        {
+          "start": "2018-07-30",
+          "risk_on": true,
+          "portfolio": [
+            "MSFT",
+            "AMZN",
+            "^DJI",
+            "^GSPC",
+            "^IXIC"
+          ]
+        },
+        {
+          "start": "2018-10-30",
+          "risk_on": false,
+          "portfolio": [
+            "GC=F",
+            "USDMXN=X"
+          ]
+        },
+        {
+          "start": "2019-01-30",
+          "risk_on": false,
+          "portfolio": [
+            "GC=F"
+          ]
+        },
+        {
+          "start": "2019-04-30",
+          "risk_on": true,
+          "portfolio": [
+            "MSFT",
+            "AMZN",
+            "^IXIC",
+            "^GSPC",
+            "NVDA"
+          ]
+        },
+        {
+          "start": "2019-07-30",
+          "risk_on": true,
+          "portfolio": [
+            "NVDA",
+            "MSFT",
+            "AAPL",
+            "^DJI",
+            "^GSPC"
+          ]
+        },
+        {
+          "start": "2019-10-30",
+          "risk_on": true,
+          "portfolio": [
+            "NVDA",
+            "AAPL",
+            "MSFT",
+            "^GSPC"
+          ]
+        },
+        {
+          "start": "2020-01-30",
+          "risk_on": true,
+          "portfolio": [
+            "MSFT",
+            "NVDA",
+            "^GSPC",
+            "AAPL",
+            "^IXIC"
+          ]
+        },
+        {
+          "start": "2020-04-30",
+          "risk_on": false,
+          "portfolio": [
+            "^IXIC",
+            "AMZN",
+            "NVDA",
+            "ETH-USD",
+            "XRP-USD"
+          ]
+        },
+        {
+          "start": "2020-07-30",
+          "risk_on": null,
+          "portfolio": [
+            "ETH-USD",
+            "BTC-USD"
+          ]
+        }
+      ]
+    },
+    {
+      "period": "2019-2022",
+      "tilt_return_pct": 113.36,
+      "tilt_max_drawdown_pct": -17.72,
+      "baseline_return_pct": 100.45,
+      "baseline_max_drawdown_pct": -11.57,
+      "return_delta_pp": 12.91,
+      "sp500_return_pct": 37.07,
+      "vs_sp500_pp": 76.29,
+      "num_segments": 13,
+      "num_risk_on_segments": 9,
+      "segment_portfolios": [
+        {
+          "start": "2019-07-30",
+          "risk_on": true,
+          "portfolio": [
+            "NVDA",
+            "MSFT",
+            "^GSPC",
+            "AAPL",
+            "^DJI"
+          ]
+        },
+        {
+          "start": "2019-10-30",
+          "risk_on": true,
+          "portfolio": [
+            "NVDA",
+            "AAPL",
+            "MSFT"
+          ]
+        },
+        {
+          "start": "2020-01-30",
+          "risk_on": true,
+          "portfolio": [
+            "MSFT",
+            "AAPL",
+            "^GSPC",
+            "TSLA",
+            "NVDA"
+          ]
+        },
+        {
+          "start": "2020-04-30",
+          "risk_on": false,
+          "portfolio": [
+            "^IXIC",
+            "NVDA",
+            "AMZN",
+            "ETH-USD",
+            "XRP-USD"
+          ]
+        },
+        {
+          "start": "2020-07-30",
+          "risk_on": true,
+          "portfolio": [
+            "^GSPC",
+            "^DJI",
+            "TSLA",
+            "NVDA"
+          ]
+        },
+        {
+          "start": "2020-10-30",
+          "risk_on": true,
+          "portfolio": [
+            "^GSPC",
+            "NVDA"
+          ]
+        },
+        {
+          "start": "2021-01-30",
+          "risk_on": true,
+          "portfolio": [
+            "AAPL",
+            "^GSPC",
+            "MSFT",
+            "^DJI",
+            "^IXIC"
+          ]
+        },
+        {
+          "start": "2021-04-30",
+          "risk_on": true,
+          "portfolio": [
+            "^GSPC",
+            "^DJI",
+            "^IXIC",
+            "AAPL",
+            "AMZN"
+          ]
+        },
+        {
+          "start": "2021-07-30",
+          "risk_on": true,
+          "portfolio": [
+            "^GSPC",
+            "^DJI",
+            "MSFT",
+            "AAPL",
+            "NVDA"
+          ]
+        },
+        {
+          "start": "2021-10-30",
+          "risk_on": true,
+          "portfolio": [
+            "^GSPC",
+            "^DJI",
+            "MSFT",
+            "NVDA",
+            "TSLA"
+          ]
+        },
+        {
+          "start": "2022-01-30",
+          "risk_on": false,
+          "portfolio": [
+            "CL=F",
+            "GC=F"
+          ]
+        },
+        {
+          "start": "2022-04-30",
+          "risk_on": false,
+          "portfolio": [
+            "USDJPY=X",
+            "^GSPC"
+          ]
+        },
+        {
+          "start": "2022-07-30",
+          "risk_on": null,
+          "portfolio": [
+            "ETH-USD",
+            "SOL-USD"
+          ]
+        }
+      ]
+    },
+    {
+      "period": "2021-2024",
+      "tilt_return_pct": 66.68,
+      "tilt_max_drawdown_pct": -30.14,
+      "baseline_return_pct": 44.98,
+      "baseline_max_drawdown_pct": -32.38,
+      "return_delta_pp": 21.7,
+      "sp500_return_pct": 23.69,
+      "vs_sp500_pp": 42.99,
+      "num_segments": 13,
+      "num_risk_on_segments": 7,
+      "segment_portfolios": [
+        {
+          "start": "2021-07-30",
+          "risk_on": true,
+          "portfolio": [
+            "^GSPC",
+            "^DJI",
+            "MSFT",
+            "AAPL",
+            "^IXIC"
+          ]
+        },
+        {
+          "start": "2021-10-30",
+          "risk_on": true,
+          "portfolio": [
+            "^GSPC",
+            "^DJI",
+            "MSFT",
+            "NVDA",
+            "TSLA"
+          ]
+        },
+        {
+          "start": "2022-01-30",
+          "risk_on": false,
+          "portfolio": [
+            "CL=F"
+          ]
+        },
+        {
+          "start": "2022-04-30",
+          "risk_on": false,
+          "portfolio": [
+            "USDJPY=X",
+            "^GSPC",
+            "^DJI"
+          ]
+        },
+        {
+          "start": "2022-07-30",
+          "risk_on": false,
+          "portfolio": [
+            "AAPL",
+            "EURUSD=X",
+            "^IXIC",
+            "MSFT",
+            "ETH-USD"
+          ]
+        },
+        {
+          "start": "2022-10-30",
+          "risk_on": false,
+          "portfolio": [
+            "CL=F"
+          ]
+        },
+        {
+          "start": "2023-01-30",
+          "risk_on": true,
+          "portfolio": [
+            "^IXIC",
+            "AAPL",
+            "NVDA"
+          ]
+        },
+        {
+          "start": "2023-04-30",
+          "risk_on": true,
+          "portfolio": [
+            "MSFT",
+            "AMZN",
+            "^GSPC"
+          ]
+        },
+        {
+          "start": "2023-07-30",
+          "risk_on": true,
+          "portfolio": [
+            "^DJI",
+            "AAPL",
+            "^GSPC",
+            "NVDA",
+            "^IXIC"
+          ]
+        },
+        {
+          "start": "2023-10-30",
+          "risk_on": false,
+          "portfolio": [
+            "SOL-USD",
+            "ETH-USD",
+            "MSFT"
+          ]
+        },
+        {
+          "start": "2024-01-30",
+          "risk_on": true,
+          "portfolio": [
+            "^GSPC",
+            "MSFT",
+            "^DJI",
+            "NVDA",
+            "^IXIC"
+          ]
+        },
+        {
+          "start": "2024-04-30",
+          "risk_on": true,
+          "portfolio": []
+        },
+        {
+          "start": "2024-07-30",
+          "risk_on": null,
+          "portfolio": [
+            "GBPUSD=X",
+            "SOL-USD",
+            "USDJPY=X",
+            "XRP-USD"
+          ]
+        }
+      ]
+    },
+    {
+      "period": "2023-2026",
+      "tilt_return_pct": 21.66,
+      "tilt_max_drawdown_pct": -40.67,
+      "baseline_return_pct": 44.71,
+      "baseline_max_drawdown_pct": -28.47,
+      "return_delta_pp": -23.05,
+      "sp500_return_pct": 62.08,
+      "vs_sp500_pp": -40.42,
+      "num_segments": 13,
+      "num_risk_on_segments": 10,
+      "segment_portfolios": [
+        {
+          "start": "2023-07-30",
+          "risk_on": true,
+          "portfolio": [
+            "^DJI",
+            "AAPL",
+            "NVDA"
+          ]
+        },
+        {
+          "start": "2023-10-30",
+          "risk_on": false,
+          "portfolio": [
+            "SOL-USD",
+            "XRP-USD"
+          ]
+        },
+        {
+          "start": "2024-01-30",
+          "risk_on": true,
+          "portfolio": [
+            "MSFT",
+            "NVDA"
+          ]
+        },
+        {
+          "start": "2024-04-30",
+          "risk_on": true,
+          "portfolio": [
+            "TSLA",
+            "AMZN"
+          ]
+        },
+        {
+          "start": "2024-07-30",
+          "risk_on": true,
+          "portfolio": [
+            "AMZN"
+          ]
+        },
+        {
+          "start": "2024-10-30",
+          "risk_on": true,
+          "portfolio": [
+            "NVDA"
+          ]
+        },
+        {
+          "start": "2025-01-30",
+          "risk_on": true,
+          "portfolio": []
+        },
+        {
+          "start": "2025-04-30",
+          "risk_on": false,
+          "portfolio": [
+            "CL=F",
+            "GBPUSD=X",
+            "GC=F",
+            "EURUSD=X",
+            "SOL-USD"
+          ]
+        },
+        {
+          "start": "2025-07-30",
+          "risk_on": true,
+          "portfolio": [
+            "MSFT",
+            "AMZN",
+            "NVDA"
+          ]
+        },
+        {
+          "start": "2025-10-30",
+          "risk_on": true,
+          "portfolio": [
+            "AAPL",
+            "MSFT",
+            "NVDA"
+          ]
+        },
+        {
+          "start": "2026-01-30",
+          "risk_on": true,
+          "portfolio": [
+            "AMZN"
+          ]
+        },
+        {
+          "start": "2026-04-30",
+          "risk_on": true,
+          "portfolio": [
+            "MSFT",
+            "AMZN",
+            "NVDA"
+          ]
+        },
+        {
+          "start": "2026-07-30",
+          "risk_on": null,
+          "portfolio": [
+            "USDJPY=X",
+            "GBPUSD=X"
+          ]
+        }
+      ]
+    }
+  ]
+}
