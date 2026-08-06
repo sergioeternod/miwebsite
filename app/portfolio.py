@@ -37,7 +37,7 @@ import pandas as pd
 
 from app.backtest.engine import extract_trades
 from app.backtest.metrics import compute_metrics
-from app.config import EXAMPLE_SYMBOLS, default_commission_bps, infer_asset_class
+from app.config import EXAMPLE_SYMBOLS, AssetClass, default_commission_bps, infer_asset_class
 from app.data.providers import get_ohlcv
 from app.data.synthetic import generate_ohlcv
 from app.fundamentals.earnings import apply_earnings_overlay
@@ -358,6 +358,61 @@ def _recent_regret_boost(closed_trades: list[dict], commission_bps: float) -> fl
 DEFAULT_STOP_LOSS_PCT = 15.0
 
 
+# Equity-regime tilt: the model's cross-asset diversification (forex, gold,
+# commodities) is what protects it in bad markets — and what anchors it in
+# strong equity years, where those assets barely move while stocks rally
+# (measured: Aug-2025→Aug-2026 the model made +7.6% vs +22-26% for the pure
+# indexes, with the drag coming from forex/gold picks). The tilt is a
+# classic, causal trend filter: at a (re)selection boundary, if the broad
+# equity market trades above its long moving average — knowable that day,
+# no lookahead — the candidate universe narrows to stocks and indexes (and
+# the per-class cap lifts, since diversification then comes from multiple
+# equity names); below it, the full defensive universe returns.
+EQUITY_TILT_REGIME_SYMBOL = "^GSPC"
+EQUITY_TILT_SMA_WINDOW = 200
+_EQUITY_CLASSES = {AssetClass.STOCK, AssetClass.INDEX}
+
+
+def _equity_risk_on(
+    dfs: dict[str, pd.DataFrame],
+    start_idx_by_symbol: dict[str, int],
+    regime_symbol: str = EQUITY_TILT_REGIME_SYMBOL,
+    sma_window: int = EQUITY_TILT_SMA_WINDOW,
+) -> bool | None:
+    """True when the regime symbol's last close strictly before the boundary
+    sits above its `sma_window`-bar moving average — the standard "market in
+    an uptrend" reading, computed only from data a trader would have had at
+    that boundary. Returns None (tilt not applicable, caller changes
+    nothing) when the regime symbol is missing or has less history than the
+    moving average needs."""
+    df = dfs.get(regime_symbol)
+    if df is None:
+        return None
+    idx = start_idx_by_symbol.get(regime_symbol, 0)
+    if idx < sma_window:
+        return None
+    closes = df["Close"].iloc[:idx]
+    return bool(float(closes.iloc[-1]) > float(closes.tail(sma_window).mean()))
+
+
+def _apply_equity_tilt(
+    usable: dict[str, pd.DataFrame],
+    risk_on: bool | None,
+    max_per_asset_class: int | None,
+) -> tuple[dict[str, pd.DataFrame], int | None]:
+    """Returns the (universe, per-class cap) the selection should actually
+    use: narrowed to equity classes with the cap lifted when risk-on, and
+    untouched otherwise — including when the narrowed universe would be
+    empty (an equity tilt with no equities to pick is a no-op, not a
+    lockout)."""
+    if not risk_on:
+        return usable, max_per_asset_class
+    equities = {s: df for s, df in usable.items() if infer_asset_class(s) in _EQUITY_CLASSES}
+    if not equities:
+        return usable, max_per_asset_class
+    return equities, None
+
+
 def _stop_loss_triggered(price_today: float, entry_price: float, direction: int, stop_loss_pct: float) -> bool:
     """`direction` is the position's sign (+1 long, -1 short). Multiplying
     the raw price-ratio move by `direction` turns "which way did price move"
@@ -580,6 +635,7 @@ def _run_simulation(
     short_confidence_premium: float = 0.0,
     risk_regime_sizing: bool = False,
     rebalance_months: int | None = None,
+    equity_regime_tilt: bool = False,
 ) -> dict:
     if step < 1:
         raise ValueError("step debe ser >= 1")
@@ -591,6 +647,7 @@ def _run_simulation(
             allow_short, step, errors, min_confidence_pct, adaptive_learning,
             include_earnings, include_news, max_per_asset_class, risk_parity_sizing,
             stop_loss_pct, short_confidence_premium, risk_regime_sizing, rebalance_months,
+            equity_regime_tilt,
         )
 
     if end_date:
@@ -609,8 +666,11 @@ def _run_simulation(
                 "Historial insuficiente antes de la fecha de inicio, o no hay barras después de esa fecha.",
             )
 
+    tilt_risk_on = _equity_risk_on(usable, start_idx_by_symbol) if equity_regime_tilt else None
+    selection_universe, selection_cap = _apply_equity_tilt(usable, tilt_risk_on, max_per_asset_class)
+
     portfolio = _select_portfolio(
-        usable,
+        selection_universe,
         start_idx_by_symbol,
         portfolio_size,
         allow_short,
@@ -619,7 +679,7 @@ def _run_simulation(
         min_confidence_pct,
         include_earnings,
         include_news,
-        max_per_asset_class,
+        selection_cap,
         short_confidence_premium,
     )
     if not portfolio:
@@ -671,6 +731,8 @@ def _run_simulation(
         "total_pnl_amount": round(final_equity - initial_capital, 2),
         "total_return_pct": round((final_equity / initial_capital - 1) * 100, 2),
         "risk_regime_sizing": risk_regime_sizing,
+        "equity_regime_tilt": equity_regime_tilt,
+        "equity_risk_on_at_start": tilt_risk_on,
         "per_symbol": [
             {
                 "symbol": r["symbol"],
@@ -716,6 +778,7 @@ def _run_rebalanced_simulation(
     short_confidence_premium: float,
     risk_regime_sizing: bool,
     rebalance_months: int,
+    equity_regime_tilt: bool = False,
 ) -> dict:
     """Same day-by-day walk-forward, but instead of marrying the portfolio
     chosen on day one for the whole period, the selection is redone every
@@ -786,8 +849,11 @@ def _run_rebalanced_simulation(
             if MIN_WARMUP_BARS <= start_idx_by_symbol[symbol] < len(df) - 1
         }
 
+        tilt_risk_on = _equity_risk_on(usable, start_idx_by_symbol) if equity_regime_tilt else None
+        selection_universe, selection_cap = _apply_equity_tilt(usable, tilt_risk_on, max_per_asset_class)
+
         portfolio = _select_portfolio(
-            usable,
+            selection_universe,
             start_idx_by_symbol,
             portfolio_size,
             allow_short,
@@ -796,7 +862,7 @@ def _run_rebalanced_simulation(
             min_confidence_pct,
             include_earnings and k == 0,
             include_news and k == 0,
-            max_per_asset_class,
+            selection_cap,
             short_confidence_premium,
         )
         if k == 0 and not portfolio:
@@ -808,6 +874,8 @@ def _run_rebalanced_simulation(
             )
 
         segment = {"start_date": str(boundary.date()), "capital_start": round(capital, 2)}
+        if equity_regime_tilt:
+            segment["equity_risk_on"] = tilt_risk_on
 
         if not portfolio:
             seg_dates = sorted({d for df in usable.values() for d in df.index[df.index >= boundary]})
@@ -908,6 +976,7 @@ def _run_rebalanced_simulation(
         "rebalance_months": rebalance_months,
         "segments": segments,
         "risk_regime_sizing": risk_regime_sizing,
+        "equity_regime_tilt": equity_regime_tilt,
         "portfolio_equity_curve": [
             {"date": str(d.date()), "equity": round(float(v), 2)} for d, v in portfolio_equity_curve.items()
         ],
@@ -942,6 +1011,7 @@ def simulate_portfolio_real(
     short_confidence_premium: float = 0.0,
     risk_regime_sizing: bool = True,
     rebalance_months: int | None = 3,
+    equity_regime_tilt: bool = False,
 ) -> dict:
     """Auto-selects a portfolio (from real symbols, defaulting to the full
     example universe) using only data before `start_date`, then walks
@@ -979,7 +1049,10 @@ def simulate_portfolio_real(
     2004-2007 (the no-rebalance arm had happened to concentrate 100% in
     AAPL pre-iPhone — a fluke diversification is *supposed* to give up)
     and 2014-2017 (-1 pp). See `_run_rebalanced_simulation` for the
-    no-lookahead and rotation-cost details."""
+    no-lookahead and rotation-cost details. `equity_regime_tilt` (default
+    off pending validation) narrows each (re)selection to stocks/indexes
+    while the S&P 500 trades above its 200-bar moving average — see
+    `_equity_risk_on`."""
     symbols = symbols or _default_symbols()
 
     dfs = {}
@@ -1010,6 +1083,7 @@ def simulate_portfolio_real(
         short_confidence_premium,
         risk_regime_sizing,
         rebalance_months,
+        equity_regime_tilt,
     )
 
 
@@ -1033,6 +1107,7 @@ def simulate_portfolio_synthetic(
     short_confidence_premium: float = 0.0,
     risk_regime_sizing: bool = True,
     rebalance_months: int | None = 3,
+    equity_regime_tilt: bool = False,
 ) -> dict:
     """Same simulation, but over synthetic profiles reaching into 2026 —
     usable with no network access. Real dates only line up exactly with
@@ -1077,4 +1152,5 @@ def simulate_portfolio_synthetic(
         short_confidence_premium,
         risk_regime_sizing,
         rebalance_months,
+        equity_regime_tilt,
     )

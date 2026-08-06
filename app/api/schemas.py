@@ -148,6 +148,10 @@ class PortfolioSimulateRequest(BaseModel):
         3,
         description="Re-selecciona el portafolio cada N meses calendario (con datos solo hasta cada frontera, sin lookahead; la rotación cobra 2x la comisión del símbolo entrante). None = una sola selección al inicio, el comportamiento clásico. Default 3: le ganó al modelo sin rebalanceo en 7 de 9 ventanas validadas (6 de ajuste + 3 vírgenes) y al buy & hold en 6 de 9",
     )
+    equity_regime_tilt: bool = Field(
+        False,
+        description="Cuando el S&P 500 está sobre su media de 200 días en una (re)selección, restringe el universo de candidatos a acciones e índices (100% accionario en mercados alcistas); debajo de ella, vuelve el universo defensivo completo. Desactivado por defecto, pendiente de validación multi-ventana",
+    )
 
 
 class ValidateRequest(BaseModel):

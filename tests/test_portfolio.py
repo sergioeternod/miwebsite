@@ -1068,3 +1068,77 @@ def test_rebalanced_sim_charges_rotation_cost_after_first_boundary(monkeypatch):
     for prev, nxt in zip(segments, segments[1:]):
         assert nxt["capital_by_symbol"]["A"] == pytest.approx(prev["capital_end"] * 0.98, abs=0.02)
     assert report["final_equity"] < 9_000.0
+
+
+# ---------------------------------------------------------------------------
+# Equity-regime tilt (100% acciones cuando el mercado está en tendencia alcista)
+# ---------------------------------------------------------------------------
+
+
+def test_equity_risk_on_true_in_uptrend_false_in_downtrend():
+    from app.portfolio import _equity_risk_on
+
+    up = _make_ohlcv(pd.Series(np.linspace(100, 300, 400)))
+    down = _make_ohlcv(pd.Series(np.linspace(300, 100, 400)))
+    assert _equity_risk_on({"^GSPC": up}, {"^GSPC": 300}) is True
+    assert _equity_risk_on({"^GSPC": down}, {"^GSPC": 300}) is False
+
+
+def test_equity_risk_on_none_without_regime_symbol_or_history():
+    from app.portfolio import _equity_risk_on
+
+    up = _make_ohlcv(pd.Series(np.linspace(100, 300, 400)))
+    assert _equity_risk_on({"AAPL": up}, {"AAPL": 300}) is None  # no ^GSPC in universe
+    assert _equity_risk_on({"^GSPC": up}, {"^GSPC": 150}) is None  # menos de 200 barras antes de la frontera
+
+
+def test_equity_risk_on_is_causal():
+    """The reading at a boundary uses only bars strictly before it: a future
+    crash after the boundary must not change it."""
+    from app.portfolio import _equity_risk_on
+
+    up_then_crash = _make_ohlcv(pd.Series(np.concatenate([np.linspace(100, 300, 300), np.linspace(300, 50, 100)])))
+    pure_up = _make_ohlcv(pd.Series(np.concatenate([np.linspace(100, 300, 300), np.linspace(300, 400, 100)])))
+    assert _equity_risk_on({"^GSPC": up_then_crash}, {"^GSPC": 300}) == _equity_risk_on({"^GSPC": pure_up}, {"^GSPC": 300})
+
+
+def test_apply_equity_tilt_narrows_to_equities_and_lifts_cap(long_uptrend_df):
+    from app.portfolio import _apply_equity_tilt
+
+    usable = {"AAPL": long_uptrend_df, "^GSPC": long_uptrend_df, "EURUSD=X": long_uptrend_df, "GC=F": long_uptrend_df}
+    narrowed, cap = _apply_equity_tilt(usable, True, 2)
+    assert set(narrowed) == {"AAPL", "^GSPC"}
+    assert cap is None
+    untouched, cap2 = _apply_equity_tilt(usable, False, 2)
+    assert set(untouched) == set(usable)
+    assert cap2 == 2
+    # risk_on=None (regime unreadable) must also be a no-op
+    same, cap3 = _apply_equity_tilt(usable, None, 2)
+    assert set(same) == set(usable)
+    assert cap3 == 2
+
+
+def test_apply_equity_tilt_noop_when_no_equities(long_uptrend_df):
+    from app.portfolio import _apply_equity_tilt
+
+    usable = {"EURUSD=X": long_uptrend_df, "GC=F": long_uptrend_df}
+    kept, cap = _apply_equity_tilt(usable, True, 2)
+    assert set(kept) == set(usable)
+    assert cap == 2
+
+
+def test_rebalanced_sim_tilt_excludes_forex_in_uptrend(monkeypatch):
+    monkeypatch.setattr(portfolio_module, "recommend", lambda *a, **k: _fake_rec(action="BUY", confidence=80.0))
+    up = pd.Series(np.linspace(100, 300, 500))
+    dfs = {"AAPL": _make_ohlcv(up), "^GSPC": _make_ohlcv(up), "EURUSD=X": _make_ohlcv(up)}
+
+    tilted = _run_sim(dfs, start_date="2023-09-01", rebalance_months=3, equity_regime_tilt=True)
+    plain = _run_sim(dfs, start_date="2023-09-01", rebalance_months=3)
+
+    for segment in tilted["segments"]:
+        if segment.get("equity_risk_on"):
+            assert "EURUSD=X" not in segment["portfolio"]
+    assert any(seg.get("equity_risk_on") for seg in tilted["segments"])
+    assert tilted["equity_regime_tilt"] is True
+    assert plain["equity_regime_tilt"] is False
+    assert any("EURUSD=X" in seg["portfolio"] for seg in plain["segments"])

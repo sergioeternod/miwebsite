@@ -302,6 +302,7 @@ def cmd_portfolio_sim(args: argparse.Namespace) -> None:
         short_confidence_premium=args.short_premium,
         risk_regime_sizing=not args.no_risk_regime,
         rebalance_months=None if args.no_rebalance else args.rebalance_months,
+        equity_regime_tilt=args.equity_tilt,
     )
     if args.max_per_asset_class is not None:
         # Omit otherwise so each path's own smart default applies (2 for
@@ -614,6 +615,10 @@ def build_parser() -> argparse.ArgumentParser:
     portfolio_sim_parser.add_argument(
         "--no-rebalance", action="store_true",
         help="Desactiva la re-selección periódica: una sola selección al inicio, mantenida todo el periodo (el comportamiento clásico)",
+    )
+    portfolio_sim_parser.add_argument(
+        "--equity-tilt", action="store_true",
+        help="Cuando el S&P 500 está sobre su media de 200 días en una (re)selección, restringe el universo a acciones e índices — 100%% accionario en mercados alcistas, universo defensivo completo en los demás (desactivado por defecto, pendiente de validación)",
     )
     portfolio_sim_parser.add_argument("--out", default=None, help="Ruta donde guardar el reporte completo en JSON")
     portfolio_sim_parser.set_defaults(func=cmd_portfolio_sim)
