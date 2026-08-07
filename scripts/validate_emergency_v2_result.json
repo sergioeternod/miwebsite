@@ -1,0 +1,218 @@
+{
+  "elapsed_seconds": 2834.8,
+  "hysteresis_band_pct": 2.0,
+  "confirm_days": 5,
+  "num_periods_run": 9,
+  "num_beats_baseline_return": 2,
+  "num_smaller_drawdown": 4,
+  "total_v2_cuts": 18,
+  "total_v1_cuts": 91,
+  "results": [
+    {
+      "period": "2004-2007 (virgen)",
+      "v2_return_pct": 179.28,
+      "v2_max_drawdown_pct": -22.82,
+      "baseline_return_pct": 75.97,
+      "baseline_max_drawdown_pct": -29.06,
+      "return_delta_pp": 103.31,
+      "drawdown_delta_pp": 6.24,
+      "v1_raw_cuts": 13,
+      "v2_cuts": 1,
+      "emergency_cuts": [
+        {
+          "segment_start": "2005-10-30",
+          "cut_date": "2005-11-16",
+          "reason": "recuperación del S&P 500 sobre su media de 200 días"
+        }
+      ]
+    },
+    {
+      "period": "2007-2010 (crisis)",
+      "v2_return_pct": 9.6,
+      "v2_max_drawdown_pct": -32.5,
+      "baseline_return_pct": 38.6,
+      "baseline_max_drawdown_pct": -19.44,
+      "return_delta_pp": -29.0,
+      "drawdown_delta_pp": -13.06,
+      "v1_raw_cuts": 12,
+      "v2_cuts": 2,
+      "emergency_cuts": [
+        {
+          "segment_start": "2007-10-30",
+          "cut_date": "2007-11-26",
+          "reason": "cruce del S&P 500 debajo de su media de 200 días"
+        },
+        {
+          "segment_start": "2009-05-27",
+          "cut_date": "2009-06-11",
+          "reason": "recuperación del S&P 500 sobre su media de 200 días"
+        }
+      ]
+    },
+    {
+      "period": "2010-2013 (virgen)",
+      "v2_return_pct": 53.49,
+      "v2_max_drawdown_pct": -12.93,
+      "baseline_return_pct": 69.91,
+      "baseline_max_drawdown_pct": -15.59,
+      "return_delta_pp": -16.42,
+      "drawdown_delta_pp": 2.66,
+      "v1_raw_cuts": 9,
+      "v2_cuts": 4,
+      "emergency_cuts": [
+        {
+          "segment_start": "2010-07-30",
+          "cut_date": "2010-09-30",
+          "reason": "recuperación del S&P 500 sobre su media de 200 días"
+        },
+        {
+          "segment_start": "2011-07-01",
+          "cut_date": "2011-08-08",
+          "reason": "cruce del S&P 500 debajo de su media de 200 días"
+        },
+        {
+          "segment_start": "2011-11-09",
+          "cut_date": "2011-11-25",
+          "reason": "cruce del S&P 500 debajo de su media de 200 días"
+        },
+        {
+          "segment_start": "2011-11-26",
+          "cut_date": "2012-01-17",
+          "reason": "recuperación del S&P 500 sobre su media de 200 días"
+        }
+      ]
+    },
+    {
+      "period": "2012-2015 (virgen)",
+      "v2_return_pct": 89.25,
+      "v2_max_drawdown_pct": -13.54,
+      "baseline_return_pct": 89.25,
+      "baseline_max_drawdown_pct": -13.54,
+      "return_delta_pp": 0.0,
+      "drawdown_delta_pp": 0.0,
+      "v1_raw_cuts": 6,
+      "v2_cuts": 0,
+      "emergency_cuts": []
+    },
+    {
+      "period": "2014-2017",
+      "v2_return_pct": 112.39,
+      "v2_max_drawdown_pct": -16.24,
+      "baseline_return_pct": 143.09,
+      "baseline_max_drawdown_pct": -14.57,
+      "return_delta_pp": -30.7,
+      "drawdown_delta_pp": -1.67,
+      "v1_raw_cuts": 12,
+      "v2_cuts": 2,
+      "emergency_cuts": [
+        {
+          "segment_start": "2015-07-30",
+          "cut_date": "2015-08-26",
+          "reason": "cruce del S&P 500 debajo de su media de 200 días"
+        },
+        {
+          "segment_start": "2015-11-27",
+          "cut_date": "2016-01-08",
+          "reason": "cruce del S&P 500 debajo de su media de 200 días"
+        }
+      ]
+    },
+    {
+      "period": "2017-2020 (COVID)",
+      "v2_return_pct": 62.41,
+      "v2_max_drawdown_pct": -17.36,
+      "baseline_return_pct": 83.4,
+      "baseline_max_drawdown_pct": -19.11,
+      "return_delta_pp": -20.99,
+      "drawdown_delta_pp": 1.75,
+      "v1_raw_cuts": 14,
+      "v2_cuts": 3,
+      "emergency_cuts": [
+        {
+          "segment_start": "2019-01-30",
+          "cut_date": "2019-03-19",
+          "reason": "recuperación del S&P 500 sobre su media de 200 días"
+        },
+        {
+          "segment_start": "2019-12-20",
+          "cut_date": "2020-03-12",
+          "reason": "cruce del S&P 500 debajo de su media de 200 días"
+        },
+        {
+          "segment_start": "2020-03-13",
+          "cut_date": "2020-06-08",
+          "reason": "recuperación del S&P 500 sobre su media de 200 días"
+        }
+      ]
+    },
+    {
+      "period": "2019-2022",
+      "v2_return_pct": 61.19,
+      "v2_max_drawdown_pct": -19.21,
+      "baseline_return_pct": 113.36,
+      "baseline_max_drawdown_pct": -17.72,
+      "return_delta_pp": -52.17,
+      "drawdown_delta_pp": -1.49,
+      "v1_raw_cuts": 7,
+      "v2_cuts": 2,
+      "emergency_cuts": [
+        {
+          "segment_start": "2020-01-30",
+          "cut_date": "2020-03-12",
+          "reason": "cruce del S&P 500 debajo de su media de 200 días"
+        },
+        {
+          "segment_start": "2020-03-13",
+          "cut_date": "2020-06-08",
+          "reason": "recuperación del S&P 500 sobre su media de 200 días"
+        }
+      ]
+    },
+    {
+      "period": "2021-2024",
+      "v2_return_pct": 48.11,
+      "v2_max_drawdown_pct": -30.14,
+      "baseline_return_pct": 66.68,
+      "baseline_max_drawdown_pct": -30.14,
+      "return_delta_pp": -18.57,
+      "drawdown_delta_pp": 0.0,
+      "v1_raw_cuts": 12,
+      "v2_cuts": 1,
+      "emergency_cuts": [
+        {
+          "segment_start": "2023-10-30",
+          "cut_date": "2023-11-14",
+          "reason": "recuperación del S&P 500 sobre su media de 200 días"
+        }
+      ]
+    },
+    {
+      "period": "2023-2026",
+      "v2_return_pct": 68.4,
+      "v2_max_drawdown_pct": -26.81,
+      "baseline_return_pct": 21.66,
+      "baseline_max_drawdown_pct": -40.67,
+      "return_delta_pp": 46.74,
+      "drawdown_delta_pp": 13.86,
+      "v1_raw_cuts": 6,
+      "v2_cuts": 3,
+      "emergency_cuts": [
+        {
+          "segment_start": "2023-10-30",
+          "cut_date": "2023-11-14",
+          "reason": "recuperación del S&P 500 sobre su media de 200 días"
+        },
+        {
+          "segment_start": "2025-02-15",
+          "cut_date": "2025-04-09",
+          "reason": "cruce del S&P 500 debajo de su media de 200 días"
+        },
+        {
+          "segment_start": "2025-04-10",
+          "cut_date": "2025-05-19",
+          "reason": "recuperación del S&P 500 sobre su media de 200 días"
+        }
+      ]
+    }
+  ]
+}

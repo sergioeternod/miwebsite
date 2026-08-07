@@ -941,9 +941,39 @@ tiempo no es un freno: es conducir frenando.
 Queda registrado como el patrón más valioso de esta sección: una mejora
 que arregla espectacularmente el caso que la motivó puede seguir siendo
 una mala mejora — la vara es el conjunto completo, no el ejemplo doloroso
-más reciente. (Una variante con confirmación de varios días u histéresis
-podría reducir las falsas alarmas; sería otro experimento pre-registrado,
-no un rescate de este.)
+más reciente.
+
+**Segundo intento (v2): histéresis de 2% + confirmación de 5 días —
+también rechazada.** La variante atacó exactamente lo que mató a la
+cruda, y el mecanismo funcionó: los cortes cayeron de 91 a 18 en total
+(de 6-14 por ventana a 0-4), cada uno ahora un evento confirmado, no un
+roce. Aun así: mejora retorno solo en **2 de 9**
+(`scripts/validate_emergency_v2_result.json`):
+
+| Periodo | Default | v2 | Delta | Cortes v1→v2 |
+|---|---|---|---|---|
+| 2004-2007 | +76.0% | +179.3% | **+103.3 pp** | 13→1 |
+| 2007-2010 (crisis) | +38.6% | +9.6% | -29.0 pp | 12→2 |
+| 2010-2013 | +69.9% | +53.5% | -16.4 pp | 9→4 |
+| 2012-2015 | +89.3% | +89.3% | 0.0 (0 cortes) | 6→0 |
+| 2014-2017 | +143.1% | +112.4% | -30.7 pp | 12→2 |
+| 2017-2020 (COVID) | +83.4% | +62.4% | -21.0 pp | 14→3 |
+| 2019-2022 | +113.4% | +61.2% | **-52.2 pp** | 7→2 |
+| 2021-2024 | +66.7% | +48.1% | -18.6 pp | 12→1 |
+| 2023-2026 | +21.7% | +68.4% | **+46.7 pp** | 6→3 |
+
+La lección de fondo, con las dos variantes sobre la mesa: la cruda falló
+por *demasiados* cortes (el costo acumulado del latigazo); la confirmada
+falló por *demasiado pocos* — con 1-3 eventos por ventana, cada corte es
+una apuesta individual de varianza enorme (+103 pp en una ventana, -52 en
+otra), no un mecanismo confiable. La frontera por eventos no tiene un
+punto de operación bueno entre ambos extremos: salirse de acciones a
+mitad de tendencia cuesta más de lo que ahorra en la mayoría de los
+caminos, se confirme como se confirme. **La línea queda cerrada** — dos
+intentos pre-registrados es investigación; un tercero sobre las mismas
+ventanas sería tortura de datos. La protección contra correcciones sigue
+siendo la que ya está validada: régimen de volatilidad, stop-loss y
+señal diaria, todas operando dentro del trimestre.
 
 ### Registro de señales hacia adelante (`track`): la única evidencia sin retrovisor
 
