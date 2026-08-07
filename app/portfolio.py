@@ -402,7 +402,18 @@ def _equity_risk_on(
 # segment the next day and triggers an immediate re-selection. The minimum
 # segment age keeps a market chattering around its moving average from
 # generating a rotation-fee-paying re-selection every few days.
+#
+# The RAW cross (no band, single-day trigger) was validated and REJECTED:
+# it fired 6-14 times per 3-year window and the accumulated whipsaw cost
+# lost to the plain quarterly default in 7 of 9 windows (see
+# scripts/validate_emergency_result.json). The active variant therefore
+# demands both a hysteresis band (the close must clear the moving average
+# by a margin, not graze it) and multi-day confirmation (consecutive
+# closes beyond the band) — both values fixed from standard practice
+# before running the second validation, not swept.
 EMERGENCY_MIN_SEGMENT_CALENDAR_DAYS = 15
+EMERGENCY_HYSTERESIS_BAND_PCT = 2.0
+EMERGENCY_CONFIRM_DAYS = 5
 
 
 def _first_regime_flip(
@@ -411,23 +422,33 @@ def _first_regime_flip(
     scan_start: pd.Timestamp,
     scan_end: pd.Timestamp | None,
     sma_window: int = EQUITY_TILT_SMA_WINDOW,
+    band_pct: float = 0.0,
+    confirm_days: int = 1,
 ) -> pd.Timestamp | None:
-    """First date in [scan_start, scan_end) where the regime symbol closes on
-    the opposite side of its `sma_window`-bar moving average from the
-    segment's starting reading. Each bar's reading comes from a rolling mean
-    ending at that bar — only closes up to that day, same no-lookahead
-    guarantee as everything else. None when there's no flip or no data."""
+    """First date in [scan_start, scan_end) where the regime symbol has
+    closed on the opposite side of its `sma_window`-bar moving average from
+    the segment's starting reading for `confirm_days` consecutive bars, each
+    beyond a `band_pct` hysteresis margin (below sma*(1-band) to leave
+    risk-on; above sma*(1+band) to leave risk-off). The returned date is the
+    day the confirmation completes — the first day the decision could
+    actually have been made. Defaults (band 0, 1 day) reproduce the raw
+    cross. Every reading comes from rolling windows ending at its own bar —
+    only closes up to that day, same no-lookahead guarantee as everything
+    else. None when there's no confirmed flip or no data."""
     if regime_df is None:
         return None
     close = regime_df["Close"]
     sma = close.rolling(sma_window).mean()
-    above = close > sma
-    mask = sma.notna() & (regime_df.index >= scan_start)
+    if risk_on_at_start:
+        beyond = close < sma * (1 - band_pct / 100)
+    else:
+        beyond = close > sma * (1 + band_pct / 100)
+    confirmed = beyond.rolling(confirm_days).sum() == confirm_days
+    mask = sma.notna() & confirmed & (regime_df.index >= scan_start)
     if scan_end is not None:
         mask = mask & (regime_df.index < scan_end)
-    in_scope = above[mask]
-    flips = in_scope[in_scope != risk_on_at_start]
-    return None if len(flips) == 0 else flips.index[0]
+    hits = regime_df.index[mask]
+    return None if len(hits) == 0 else hits[0]
 
 
 def _apply_equity_tilt(
@@ -897,6 +918,8 @@ def _run_rebalanced_simulation(
                 regime_reading,
                 boundary + pd.Timedelta(days=EMERGENCY_MIN_SEGMENT_CALENDAR_DAYS),
                 seg_end,
+                band_pct=EMERGENCY_HYSTERESIS_BAND_PCT,
+                confirm_days=EMERGENCY_CONFIRM_DAYS,
             )
             if emergency_cut is not None:
                 seg_end = emergency_cut + pd.Timedelta(days=1)

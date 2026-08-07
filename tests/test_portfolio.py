@@ -1215,3 +1215,49 @@ def test_rebalanced_sim_emergency_off_by_default(monkeypatch):
     report = _run_sim(dfs, start_date="2023-09-01", rebalance_months=3, portfolio_size=1, equity_regime_tilt=True)
     assert report["emergency_reselect"] is False
     assert all("emergency_cut_date" not in s for s in report["segments"])
+
+
+def test_first_regime_flip_hysteresis_band_ignores_shallow_cross():
+    """A dip that crosses the SMA but never clears the band must not fire."""
+    from app.portfolio import _first_regime_flip
+
+    up = np.linspace(100, 200, 300)
+    # Shallow dip: ~1% below the SMA at its lowest, then recovery.
+    shallow = np.concatenate([up, np.linspace(200, 185, 30), np.linspace(185, 210, 70)])
+    df = _make_ohlcv(pd.Series(shallow))
+    raw = _first_regime_flip(df, True, df.index[0], None)
+    banded = _first_regime_flip(df, True, df.index[0], None, band_pct=2.0, confirm_days=1)
+    if raw is not None:  # the raw cross fires on the shallow dip...
+        close, sma = df["Close"], df["Close"].rolling(200).mean()
+        assert close.loc[raw] < sma.loc[raw]
+        # ...but never gets 2% beyond the SMA, so the banded variant stays quiet.
+        assert ((close < sma * 0.98) & sma.notna()).sum() == 0
+        assert banded is None
+
+
+def test_first_regime_flip_confirmation_requires_consecutive_days():
+    """One isolated day beyond the band must not fire with confirm_days=5;
+    a sustained slide must, dated at the day confirmation completes."""
+    from app.portfolio import _first_regime_flip
+
+    df = _make_ohlcv(_regime_cross_down_close(n_up=300, n_down=100))
+    single = _first_regime_flip(df, True, df.index[0], None, band_pct=2.0, confirm_days=1)
+    confirmed = _first_regime_flip(df, True, df.index[0], None, band_pct=2.0, confirm_days=5)
+    assert single is not None and confirmed is not None
+    assert confirmed == df.index[df.index.get_loc(single) + 4]  # exactly 4 bars after the first beyond-band close
+    close, sma = df["Close"], df["Close"].rolling(200).mean()
+    window = close.loc[:confirmed].tail(5)
+    assert (window < sma.loc[window.index] * 0.98).all()
+
+
+def test_first_regime_flip_confirmation_is_causal():
+    """The confirmed flip date must not move if the future after it changes."""
+    from app.portfolio import _first_regime_flip
+
+    base = _regime_cross_down_close(n_up=300, n_down=100)
+    df = _make_ohlcv(base)
+    flip = _first_regime_flip(df, True, df.index[0], None, band_pct=2.0, confirm_days=5)
+    cut = df.index.get_loc(flip) + 1
+    altered = pd.concat([base.iloc[:cut], pd.Series(np.linspace(base.iloc[cut - 1], 400, len(base) - cut))], ignore_index=True)
+    df2 = _make_ohlcv(altered)
+    assert _first_regime_flip(df2, True, df2.index[0], None, band_pct=2.0, confirm_days=5) == flip
