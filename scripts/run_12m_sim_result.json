@@ -1,7 +1,7 @@
 {
   "start_date": "2025-08-05",
-  "end_date": "2026-08-06",
-  "num_trading_days": 261,
+  "end_date": "2026-08-07",
+  "num_trading_days": 262,
   "initial_capital": 10000.0,
   "capital_by_symbol": {
     "USDJPY=X": 4522.65,
@@ -47,9 +47,9 @@
       "risk_adjusted_score": 51.75
     }
   ],
-  "final_equity": 10759.61,
-  "total_pnl_amount": 759.61,
-  "total_return_pct": 7.6,
+  "final_equity": 10739.86,
+  "total_pnl_amount": 739.86,
+  "total_return_pct": 7.4,
   "rebalance_months": 3,
   "segments": [
     {
@@ -278,36 +278,65 @@
     {
       "start_date": "2026-08-05",
       "capital_start": 10755.35,
-      "end_date": "2026-08-06",
+      "end_date": "2026-08-07",
       "portfolio": [
+        "^GSPC",
+        "^DJI",
+        "AMZN",
         "GBPUSD=X",
         "USDJPY=X"
       ],
       "capital_by_symbol": {
-        "GBPUSD=X": 5825.6,
-        "USDJPY=X": 4926.53
+        "^GSPC": 1768.95,
+        "^DJI": 1988.6,
+        "AMZN": 828.51,
+        "GBPUSD=X": 3340.59,
+        "USDJPY=X": 2825.03
       },
-      "capital_end": 10759.61,
-      "return_pct": 0.04,
+      "capital_end": 10739.86,
+      "return_pct": -0.14,
       "per_symbol": [
         {
-          "symbol": "GBPUSD=X",
-          "final_equity": 5832.9,
-          "pnl_amount": 7.3,
+          "symbol": "^GSPC",
+          "final_equity": 1765.84,
+          "pnl_amount": -3.11,
           "num_trades": 1,
           "risk_regime_avg_exposure_pct": 100.0
         },
         {
-          "symbol": "USDJPY=X",
-          "final_equity": 4926.71,
-          "pnl_amount": 0.18,
+          "symbol": "^DJI",
+          "final_equity": 1971.62,
+          "pnl_amount": -16.98,
           "num_trades": 1,
-          "risk_regime_avg_exposure_pct": 74.6
+          "risk_regime_avg_exposure_pct": 99.1
+        },
+        {
+          "symbol": "AMZN",
+          "final_equity": 827.76,
+          "pnl_amount": -0.75,
+          "num_trades": 1,
+          "risk_regime_avg_exposure_pct": 63.0
+        },
+        {
+          "symbol": "GBPUSD=X",
+          "final_equity": 3341.13,
+          "pnl_amount": 0.54,
+          "num_trades": 1,
+          "risk_regime_avg_exposure_pct": 99.8
+        },
+        {
+          "symbol": "USDJPY=X",
+          "final_equity": 2833.52,
+          "pnl_amount": 8.49,
+          "num_trades": 1,
+          "risk_regime_avg_exposure_pct": 73.2
         }
       ]
     }
   ],
   "risk_regime_sizing": true,
+  "equity_regime_tilt": false,
+  "emergency_reselect": false,
   "portfolio_equity_curve": [
     {
       "date": "2025-08-05",
@@ -343,7 +372,7 @@
     },
     {
       "date": "2025-08-15",
-      "equity": 10161.41
+      "equity": 10161.42
     },
     {
       "date": "2025-08-18",
@@ -351,7 +380,7 @@
     },
     {
       "date": "2025-08-19",
-      "equity": 10072.25
+      "equity": 10072.26
     },
     {
       "date": "2025-08-20",
@@ -1347,11 +1376,15 @@
     },
     {
       "date": "2026-08-05",
-      "equity": 10752.13
+      "equity": 10751.68
     },
     {
       "date": "2026-08-06",
-      "equity": 10759.61
+      "equity": 10734.24
+    },
+    {
+      "date": "2026-08-07",
+      "equity": 10739.86
     }
   ],
   "hindsight_summary": {
@@ -1363,17 +1396,17 @@
   },
   "benchmark_buy_hold": {
     "description": "Mismos símbolos y mismo reparto de capital, comprados (long) al cierre del primer día simulado y mantenidos sin operar hasta el final — el punto de comparación pasivo.",
-    "final_equity": 11163.79,
-    "total_pnl_amount": 1163.79,
-    "total_return_pct": 11.64,
+    "final_equity": 11223.47,
+    "total_pnl_amount": 1223.47,
+    "total_return_pct": 12.23,
     "per_symbol": {
-      "USDJPY=X": 4857.96,
-      "AMZN": 1808.76,
-      "MSFT": 1746.82,
-      "^IXIC": 2750.25
+      "USDJPY=X": 4877.37,
+      "AMZN": 1806.17,
+      "MSFT": 1791.26,
+      "^IXIC": 2748.67
     }
   },
-  "vs_benchmark_pct_points": -4.04,
+  "vs_benchmark_pct_points": -4.83,
   "errors": {},
   "disclaimer": "Simulación histórica basada únicamente en indicadores técnicos; no es asesoría financiera y no garantiza resultados futuros. El desempeño pasado, incluso el de este mismo motor, no predice el desempeño futuro."
 }
