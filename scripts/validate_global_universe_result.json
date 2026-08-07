@@ -1,0 +1,1134 @@
+{
+  "elapsed_seconds": 3522.8,
+  "num_periods_run": 9,
+  "num_beats_baseline": 1,
+  "num_wins_or_ties": 1,
+  "results": [
+    {
+      "period": "2004-2007 (virgen)",
+      "global_return_pct": 76.69,
+      "global_max_drawdown_pct": -15.03,
+      "baseline_return_pct": 75.97,
+      "baseline_max_drawdown_pct": -29.06,
+      "return_delta_pp": 0.72,
+      "drawdown_delta_pp": 14.03,
+      "international_picks": [
+        "^GDAXI",
+        "^HSI"
+      ],
+      "segment_portfolios": [
+        {
+          "start": "2004-07-30",
+          "portfolio": [
+            "^HSI",
+            "AAPL"
+          ]
+        },
+        {
+          "start": "2004-10-30",
+          "portfolio": [
+            "^HSI",
+            "AAPL",
+            "^IXIC",
+            "^GSPC",
+            "^GDAXI"
+          ]
+        },
+        {
+          "start": "2005-01-30",
+          "portfolio": [
+            "AAPL",
+            "^GDAXI",
+            "NVDA"
+          ]
+        },
+        {
+          "start": "2005-04-30",
+          "portfolio": []
+        },
+        {
+          "start": "2005-07-30",
+          "portfolio": [
+            "^HSI",
+            "^IXIC",
+            "^GDAXI",
+            "AAPL",
+            "^GSPC"
+          ]
+        },
+        {
+          "start": "2005-10-30",
+          "portfolio": [
+            "^GDAXI",
+            "USDJPY=X",
+            "MSFT",
+            "AAPL"
+          ]
+        },
+        {
+          "start": "2006-01-30",
+          "portfolio": [
+            "^GDAXI",
+            "^HSI",
+            "NVDA",
+            "MSFT",
+            "^IXIC"
+          ]
+        },
+        {
+          "start": "2006-04-30",
+          "portfolio": [
+            "^GDAXI",
+            "^HSI",
+            "AAPL",
+            "^IXIC"
+          ]
+        },
+        {
+          "start": "2006-07-30",
+          "portfolio": [
+            "^HSI",
+            "^GDAXI"
+          ]
+        },
+        {
+          "start": "2006-10-30",
+          "portfolio": [
+            "^GDAXI",
+            "^HSI",
+            "^IXIC",
+            "^GSPC",
+            "AAPL"
+          ]
+        },
+        {
+          "start": "2007-01-30",
+          "portfolio": [
+            "^HSI",
+            "^GDAXI",
+            "^IXIC"
+          ]
+        },
+        {
+          "start": "2007-04-30",
+          "portfolio": [
+            "^GDAXI",
+            "NVDA",
+            "^HSI",
+            "^IXIC",
+            "AAPL"
+          ]
+        },
+        {
+          "start": "2007-07-30",
+          "portfolio": []
+        }
+      ]
+    },
+    {
+      "period": "2007-2010 (crisis)",
+      "global_return_pct": 34.26,
+      "global_max_drawdown_pct": -19.52,
+      "baseline_return_pct": 38.6,
+      "baseline_max_drawdown_pct": -19.44,
+      "return_delta_pp": -4.34,
+      "drawdown_delta_pp": -0.08,
+      "international_picks": [
+        "^FTSE",
+        "^GDAXI",
+        "^HSI"
+      ],
+      "segment_portfolios": [
+        {
+          "start": "2007-07-30",
+          "portfolio": [
+            "^GDAXI",
+            "NVDA",
+            "^GSPC",
+            "^HSI",
+            "AAPL"
+          ]
+        },
+        {
+          "start": "2007-10-30",
+          "portfolio": [
+            "^HSI",
+            "^GDAXI",
+            "MSFT",
+            "NVDA",
+            "AAPL"
+          ]
+        },
+        {
+          "start": "2008-01-30",
+          "portfolio": [
+            "^FTSE",
+            "SI=F",
+            "GC=F",
+            "^DJI"
+          ]
+        },
+        {
+          "start": "2008-04-30",
+          "portfolio": [
+            "USDMXN=X",
+            "USDJPY=X",
+            "^HSI",
+            "^GDAXI",
+            "AAPL"
+          ]
+        },
+        {
+          "start": "2008-07-30",
+          "portfolio": [
+            "USDMXN=X",
+            "USDJPY=X"
+          ]
+        },
+        {
+          "start": "2008-10-30",
+          "portfolio": [
+            "USDMXN=X",
+            "^DJI"
+          ]
+        },
+        {
+          "start": "2009-01-30",
+          "portfolio": [
+            "USDMXN=X",
+            "NVDA"
+          ]
+        },
+        {
+          "start": "2009-04-30",
+          "portfolio": [
+            "^IXIC",
+            "MSFT",
+            "AAPL",
+            "^GDAXI",
+            "CL=F"
+          ]
+        },
+        {
+          "start": "2009-07-30",
+          "portfolio": [
+            "^HSI",
+            "^IXIC",
+            "AAPL",
+            "MSFT",
+            "NVDA"
+          ]
+        },
+        {
+          "start": "2009-10-30",
+          "portfolio": [
+            "MSFT",
+            "^IXIC",
+            "^HSI",
+            "AMZN",
+            "AAPL"
+          ]
+        },
+        {
+          "start": "2010-01-30",
+          "portfolio": [
+            "^IXIC",
+            "MSFT",
+            "AAPL"
+          ]
+        },
+        {
+          "start": "2010-04-30",
+          "portfolio": [
+            "AAPL",
+            "MSFT",
+            "^IXIC",
+            "^HSI",
+            "AMZN"
+          ]
+        },
+        {
+          "start": "2010-07-30",
+          "portfolio": []
+        }
+      ]
+    },
+    {
+      "period": "2010-2013 (virgen)",
+      "global_return_pct": 53.13,
+      "global_max_drawdown_pct": -17.45,
+      "baseline_return_pct": 69.91,
+      "baseline_max_drawdown_pct": -15.59,
+      "return_delta_pp": -16.78,
+      "drawdown_delta_pp": -1.86,
+      "international_picks": [
+        "^FTSE",
+        "^HSI",
+        "^N225"
+      ],
+      "segment_portfolios": [
+        {
+          "start": "2010-07-30",
+          "portfolio": [
+            "USDJPY=X",
+            "GBPUSD=X",
+            "^DJI",
+            "^HSI",
+            "CL=F"
+          ]
+        },
+        {
+          "start": "2010-10-30",
+          "portfolio": [
+            "MSFT",
+            "^IXIC",
+            "AAPL",
+            "NVDA",
+            "AMZN"
+          ]
+        },
+        {
+          "start": "2011-01-30",
+          "portfolio": [
+            "NVDA",
+            "AAPL",
+            "MSFT",
+            "^DJI",
+            "^HSI"
+          ]
+        },
+        {
+          "start": "2011-04-30",
+          "portfolio": [
+            "^DJI",
+            "^IXIC",
+            "^GSPC",
+            "^FTSE",
+            "AMZN"
+          ]
+        },
+        {
+          "start": "2011-07-30",
+          "portfolio": [
+            "AAPL",
+            "MSFT",
+            "AMZN",
+            "^IXIC",
+            "^DJI"
+          ]
+        },
+        {
+          "start": "2011-10-30",
+          "portfolio": [
+            "^GSPC",
+            "^FTSE",
+            "^IXIC",
+            "AAPL",
+            "^DJI"
+          ]
+        },
+        {
+          "start": "2012-01-30",
+          "portfolio": [
+            "^N225",
+            "AAPL",
+            "^GSPC",
+            "^FTSE",
+            "^IXIC"
+          ]
+        },
+        {
+          "start": "2012-04-30",
+          "portfolio": [
+            "^GSPC",
+            "AAPL",
+            "^IXIC"
+          ]
+        },
+        {
+          "start": "2012-07-30",
+          "portfolio": [
+            "^DJI",
+            "^GSPC",
+            "AAPL",
+            "^IXIC",
+            "^FTSE"
+          ]
+        },
+        {
+          "start": "2012-10-30",
+          "portfolio": [
+            "^N225",
+            "^HSI",
+            "^FTSE",
+            "^DJI",
+            "^GSPC"
+          ]
+        },
+        {
+          "start": "2013-01-30",
+          "portfolio": [
+            "^FTSE",
+            "^DJI",
+            "^GSPC",
+            "^HSI",
+            "^IXIC"
+          ]
+        },
+        {
+          "start": "2013-04-30",
+          "portfolio": [
+            "^N225",
+            "^IXIC",
+            "^GSPC",
+            "MSFT",
+            "^DJI"
+          ]
+        },
+        {
+          "start": "2013-07-30",
+          "portfolio": []
+        }
+      ]
+    },
+    {
+      "period": "2012-2015 (virgen)",
+      "global_return_pct": 73.44,
+      "global_max_drawdown_pct": -14.52,
+      "baseline_return_pct": 89.25,
+      "baseline_max_drawdown_pct": -13.54,
+      "return_delta_pp": -15.81,
+      "drawdown_delta_pp": -0.98,
+      "international_picks": [
+        "^FTSE",
+        "^GDAXI",
+        "^HSI",
+        "^N225"
+      ],
+      "segment_portfolios": [
+        {
+          "start": "2012-07-30",
+          "portfolio": [
+            "AMZN",
+            "NVDA"
+          ]
+        },
+        {
+          "start": "2012-10-30",
+          "portfolio": [
+            "^HSI",
+            "^GDAXI"
+          ]
+        },
+        {
+          "start": "2013-01-30",
+          "portfolio": [
+            "^GDAXI",
+            "^DJI",
+            "^HSI",
+            "^GSPC",
+            "TSLA"
+          ]
+        },
+        {
+          "start": "2013-04-30",
+          "portfolio": [
+            "MSFT",
+            "TSLA",
+            "^N225",
+            "NVDA"
+          ]
+        },
+        {
+          "start": "2013-07-30",
+          "portfolio": [
+            "TSLA",
+            "^DJI"
+          ]
+        },
+        {
+          "start": "2013-10-30",
+          "portfolio": [
+            "AAPL",
+            "^IXIC",
+            "^GDAXI",
+            "AMZN",
+            "^GSPC"
+          ]
+        },
+        {
+          "start": "2014-01-30",
+          "portfolio": [
+            "TSLA",
+            "^HSI",
+            "^IXIC",
+            "NVDA"
+          ]
+        },
+        {
+          "start": "2014-04-30",
+          "portfolio": [
+            "AAPL",
+            "^GDAXI",
+            "NVDA"
+          ]
+        },
+        {
+          "start": "2014-07-30",
+          "portfolio": [
+            "AAPL",
+            "MSFT",
+            "^IXIC",
+            "TSLA",
+            "AMZN"
+          ]
+        },
+        {
+          "start": "2014-10-30",
+          "portfolio": [
+            "^FTSE",
+            "AAPL"
+          ]
+        },
+        {
+          "start": "2015-01-30",
+          "portfolio": [
+            "^GDAXI"
+          ]
+        },
+        {
+          "start": "2015-04-30",
+          "portfolio": [
+            "^HSI",
+            "AMZN",
+            "TSLA",
+            "MSFT",
+            "AAPL"
+          ]
+        },
+        {
+          "start": "2015-07-30",
+          "portfolio": []
+        }
+      ]
+    },
+    {
+      "period": "2014-2017",
+      "global_return_pct": 83.9,
+      "global_max_drawdown_pct": -15.51,
+      "baseline_return_pct": 143.09,
+      "baseline_max_drawdown_pct": -14.57,
+      "return_delta_pp": -59.19,
+      "drawdown_delta_pp": -0.94,
+      "international_picks": [
+        "^FTSE",
+        "^GDAXI",
+        "^HSI"
+      ],
+      "segment_portfolios": [
+        {
+          "start": "2014-07-30",
+          "portfolio": [
+            "MSFT",
+            "^IXIC",
+            "AMZN",
+            "AAPL"
+          ]
+        },
+        {
+          "start": "2014-10-30",
+          "portfolio": [
+            "^FTSE"
+          ]
+        },
+        {
+          "start": "2015-01-30",
+          "portfolio": []
+        },
+        {
+          "start": "2015-04-30",
+          "portfolio": [
+            "TSLA",
+            "^HSI",
+            "MSFT"
+          ]
+        },
+        {
+          "start": "2015-07-30",
+          "portfolio": [
+            "NVDA",
+            "AMZN",
+            "^HSI"
+          ]
+        },
+        {
+          "start": "2015-10-30",
+          "portfolio": [
+            "^HSI",
+            "MSFT",
+            "^GDAXI",
+            "NVDA",
+            "AAPL"
+          ]
+        },
+        {
+          "start": "2016-01-30",
+          "portfolio": [
+            "^DJI",
+            "USDMXN=X",
+            "^GSPC"
+          ]
+        },
+        {
+          "start": "2016-04-30",
+          "portfolio": []
+        },
+        {
+          "start": "2016-07-30",
+          "portfolio": [
+            "^HSI",
+            "NVDA",
+            "^IXIC",
+            "AAPL",
+            "TSLA"
+          ]
+        },
+        {
+          "start": "2016-10-30",
+          "portfolio": [
+            "NVDA"
+          ]
+        },
+        {
+          "start": "2017-01-30",
+          "portfolio": [
+            "NVDA",
+            "AAPL",
+            "^IXIC",
+            "^GDAXI",
+            "TSLA"
+          ]
+        },
+        {
+          "start": "2017-04-30",
+          "portfolio": [
+            "^HSI",
+            "^IXIC",
+            "MSFT",
+            "AMZN",
+            "^GDAXI"
+          ]
+        },
+        {
+          "start": "2017-07-30",
+          "portfolio": []
+        }
+      ]
+    },
+    {
+      "period": "2017-2020 (COVID)",
+      "global_return_pct": 61.71,
+      "global_max_drawdown_pct": -14.85,
+      "baseline_return_pct": 83.4,
+      "baseline_max_drawdown_pct": -19.11,
+      "return_delta_pp": -21.69,
+      "drawdown_delta_pp": 4.26,
+      "international_picks": [
+        "^FTSE",
+        "^GDAXI",
+        "^HSI"
+      ],
+      "segment_portfolios": [
+        {
+          "start": "2017-07-30",
+          "portfolio": [
+            "^HSI",
+            "^IXIC",
+            "NVDA",
+            "^DJI",
+            "AAPL"
+          ]
+        },
+        {
+          "start": "2017-10-30",
+          "portfolio": [
+            "^DJI",
+            "NVDA",
+            "^GDAXI",
+            "MSFT",
+            "AAPL"
+          ]
+        },
+        {
+          "start": "2018-01-30",
+          "portfolio": [
+            "^DJI",
+            "^IXIC",
+            "^HSI",
+            "AMZN",
+            "^GSPC"
+          ]
+        },
+        {
+          "start": "2018-04-30",
+          "portfolio": [
+            "^GDAXI",
+            "MSFT"
+          ]
+        },
+        {
+          "start": "2018-07-30",
+          "portfolio": [
+            "MSFT",
+            "AMZN",
+            "^DJI",
+            "^GSPC",
+            "^IXIC"
+          ]
+        },
+        {
+          "start": "2018-10-30",
+          "portfolio": [
+            "GC=F",
+            "USDMXN=X"
+          ]
+        },
+        {
+          "start": "2019-01-30",
+          "portfolio": [
+            "GC=F",
+            "^HSI"
+          ]
+        },
+        {
+          "start": "2019-04-30",
+          "portfolio": [
+            "MSFT",
+            "AMZN",
+            "^IXIC",
+            "^GSPC",
+            "^GDAXI"
+          ]
+        },
+        {
+          "start": "2019-07-30",
+          "portfolio": [
+            "NVDA",
+            "MSFT",
+            "^GDAXI",
+            "AAPL",
+            "^DJI"
+          ]
+        },
+        {
+          "start": "2019-10-30",
+          "portfolio": [
+            "NVDA",
+            "AAPL",
+            "^GDAXI",
+            "MSFT",
+            "^GSPC"
+          ]
+        },
+        {
+          "start": "2020-01-30",
+          "portfolio": [
+            "MSFT",
+            "^GDAXI",
+            "NVDA",
+            "^GSPC",
+            "AAPL"
+          ]
+        },
+        {
+          "start": "2020-04-30",
+          "portfolio": [
+            "^IXIC",
+            "AMZN",
+            "NVDA",
+            "^FTSE",
+            "ETH-USD"
+          ]
+        },
+        {
+          "start": "2020-07-30",
+          "portfolio": []
+        }
+      ]
+    },
+    {
+      "period": "2019-2022",
+      "global_return_pct": 84.08,
+      "global_max_drawdown_pct": -17.72,
+      "baseline_return_pct": 113.36,
+      "baseline_max_drawdown_pct": -17.72,
+      "return_delta_pp": -29.28,
+      "drawdown_delta_pp": 0.0,
+      "international_picks": [
+        "^FTSE",
+        "^GDAXI",
+        "^N225"
+      ],
+      "segment_portfolios": [
+        {
+          "start": "2019-07-30",
+          "portfolio": [
+            "NVDA",
+            "MSFT",
+            "^GSPC",
+            "AAPL",
+            "^DJI"
+          ]
+        },
+        {
+          "start": "2019-10-30",
+          "portfolio": [
+            "NVDA",
+            "AAPL",
+            "^N225",
+            "MSFT",
+            "^GDAXI"
+          ]
+        },
+        {
+          "start": "2020-01-30",
+          "portfolio": [
+            "MSFT",
+            "AAPL",
+            "^GSPC",
+            "TSLA",
+            "NVDA"
+          ]
+        },
+        {
+          "start": "2020-04-30",
+          "portfolio": [
+            "^IXIC",
+            "NVDA",
+            "^FTSE",
+            "AMZN",
+            "ETH-USD"
+          ]
+        },
+        {
+          "start": "2020-07-30",
+          "portfolio": [
+            "^GSPC",
+            "^DJI",
+            "TSLA",
+            "NVDA"
+          ]
+        },
+        {
+          "start": "2020-10-30",
+          "portfolio": [
+            "^GSPC",
+            "NVDA"
+          ]
+        },
+        {
+          "start": "2021-01-30",
+          "portfolio": [
+            "AAPL",
+            "^GSPC",
+            "MSFT",
+            "^DJI",
+            "^IXIC"
+          ]
+        },
+        {
+          "start": "2021-04-30",
+          "portfolio": [
+            "^GSPC",
+            "^DJI",
+            "^IXIC",
+            "AAPL",
+            "AMZN"
+          ]
+        },
+        {
+          "start": "2021-07-30",
+          "portfolio": [
+            "^GSPC",
+            "^DJI",
+            "MSFT",
+            "AAPL",
+            "NVDA"
+          ]
+        },
+        {
+          "start": "2021-10-30",
+          "portfolio": [
+            "^GSPC",
+            "^DJI",
+            "MSFT",
+            "NVDA",
+            "TSLA"
+          ]
+        },
+        {
+          "start": "2022-01-30",
+          "portfolio": [
+            "CL=F",
+            "GC=F"
+          ]
+        },
+        {
+          "start": "2022-04-30",
+          "portfolio": [
+            "USDJPY=X",
+            "^GSPC"
+          ]
+        },
+        {
+          "start": "2022-07-30",
+          "portfolio": [
+            "ETH-USD",
+            "SOL-USD"
+          ]
+        }
+      ]
+    },
+    {
+      "period": "2021-2024",
+      "global_return_pct": 8.09,
+      "global_max_drawdown_pct": -34.37,
+      "baseline_return_pct": 66.68,
+      "baseline_max_drawdown_pct": -30.14,
+      "return_delta_pp": -58.59,
+      "drawdown_delta_pp": -4.23,
+      "international_picks": [
+        "^FTSE",
+        "^GDAXI",
+        "^HSI",
+        "^N225"
+      ],
+      "segment_portfolios": [
+        {
+          "start": "2021-07-30",
+          "portfolio": [
+            "^GSPC",
+            "^DJI",
+            "MSFT",
+            "AAPL",
+            "^IXIC"
+          ]
+        },
+        {
+          "start": "2021-10-30",
+          "portfolio": [
+            "^GSPC",
+            "^DJI",
+            "^FTSE",
+            "MSFT",
+            "NVDA"
+          ]
+        },
+        {
+          "start": "2022-01-30",
+          "portfolio": [
+            "^FTSE",
+            "CL=F",
+            "^HSI"
+          ]
+        },
+        {
+          "start": "2022-04-30",
+          "portfolio": [
+            "USDJPY=X",
+            "^GSPC",
+            "^DJI"
+          ]
+        },
+        {
+          "start": "2022-07-30",
+          "portfolio": [
+            "AAPL",
+            "EURUSD=X",
+            "^IXIC",
+            "MSFT",
+            "ETH-USD"
+          ]
+        },
+        {
+          "start": "2022-10-30",
+          "portfolio": [
+            "CL=F"
+          ]
+        },
+        {
+          "start": "2023-01-30",
+          "portfolio": [
+            "^HSI",
+            "^IXIC",
+            "^FTSE",
+            "^GDAXI",
+            "AAPL"
+          ]
+        },
+        {
+          "start": "2023-04-30",
+          "portfolio": [
+            "MSFT",
+            "AMZN",
+            "^HSI",
+            "^GSPC",
+            "^FTSE"
+          ]
+        },
+        {
+          "start": "2023-07-30",
+          "portfolio": [
+            "^DJI",
+            "AAPL",
+            "^GSPC",
+            "NVDA",
+            "^IXIC"
+          ]
+        },
+        {
+          "start": "2023-10-30",
+          "portfolio": [
+            "SOL-USD",
+            "ETH-USD",
+            "MSFT"
+          ]
+        },
+        {
+          "start": "2024-01-30",
+          "portfolio": [
+            "^GSPC",
+            "^N225",
+            "MSFT",
+            "^DJI",
+            "^GDAXI"
+          ]
+        },
+        {
+          "start": "2024-04-30",
+          "portfolio": [
+            "^FTSE"
+          ]
+        },
+        {
+          "start": "2024-07-30",
+          "portfolio": [
+            "^N225"
+          ]
+        }
+      ]
+    },
+    {
+      "period": "2023-2026",
+      "global_return_pct": 17.93,
+      "global_max_drawdown_pct": -40.5,
+      "baseline_return_pct": 21.66,
+      "baseline_max_drawdown_pct": -40.67,
+      "return_delta_pp": -3.73,
+      "drawdown_delta_pp": 0.17,
+      "international_picks": [
+        "^GDAXI",
+        "^HSI",
+        "^N225"
+      ],
+      "segment_portfolios": [
+        {
+          "start": "2023-07-30",
+          "portfolio": [
+            "^DJI",
+            "AAPL",
+            "NVDA"
+          ]
+        },
+        {
+          "start": "2023-10-30",
+          "portfolio": [
+            "SOL-USD",
+            "XRP-USD"
+          ]
+        },
+        {
+          "start": "2024-01-30",
+          "portfolio": [
+            "MSFT",
+            "^GDAXI",
+            "NVDA"
+          ]
+        },
+        {
+          "start": "2024-04-30",
+          "portfolio": [
+            "TSLA",
+            "AMZN"
+          ]
+        },
+        {
+          "start": "2024-07-30",
+          "portfolio": [
+            "^N225",
+            "AMZN"
+          ]
+        },
+        {
+          "start": "2024-10-30",
+          "portfolio": [
+            "NVDA"
+          ]
+        },
+        {
+          "start": "2025-01-30",
+          "portfolio": [
+            "^GDAXI"
+          ]
+        },
+        {
+          "start": "2025-04-30",
+          "portfolio": [
+            "CL=F",
+            "GBPUSD=X",
+            "GC=F",
+            "EURUSD=X",
+            "^HSI"
+          ]
+        },
+        {
+          "start": "2025-07-30",
+          "portfolio": [
+            "MSFT",
+            "AMZN",
+            "^HSI",
+            "NVDA"
+          ]
+        },
+        {
+          "start": "2025-10-30",
+          "portfolio": [
+            "^N225",
+            "AAPL",
+            "MSFT",
+            "NVDA"
+          ]
+        },
+        {
+          "start": "2026-01-30",
+          "portfolio": [
+            "AMZN"
+          ]
+        },
+        {
+          "start": "2026-04-30",
+          "portfolio": [
+            "^N225",
+            "MSFT",
+            "AMZN",
+            "NVDA"
+          ]
+        },
+        {
+          "start": "2026-07-30",
+          "portfolio": []
+        }
+      ]
+    }
+  ]
+}

@@ -59,10 +59,15 @@ def test_all_asset_classes_have_a_default_commission():
         assert DEFAULT_COMMISSION_BPS[asset_class] > 0
 
 
-def test_international_indexes_in_universe_and_classified_as_index():
+def test_international_indexes_excluded_from_default_universe_but_still_classified():
+    """Tested in the default universe and REVERTED: the model picked them
+    and lost to the US-only universe in 8 of 9 historical windows (see
+    scripts/validate_global_universe_result.json). They remain valid
+    symbols for explicit --symbols use; they're just not on the default
+    menu."""
     from app.config import EXAMPLE_SYMBOLS, AssetClass, infer_asset_class
 
     index_symbols = {e["symbol"] for e in EXAMPLE_SYMBOLS[AssetClass.INDEX]}
     for symbol in ("^N225", "^FTSE", "^GDAXI", "^HSI"):
-        assert symbol in index_symbols
+        assert symbol not in index_symbols
         assert infer_asset_class(symbol) is AssetClass.INDEX

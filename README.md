@@ -975,6 +975,35 @@ ventanas sería tortura de datos. La protección contra correcciones sigue
 siendo la que ya está validada: régimen de volatilidad, stop-loss y
 señal diaria, todas operando dentro del trimestre.
 
+### Universo global: probado y revertido
+
+¿Ayuda darle al modelo índices internacionales (Nikkei, FTSE, DAX, Hang
+Seng) como candidatos? La hipótesis era razonable — más menú para la
+misma selección validada, con el tilt eligiendo entre 7 mercados de
+índices en vez de 3 — y la respuesta empírica fue no
+(`scripts/validate_global_universe.py`, regla pre-registrada): **el
+universo global perdió contra el solo-EEUU en 8 de 9 ventanas**, con
+deltas de -3.7 a **-59.2 pp** (2014-2017 y 2021-2024 las peores), y su
+única "victoria" fue un empate técnico (+0.7 pp en 2004-2007).
+
+El diagnóstico no es que el selector los ignorara — al contrario: eligió
+FTSE, DAX, Hang Seng y Nikkei en las canastas de *todas* las ventanas. El
+problema es que en casi todas estas décadas los índices de EEUU
+simplemente rindieron más que los europeos y asiáticos, así que cada
+lugar de la canasta ocupado por un índice internacional fue un lugar
+quitado a uno mejor. La señal técnica de cada índice puede verse igual de
+convincente en el momento de elegir; el rendimiento estructural de fondo
+no lo era. (Caveat metodológico que corre *a favor* del veredicto: el
+simulador midió sus retornos en moneda local, sin el costo/beneficio
+cambiario de acceder vía ETFs en dólares — y aun con esa medición
+generosa, perdieron.)
+
+Los símbolos se revirtieron del universo por defecto siguiendo la regla;
+siguen disponibles vía `--symbols` para quien quiera estudiarlos. Sesión
+con marcador 2-3: rebalanceo trimestral y tilt accionario adoptados;
+frontera de emergencia (dos variantes) y universo global rechazados —
+así se ve un proceso que deja hablar a la evidencia.
+
 ### Registro de señales hacia adelante (`track`): la única evidencia sin retrovisor
 
 Todas las validaciones anteriores son backtests — calculadas después de los
