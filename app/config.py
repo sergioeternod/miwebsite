@@ -50,6 +50,16 @@ EXAMPLE_SYMBOLS = {
         {"symbol": "^GSPC", "name": "S&P 500"},
         {"symbol": "^IXIC", "name": "Nasdaq Composite"},
         {"symbol": "^DJI", "name": "Dow Jones Industrial Average"},
+        # Mercados internacionales. Nota honesta: cotizan en su moneda local
+        # (yen, libra, euro, dólar de Hong Kong) y el simulador mide el
+        # rendimiento del índice en esa moneda, sin conversión cambiaria —
+        # en la práctica se compran vía ETFs en dólares (EWJ, EWU, EWG,
+        # FXI/MCHI), cuyo retorno difiere por el tipo de cambio. Para China
+        # se usa el Hang Seng, el proxy líquido e invertible desde fuera.
+        {"symbol": "^N225", "name": "Nikkei 225 (Japón)"},
+        {"symbol": "^FTSE", "name": "FTSE 100 (Reino Unido)"},
+        {"symbol": "^GDAXI", "name": "DAX (Alemania)"},
+        {"symbol": "^HSI", "name": "Hang Seng (China/Hong Kong)"},
     ],
 }
 

@@ -57,3 +57,12 @@ def test_all_asset_classes_have_a_default_commission():
     for asset_class in AssetClass:
         assert asset_class in DEFAULT_COMMISSION_BPS
         assert DEFAULT_COMMISSION_BPS[asset_class] > 0
+
+
+def test_international_indexes_in_universe_and_classified_as_index():
+    from app.config import EXAMPLE_SYMBOLS, AssetClass, infer_asset_class
+
+    index_symbols = {e["symbol"] for e in EXAMPLE_SYMBOLS[AssetClass.INDEX]}
+    for symbol in ("^N225", "^FTSE", "^GDAXI", "^HSI"):
+        assert symbol in index_symbols
+        assert infer_asset_class(symbol) is AssetClass.INDEX
