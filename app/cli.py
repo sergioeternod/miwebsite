@@ -303,6 +303,7 @@ def cmd_portfolio_sim(args: argparse.Namespace) -> None:
         risk_regime_sizing=not args.no_risk_regime,
         rebalance_months=None if args.no_rebalance else args.rebalance_months,
         equity_regime_tilt=not args.no_equity_tilt,
+        emergency_reselect=args.emergency_reselect,
     )
     if args.max_per_asset_class is not None:
         # Omit otherwise so each path's own smart default applies (2 for
@@ -619,6 +620,10 @@ def build_parser() -> argparse.ArgumentParser:
     portfolio_sim_parser.add_argument(
         "--equity-tilt", action="store_true",
         help="Restringe el universo a acciones e índices cuando el S&P 500 está sobre su media de 200 días (ya es el default; se mantiene por compatibilidad)",
+    )
+    portfolio_sim_parser.add_argument(
+        "--emergency-reselect", action="store_true",
+        help="Frontera de emergencia: si el S&P 500 cruza su media de 200 días a mitad de un segmento (en cualquier dirección), corta el segmento ahí y re-selecciona de inmediato en vez de esperar al corte trimestral (desactivado por defecto, pendiente de validación)",
     )
     portfolio_sim_parser.add_argument(
         "--no-equity-tilt", action="store_true",

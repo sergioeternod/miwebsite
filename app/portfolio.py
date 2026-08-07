@@ -395,6 +395,41 @@ def _equity_risk_on(
     return bool(float(closes.iloc[-1]) > float(closes.tail(sma_window).mean()))
 
 
+# Emergency re-selection boundary: the quarterly cut governs *scheduled*
+# re-selection, but a regime flip — the S&P 500 crossing its 200-day moving
+# average, in either direction — is new information that shouldn't wait for
+# the calendar. When enabled, the first flip inside a segment ends that
+# segment the next day and triggers an immediate re-selection. The minimum
+# segment age keeps a market chattering around its moving average from
+# generating a rotation-fee-paying re-selection every few days.
+EMERGENCY_MIN_SEGMENT_CALENDAR_DAYS = 15
+
+
+def _first_regime_flip(
+    regime_df: pd.DataFrame | None,
+    risk_on_at_start: bool,
+    scan_start: pd.Timestamp,
+    scan_end: pd.Timestamp | None,
+    sma_window: int = EQUITY_TILT_SMA_WINDOW,
+) -> pd.Timestamp | None:
+    """First date in [scan_start, scan_end) where the regime symbol closes on
+    the opposite side of its `sma_window`-bar moving average from the
+    segment's starting reading. Each bar's reading comes from a rolling mean
+    ending at that bar — only closes up to that day, same no-lookahead
+    guarantee as everything else. None when there's no flip or no data."""
+    if regime_df is None:
+        return None
+    close = regime_df["Close"]
+    sma = close.rolling(sma_window).mean()
+    above = close > sma
+    mask = sma.notna() & (regime_df.index >= scan_start)
+    if scan_end is not None:
+        mask = mask & (regime_df.index < scan_end)
+    in_scope = above[mask]
+    flips = in_scope[in_scope != risk_on_at_start]
+    return None if len(flips) == 0 else flips.index[0]
+
+
 def _apply_equity_tilt(
     usable: dict[str, pd.DataFrame],
     risk_on: bool | None,
@@ -636,6 +671,7 @@ def _run_simulation(
     risk_regime_sizing: bool = False,
     rebalance_months: int | None = None,
     equity_regime_tilt: bool = False,
+    emergency_reselect: bool = False,
 ) -> dict:
     if step < 1:
         raise ValueError("step debe ser >= 1")
@@ -647,7 +683,7 @@ def _run_simulation(
             allow_short, step, errors, min_confidence_pct, adaptive_learning,
             include_earnings, include_news, max_per_asset_class, risk_parity_sizing,
             stop_loss_pct, short_confidence_premium, risk_regime_sizing, rebalance_months,
-            equity_regime_tilt,
+            equity_regime_tilt, emergency_reselect,
         )
 
     if end_date:
@@ -779,6 +815,7 @@ def _run_rebalanced_simulation(
     risk_regime_sizing: bool,
     rebalance_months: int,
     equity_regime_tilt: bool = False,
+    emergency_reselect: bool = False,
 ) -> dict:
     """Same day-by-day walk-forward, but instead of marrying the portfolio
     chosen on day one for the whole period, the selection is redone every
@@ -806,17 +843,21 @@ def _run_rebalanced_simulation(
       the non-rebalanced simulator.
     - Adaptive learning's hindsight window restarts with each segment (each
       segment is its own walk-forward call); it never reaches across a
-      rebalance into another symbol's history."""
+      rebalance into another symbol's history.
+
+    `emergency_reselect` (default off pending validation) lets a regime flip
+    end a segment early: the first day inside a segment (after a minimum
+    age of `EMERGENCY_MIN_SEGMENT_CALENDAR_DAYS`) where the S&P 500 closes
+    on the opposite side of its 200-day moving average from the segment's
+    starting reading cuts the segment there and re-selects the next day —
+    see `_first_regime_flip`. The calendar keeps governing scheduled cuts;
+    the emergency only ever *advances* one."""
     if end_date:
         dfs = {symbol: df[df.index <= pd.Timestamp(end_date)] for symbol, df in dfs.items()}
     non_empty = {s: df for s, df in dfs.items() if len(df)}
     if not non_empty:
         raise ValueError("No hay datos disponibles para ningún símbolo.")
     last_date = max(df.index[-1] for df in non_empty.values())
-
-    boundaries = [pd.Timestamp(start_date)]
-    while boundaries[-1] + pd.DateOffset(months=rebalance_months) <= last_date:
-        boundaries.append(boundaries[-1] + pd.DateOffset(months=rebalance_months))
 
     # Same "insufficient history at the overall start" bookkeeping as the
     # non-rebalanced path — relative to the overall start date, so the
@@ -836,20 +877,41 @@ def _run_rebalanced_simulation(
     initial_portfolio = None
     initial_capital_by_symbol = None
 
-    for k, boundary in enumerate(boundaries):
-        seg_end = boundaries[k + 1] if k + 1 < len(boundaries) else None
+    boundary = pd.Timestamp(start_date)
+    k = 0
+    while True:
+        scheduled_end = boundary + pd.DateOffset(months=rebalance_months)
+        seg_end = scheduled_end if scheduled_end <= last_date else None
+
+        start_idx_by_symbol = {symbol: _find_start_index(df, str(boundary.date())) for symbol, df in non_empty.items()}
+        regime_reading = (
+            _equity_risk_on(non_empty, start_idx_by_symbol)
+            if (equity_regime_tilt or emergency_reselect)
+            else None
+        )
+
+        emergency_cut = None
+        if emergency_reselect and regime_reading is not None:
+            emergency_cut = _first_regime_flip(
+                non_empty.get(EQUITY_TILT_REGIME_SYMBOL),
+                regime_reading,
+                boundary + pd.Timedelta(days=EMERGENCY_MIN_SEGMENT_CALENDAR_DAYS),
+                seg_end,
+            )
+            if emergency_cut is not None:
+                seg_end = emergency_cut + pd.Timedelta(days=1)
+
         seg_dfs = {
             symbol: (df[df.index < seg_end] if seg_end is not None else df)
             for symbol, df in non_empty.items()
         }
-        start_idx_by_symbol = {symbol: _find_start_index(df, str(boundary.date())) for symbol, df in seg_dfs.items()}
         usable = {
             symbol: df
             for symbol, df in seg_dfs.items()
             if MIN_WARMUP_BARS <= start_idx_by_symbol[symbol] < len(df) - 1
         }
 
-        tilt_risk_on = _equity_risk_on(usable, start_idx_by_symbol) if equity_regime_tilt else None
+        tilt_risk_on = regime_reading if equity_regime_tilt else None
         selection_universe, selection_cap = _apply_equity_tilt(usable, tilt_risk_on, max_per_asset_class)
 
         portfolio = _select_portfolio(
@@ -876,6 +938,13 @@ def _run_rebalanced_simulation(
         segment = {"start_date": str(boundary.date()), "capital_start": round(capital, 2)}
         if equity_regime_tilt:
             segment["equity_risk_on"] = tilt_risk_on
+        if emergency_cut is not None:
+            segment["emergency_cut_date"] = str(emergency_cut.date())
+            segment["cut_reason"] = (
+                "cruce del S&P 500 debajo de su media de 200 días"
+                if regime_reading
+                else "recuperación del S&P 500 sobre su media de 200 días"
+            )
 
         if not portfolio:
             seg_dates = sorted({d for df in usable.values() for d in df.index[df.index >= boundary]})
@@ -891,68 +960,72 @@ def _run_rebalanced_simulation(
                 }
             )
             segments.append(segment)
-            continue
-
-        if risk_parity_sizing:
-            weights = _risk_parity_weights(portfolio)
         else:
-            weights = {c["symbol"]: 1.0 / len(portfolio) for c in portfolio}
-        capital_by_symbol = {}
-        for symbol, weight in weights.items():
-            allocation = capital * weight
-            if k > 0:
-                bps = commission_bps if commission_bps is not None else default_commission_bps(symbol)
-                allocation *= 1 - 2 * bps / 10000  # rotation cost: exit old + enter new
-            capital_by_symbol[symbol] = round(allocation, 2)
+            if risk_parity_sizing:
+                weights = _risk_parity_weights(portfolio)
+            else:
+                weights = {c["symbol"]: 1.0 / len(portfolio) for c in portfolio}
+            capital_by_symbol = {}
+            for symbol, weight in weights.items():
+                allocation = capital * weight
+                if k > 0:
+                    bps = commission_bps if commission_bps is not None else default_commission_bps(symbol)
+                    allocation *= 1 - 2 * bps / 10000  # rotation cost: exit old + enter new
+                capital_by_symbol[symbol] = round(allocation, 2)
 
-        per_symbol_results = [
-            _walk_forward_result(
-                usable[c["symbol"]],
-                start_idx_by_symbol[c["symbol"]],
-                c["symbol"],
-                allow_short,
-                capital_by_symbol[c["symbol"]],
-                commission_bps,
-                step,
-                min_confidence_pct,
-                adaptive_learning,
-                stop_loss_pct,
-                short_confidence_premium,
-                risk_regime_sizing,
+            per_symbol_results = [
+                _walk_forward_result(
+                    usable[c["symbol"]],
+                    start_idx_by_symbol[c["symbol"]],
+                    c["symbol"],
+                    allow_short,
+                    capital_by_symbol[c["symbol"]],
+                    commission_bps,
+                    step,
+                    min_confidence_pct,
+                    adaptive_learning,
+                    stop_loss_pct,
+                    short_confidence_premium,
+                    risk_regime_sizing,
+                )
+                for c in portfolio
+            ]
+            seg_curve = _combine_equity_curves(per_symbol_results, capital_by_symbol)
+            seg_final = float(seg_curve.iloc[-1])
+            curves.append(seg_curve)
+            for r in per_symbol_results:
+                all_trades.extend(r["trades"])
+
+            segment.update(
+                {
+                    "end_date": str(seg_curve.index[-1].date()),
+                    "portfolio": [c["symbol"] for c in portfolio],
+                    "capital_by_symbol": capital_by_symbol,
+                    "capital_end": round(seg_final, 2),
+                    "return_pct": round((seg_final / capital - 1) * 100, 2),
+                    "per_symbol": [
+                        {
+                            "symbol": r["symbol"],
+                            "final_equity": round(float(r["equity_curve"].iloc[-1]), 2),
+                            "pnl_amount": round(float(r["equity_curve"].iloc[-1]) - capital_by_symbol[r["symbol"]], 2),
+                            "num_trades": len(r["trades"]),
+                            "risk_regime_avg_exposure_pct": r["risk_regime_avg_exposure_pct"],
+                        }
+                        for r in per_symbol_results
+                    ],
+                }
             )
-            for c in portfolio
-        ]
-        seg_curve = _combine_equity_curves(per_symbol_results, capital_by_symbol)
-        seg_final = float(seg_curve.iloc[-1])
-        curves.append(seg_curve)
-        for r in per_symbol_results:
-            all_trades.extend(r["trades"])
+            segments.append(segment)
 
-        segment.update(
-            {
-                "end_date": str(seg_curve.index[-1].date()),
-                "portfolio": [c["symbol"] for c in portfolio],
-                "capital_by_symbol": capital_by_symbol,
-                "capital_end": round(seg_final, 2),
-                "return_pct": round((seg_final / capital - 1) * 100, 2),
-                "per_symbol": [
-                    {
-                        "symbol": r["symbol"],
-                        "final_equity": round(float(r["equity_curve"].iloc[-1]), 2),
-                        "pnl_amount": round(float(r["equity_curve"].iloc[-1]) - capital_by_symbol[r["symbol"]], 2),
-                        "num_trades": len(r["trades"]),
-                        "risk_regime_avg_exposure_pct": r["risk_regime_avg_exposure_pct"],
-                    }
-                    for r in per_symbol_results
-                ],
-            }
-        )
-        segments.append(segment)
+            if k == 0:
+                initial_portfolio = portfolio
+                initial_capital_by_symbol = capital_by_symbol
+            capital = seg_final
 
-        if k == 0:
-            initial_portfolio = portfolio
-            initial_capital_by_symbol = capital_by_symbol
-        capital = seg_final
+        if seg_end is None:
+            break
+        boundary = seg_end
+        k += 1
 
     portfolio_equity_curve = pd.concat(curves)
     final_equity = round(float(capital), 2)
@@ -977,6 +1050,7 @@ def _run_rebalanced_simulation(
         "segments": segments,
         "risk_regime_sizing": risk_regime_sizing,
         "equity_regime_tilt": equity_regime_tilt,
+        "emergency_reselect": emergency_reselect,
         "portfolio_equity_curve": [
             {"date": str(d.date()), "equity": round(float(v), 2)} for d, v in portfolio_equity_curve.items()
         ],
@@ -1012,6 +1086,7 @@ def simulate_portfolio_real(
     risk_regime_sizing: bool = True,
     rebalance_months: int | None = 3,
     equity_regime_tilt: bool = True,
+    emergency_reselect: bool = False,
 ) -> dict:
     """Auto-selects a portfolio (from real symbols, defaulting to the full
     example universe) using only data before `start_date`, then walks
@@ -1090,6 +1165,7 @@ def simulate_portfolio_real(
         risk_regime_sizing,
         rebalance_months,
         equity_regime_tilt,
+        emergency_reselect,
     )
 
 
@@ -1114,6 +1190,7 @@ def simulate_portfolio_synthetic(
     risk_regime_sizing: bool = True,
     rebalance_months: int | None = 3,
     equity_regime_tilt: bool = True,
+    emergency_reselect: bool = False,
 ) -> dict:
     """Same simulation, but over synthetic profiles reaching into 2026 —
     usable with no network access. Real dates only line up exactly with
@@ -1159,4 +1236,5 @@ def simulate_portfolio_synthetic(
         risk_regime_sizing,
         rebalance_months,
         equity_regime_tilt,
+        emergency_reselect,
     )

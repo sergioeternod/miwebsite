@@ -152,6 +152,10 @@ class PortfolioSimulateRequest(BaseModel):
         True,
         description="Cuando el S&P 500 está sobre su media de 200 días en una (re)selección, restringe el universo de candidatos a acciones e índices (100% accionario en mercados alcistas); debajo de ella, vuelve el universo defensivo completo. Activo por defecto: ganó al modelo sin tilt en 6 de 9 ventanas validadas (+17.2 pp promedio) y al S&P 500 en 8 de 9, a cambio de ~4 pp más de drawdown promedio (peor caso 2023-2026: -40.7%)",
     )
+    emergency_reselect: bool = Field(
+        False,
+        description="Frontera de emergencia: si el S&P 500 cruza su media de 200 días a mitad de un segmento (en cualquier dirección), corta el segmento ahí y re-selecciona de inmediato en vez de esperar al corte programado. Requiere rebalance_months. Desactivado por defecto, pendiente de validación",
+    )
 
 
 class ValidateRequest(BaseModel):

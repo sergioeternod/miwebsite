@@ -1142,3 +1142,76 @@ def test_rebalanced_sim_tilt_excludes_forex_in_uptrend(monkeypatch):
     assert tilted["equity_regime_tilt"] is True
     assert plain["equity_regime_tilt"] is False
     assert any("EURUSD=X" in seg["portfolio"] for seg in plain["segments"])
+
+
+# ---------------------------------------------------------------------------
+# Emergency re-selection boundary (regime flip mid-segment)
+# ---------------------------------------------------------------------------
+
+
+def _regime_cross_down_close(n_up=300, n_down=100):
+    """Rises long enough to sit above its 200-bar SMA, then slides until it
+    crosses below it — the classic risk-on -> risk-off flip."""
+    return pd.Series(np.concatenate([np.linspace(100, 200, n_up), np.linspace(200, 120, n_down)]))
+
+
+def test_first_regime_flip_finds_cross_down():
+    from app.portfolio import _first_regime_flip
+
+    df = _make_ohlcv(_regime_cross_down_close())
+    flip = _first_regime_flip(df, True, df.index[0], None)
+    assert flip is not None
+    close = df["Close"]
+    sma = close.rolling(200).mean()
+    assert close.loc[flip] < sma.loc[flip]
+    prev = df.index[df.index.get_loc(flip) - 1]
+    assert close.loc[prev] > sma.loc[prev]  # first bar below, not a later one
+
+
+def test_first_regime_flip_none_without_cross_or_data():
+    from app.portfolio import _first_regime_flip
+
+    up = _make_ohlcv(pd.Series(np.linspace(100, 300, 400)))
+    assert _first_regime_flip(up, True, up.index[0], None) is None  # never crosses down
+    assert _first_regime_flip(None, True, up.index[0], None) is None
+
+
+def test_first_regime_flip_respects_scan_window():
+    from app.portfolio import _first_regime_flip
+
+    df = _make_ohlcv(_regime_cross_down_close())
+    flip = _first_regime_flip(df, True, df.index[0], None)
+    after = _first_regime_flip(df, True, flip + pd.Timedelta(days=200), None)
+    assert after is None or after > flip + pd.Timedelta(days=199)
+    before = _first_regime_flip(df, True, df.index[0], flip)  # scan ends (exclusive) at the flip
+    assert before is None
+
+
+def test_rebalanced_sim_emergency_cuts_segment_at_regime_flip(monkeypatch):
+    monkeypatch.setattr(portfolio_module, "recommend", lambda *a, **k: _fake_rec(action="BUY", confidence=80.0))
+    regime = _make_ohlcv(_regime_cross_down_close(n_up=320, n_down=180))
+    dfs = {"^GSPC": regime, "AAPL": _make_ohlcv(pd.Series(np.linspace(100, 250, 500))), "EURUSD=X": _make_ohlcv(pd.Series(np.linspace(100, 110, 500)))}
+
+    with_emergency = _run_sim(dfs, start_date="2023-09-01", rebalance_months=6, equity_regime_tilt=True, emergency_reselect=True)
+    without = _run_sim(dfs, start_date="2023-09-01", rebalance_months=6, equity_regime_tilt=True)
+
+    cut_segments = [s for s in with_emergency["segments"] if "emergency_cut_date" in s]
+    assert cut_segments, "el cruce debajo de la media de 200 días debe adelantar una frontera"
+    assert "cruce" in cut_segments[0]["cut_reason"]
+    # The segment after the cut re-read the regime as risk-off -> defensive universe allowed again
+    cut_idx = with_emergency["segments"].index(cut_segments[0])
+    assert with_emergency["segments"][cut_idx + 1]["equity_risk_on"] is False
+    assert with_emergency["emergency_reselect"] is True
+    # Without the emergency, boundaries stay purely calendar-driven: 6-month segments
+    assert all("emergency_cut_date" not in s for s in without["segments"])
+    # The cut fired strictly before the scheduled 6-month boundary would have
+    next_start = with_emergency["segments"][cut_idx + 1]["start_date"]
+    assert next_start < "2024-03-01"  # 2023-09-01 + 6 meses
+
+
+def test_rebalanced_sim_emergency_off_by_default(monkeypatch):
+    monkeypatch.setattr(portfolio_module, "recommend", lambda *a, **k: _fake_rec(action="BUY", confidence=80.0))
+    dfs = {"^GSPC": _make_ohlcv(_regime_cross_down_close(n_up=320, n_down=180))}
+    report = _run_sim(dfs, start_date="2023-09-01", rebalance_months=3, portfolio_size=1, equity_regime_tilt=True)
+    assert report["emergency_reselect"] is False
+    assert all("emergency_cut_date" not in s for s in report["segments"])
