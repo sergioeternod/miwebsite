@@ -903,6 +903,48 @@ caro el latigazo. Ese es el trato completo: más retorno esperado y
 ganarle al índice casi siempre, a cambio de caídas más profundas cuando
 el régimen cambia rápido. 9 ventanas no garantizan la décima.
 
+### Frontera de emergencia: probada y rechazada
+
+La hipótesis sonaba impecable: el punto ciego del tilt son los cambios de
+régimen más rápidos que su calendario (2023-2026, DD -40.7%), así que un
+cruce del S&P 500 sobre su media de 200 días a mitad de segmento debería
+adelantar la re-selección en vez de esperar al corte trimestral. La
+función existe (`emergency_reselect` / `--emergency-reselect`, con
+antigüedad mínima de 15 días por segmento y lectura causal del cruce) y
+se validó en las 9 ventanas con regla pre-registrada
+(`scripts/validate_emergency.py`). Resultado: **rechazada — mejora el
+retorno solo en 2 de 9 ventanas y queda apagada por defecto.**
+
+| Periodo | Default actual | Con emergencia | Delta | Cortes de emergencia |
+|---|---|---|---|---|
+| 2004-2007 | +76.0% | -2.8% | **-78.8 pp** | 13 |
+| 2007-2010 (crisis) | +38.6% | +61.6% | +23.0 pp | 12 |
+| 2010-2013 | +69.9% | +8.0% | **-61.9 pp** | 9 |
+| 2012-2015 | +89.3% | +42.7% | **-46.5 pp** | 6 |
+| 2014-2017 | +143.1% | +78.7% | **-64.4 pp** | 12 |
+| 2017-2020 (COVID) | +83.4% | +66.9% | -16.5 pp | 14 |
+| 2019-2022 | +113.4% | +98.7% | -14.7 pp | 7 |
+| 2021-2024 | +66.7% | +53.4% | -13.3 pp | 12 |
+| 2023-2026 | +21.7% | +58.2% | +36.6 pp | 6 |
+
+La autopsia es instructiva. La emergencia **sí reparó exactamente las dos
+ventanas para las que se diseñó** (la crisis de 2008: +23 pp; y 2023-2026:
++36.6 pp con 9 pp menos de drawdown). Pero el supuesto de que "el cruce de
+la media de 200 días ocurre pocas veces por década" resultó empíricamente
+falso: disparó **de 6 a 14 cortes por ventana de 3 años** — el índice
+parlotea alrededor de su media mucho más de lo que la intuición sugiere —
+y cada falsa alarma pagó rotación completa y perdió días del rally
+siguiente. El costo acumulado de los latigazos se comió de -13 a -79 pp
+en las 7 ventanas restantes. Un freno de emergencia que dispara todo el
+tiempo no es un freno: es conducir frenando.
+
+Queda registrado como el patrón más valioso de esta sección: una mejora
+que arregla espectacularmente el caso que la motivó puede seguir siendo
+una mala mejora — la vara es el conjunto completo, no el ejemplo doloroso
+más reciente. (Una variante con confirmación de varios días u histéresis
+podría reducir las falsas alarmas; sería otro experimento pre-registrado,
+no un rescate de este.)
+
 ### Registro de señales hacia adelante (`track`): la única evidencia sin retrovisor
 
 Todas las validaciones anteriores son backtests — calculadas después de los
