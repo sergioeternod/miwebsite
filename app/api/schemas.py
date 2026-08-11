@@ -156,6 +156,10 @@ class PortfolioSimulateRequest(BaseModel):
         False,
         description="Frontera de emergencia: si el S&P 500 cruza su media de 200 días a mitad de un segmento (en cualquier dirección), corta el segmento ahí y re-selecciona de inmediato en vez de esperar al corte programado. Requiere rebalance_months. Desactivado por defecto, pendiente de validación",
     )
+    max_position_weight: float | None = Field(
+        None,
+        description="Fracción máxima del capital en un solo símbolo (ej. 0.4); el excedente queda en efectivo (el benchmark buy & hold conserva la misma reserva para que la comparación sea justa). Acota la concentración cuando pocos candidatos superan el umbral. Desactivado por defecto, pendiente de validación",
+    )
 
 
 class ValidateRequest(BaseModel):

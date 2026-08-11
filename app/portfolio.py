@@ -101,6 +101,27 @@ DEFAULT_MAX_PER_ASSET_CLASS = 2
 MIN_VOLATILITY_PCT = 0.1  # floor so a near-flat instrument doesn't dominate the weights
 
 
+# Concentration cap: when only one or two candidates clear the confidence
+# bar, nothing in plain risk-parity stops the model from putting 100% of the
+# capital into a single name (measured: the frozen 2004-2007 run held only
+# AAPL, and the 2026-08-03 week held only ^DJI). "Just one symbol convinces
+# me" is portfolio-level information — deploying everything into it ignores
+# how thin the conviction is. Capping each position's weight and leaving the
+# surplus in cash respects the signals while bounding single-name risk; it
+# also tames extreme risk-parity weights on very-low-volatility instruments.
+DEFAULT_MAX_POSITION_WEIGHT = 0.4
+
+
+def _cap_weights(weights: dict[str, float], max_position_weight: float | None) -> dict[str, float]:
+    """Caps each weight at `max_position_weight` WITHOUT renormalizing —
+    the clipped surplus deliberately stays undeployed (cash), rather than
+    being pushed into the remaining names (which would just re-concentrate
+    it). None disables the cap."""
+    if max_position_weight is None:
+        return weights
+    return {symbol: min(weight, max_position_weight) for symbol, weight in weights.items()}
+
+
 def _risk_parity_weights(portfolio: list[dict]) -> dict[str, float]:
     """Inverse-volatility weights for the selected `portfolio`, normalized to
     sum to 1.0. A missing/zero volatility reading is floored to
@@ -693,6 +714,7 @@ def _run_simulation(
     rebalance_months: int | None = None,
     equity_regime_tilt: bool = False,
     emergency_reselect: bool = False,
+    max_position_weight: float | None = None,
 ) -> dict:
     if step < 1:
         raise ValueError("step debe ser >= 1")
@@ -704,7 +726,7 @@ def _run_simulation(
             allow_short, step, errors, min_confidence_pct, adaptive_learning,
             include_earnings, include_news, max_per_asset_class, risk_parity_sizing,
             stop_loss_pct, short_confidence_premium, risk_regime_sizing, rebalance_months,
-            equity_regime_tilt, emergency_reselect,
+            equity_regime_tilt, emergency_reselect, max_position_weight,
         )
 
     if end_date:
@@ -751,7 +773,9 @@ def _run_simulation(
         weights = _risk_parity_weights(portfolio)
     else:
         weights = {c["symbol"]: 1.0 / len(portfolio) for c in portfolio}
+    weights = _cap_weights(weights, max_position_weight)
     capital_by_symbol = {symbol: round(initial_capital * weight, 2) for symbol, weight in weights.items()}
+    cash_reserved = round(initial_capital - sum(capital_by_symbol.values()), 2)
 
     per_symbol_results = [
         _walk_forward_result(
@@ -771,14 +795,23 @@ def _run_simulation(
         for c in portfolio
     ]
 
-    portfolio_equity_curve = _combine_equity_curves(per_symbol_results, capital_by_symbol)
+    portfolio_equity_curve = _combine_equity_curves(per_symbol_results, capital_by_symbol) + cash_reserved
     final_equity = round(float(portfolio_equity_curve.iloc[-1]), 2)
     num_trading_days = max(len(r["equity_curve"]) for r in per_symbol_results)
     all_trades = [trade for r in per_symbol_results for trade in r["trades"]]
     benchmark = _buy_hold_benchmark(usable, start_idx_by_symbol, capital_by_symbol, commission_bps)
+    if cash_reserved:
+        # Same idle cash on both sides of the comparison, so the cap's cost
+        # or benefit shows up in the spread, not in an accounting mismatch.
+        bench_final = benchmark["final_equity"] + cash_reserved
+        benchmark["final_equity"] = round(bench_final, 2)
+        benchmark["total_pnl_amount"] = round(bench_final - initial_capital, 2)
+        benchmark["total_return_pct"] = round((bench_final / initial_capital - 1) * 100, 2)
+        benchmark["cash_reserved"] = cash_reserved
 
     return {
         "start_date": start_date,
+        "cash_reserved": cash_reserved,
         "end_date": str(portfolio_equity_curve.index[-1].date()),
         "num_trading_days": num_trading_days,
         "initial_capital": initial_capital,
@@ -837,6 +870,7 @@ def _run_rebalanced_simulation(
     rebalance_months: int,
     equity_regime_tilt: bool = False,
     emergency_reselect: bool = False,
+    max_position_weight: float | None = None,
 ) -> dict:
     """Same day-by-day walk-forward, but instead of marrying the portfolio
     chosen on day one for the whole period, the selection is redone every
@@ -897,6 +931,7 @@ def _run_rebalanced_simulation(
     all_trades = []
     initial_portfolio = None
     initial_capital_by_symbol = None
+    initial_cash = 0.0
 
     boundary = pd.Timestamp(start_date)
     k = 0
@@ -988,6 +1023,8 @@ def _run_rebalanced_simulation(
                 weights = _risk_parity_weights(portfolio)
             else:
                 weights = {c["symbol"]: 1.0 / len(portfolio) for c in portfolio}
+            weights = _cap_weights(weights, max_position_weight)
+            seg_cash = round(capital * (1 - sum(weights.values())), 2)
             capital_by_symbol = {}
             for symbol, weight in weights.items():
                 allocation = capital * weight
@@ -1013,7 +1050,7 @@ def _run_rebalanced_simulation(
                 )
                 for c in portfolio
             ]
-            seg_curve = _combine_equity_curves(per_symbol_results, capital_by_symbol)
+            seg_curve = _combine_equity_curves(per_symbol_results, capital_by_symbol) + seg_cash
             seg_final = float(seg_curve.iloc[-1])
             curves.append(seg_curve)
             for r in per_symbol_results:
@@ -1024,6 +1061,7 @@ def _run_rebalanced_simulation(
                     "end_date": str(seg_curve.index[-1].date()),
                     "portfolio": [c["symbol"] for c in portfolio],
                     "capital_by_symbol": capital_by_symbol,
+                    "cash_reserved": seg_cash,
                     "capital_end": round(seg_final, 2),
                     "return_pct": round((seg_final / capital - 1) * 100, 2),
                     "per_symbol": [
@@ -1043,6 +1081,7 @@ def _run_rebalanced_simulation(
             if k == 0:
                 initial_portfolio = portfolio
                 initial_capital_by_symbol = capital_by_symbol
+                initial_cash = seg_cash
             capital = seg_final
 
         if seg_end is None:
@@ -1058,6 +1097,14 @@ def _run_rebalanced_simulation(
     # what "doing nothing" actually means for the whole period.
     benchmark_dfs = {symbol: non_empty[symbol] for symbol in initial_capital_by_symbol}
     benchmark = _buy_hold_benchmark(benchmark_dfs, overall_start_idx, initial_capital_by_symbol, commission_bps)
+    if initial_cash:
+        # Same idle cash on both sides — the buy & hold arm holds the same
+        # undeployed reserve as the model's day-one book.
+        bench_final = benchmark["final_equity"] + initial_cash
+        benchmark["final_equity"] = round(bench_final, 2)
+        benchmark["total_pnl_amount"] = round(bench_final - initial_capital, 2)
+        benchmark["total_return_pct"] = round((bench_final / initial_capital - 1) * 100, 2)
+        benchmark["cash_reserved"] = initial_cash
 
     return {
         "start_date": start_date,
@@ -1110,6 +1157,7 @@ def simulate_portfolio_real(
     rebalance_months: int | None = 3,
     equity_regime_tilt: bool = True,
     emergency_reselect: bool = False,
+    max_position_weight: float | None = None,
 ) -> dict:
     """Auto-selects a portfolio (from real symbols, defaulting to the full
     example universe) using only data before `start_date`, then walks
@@ -1189,6 +1237,7 @@ def simulate_portfolio_real(
         rebalance_months,
         equity_regime_tilt,
         emergency_reselect,
+        max_position_weight,
     )
 
 
@@ -1214,6 +1263,7 @@ def simulate_portfolio_synthetic(
     rebalance_months: int | None = 3,
     equity_regime_tilt: bool = True,
     emergency_reselect: bool = False,
+    max_position_weight: float | None = None,
 ) -> dict:
     """Same simulation, but over synthetic profiles reaching into 2026 —
     usable with no network access. Real dates only line up exactly with
@@ -1260,4 +1310,5 @@ def simulate_portfolio_synthetic(
         rebalance_months,
         equity_regime_tilt,
         emergency_reselect,
+        max_position_weight,
     )

@@ -1261,3 +1261,63 @@ def test_first_regime_flip_confirmation_is_causal():
     altered = pd.concat([base.iloc[:cut], pd.Series(np.linspace(base.iloc[cut - 1], 400, len(base) - cut))], ignore_index=True)
     df2 = _make_ohlcv(altered)
     assert _first_regime_flip(df2, True, df2.index[0], None, band_pct=2.0, confirm_days=5) == flip
+
+
+# ---------------------------------------------------------------------------
+# Concentration cap (max_position_weight + cash reserve)
+# ---------------------------------------------------------------------------
+
+
+def test_cap_weights_caps_without_renormalizing():
+    from app.portfolio import _cap_weights
+
+    capped = _cap_weights({"A": 1.0}, 0.4)
+    assert capped == {"A": 0.4}  # surplus stays undeployed, not pushed elsewhere
+    multi = _cap_weights({"A": 0.5, "B": 0.3, "C": 0.2}, 0.4)
+    assert multi == {"A": 0.4, "B": 0.3, "C": 0.2}
+    assert _cap_weights({"A": 1.0}, None) == {"A": 1.0}
+
+
+def test_single_candidate_deploys_capped_fraction_and_keeps_cash(monkeypatch):
+    """One candidate, flat market, zero commission: with a 0.4 cap the model
+    must end with exactly its starting capital — 40% deployed earning zero
+    plus 60% cash — and report the reserve."""
+    monkeypatch.setattr(portfolio_module, "recommend", lambda *a, **k: _fake_rec(action="BUY", confidence=80.0))
+    dfs = {"A": _make_ohlcv(pd.Series([100.0] * 400))}
+
+    report = _run_sim(dfs, portfolio_size=1, rebalance_months=None, max_position_weight=0.4)
+
+    assert report["cash_reserved"] == pytest.approx(9_000.0 * 0.6)
+    assert report["capital_by_symbol"]["A"] == pytest.approx(9_000.0 * 0.4)
+    assert report["final_equity"] == pytest.approx(9_000.0)
+    assert report["benchmark_buy_hold"]["cash_reserved"] == pytest.approx(9_000.0 * 0.6)
+
+
+def test_cap_limits_single_name_loss(monkeypatch):
+    """A crashing single pick: uncapped loses the full crash on 100% of the
+    capital; capped at 0.4 the damage is bounded to the deployed slice."""
+    def buy_once_then_hold(window, *a, **k):
+        return _fake_rec(action="BUY" if len(window) <= 152 else "HOLD", confidence=80.0)
+
+    monkeypatch.setattr(portfolio_module, "recommend", buy_once_then_hold)
+    close = pd.Series([100.0] * 200 + list(np.linspace(100, 60, 200)))
+    dfs = {"A": _make_ohlcv(close)}
+    common = dict(portfolio_size=1, rebalance_months=None, stop_loss_pct=None)
+
+    uncapped = _run_sim(dfs, **common)
+    capped = _run_sim(dfs, **common, max_position_weight=0.4)
+
+    assert capped["final_equity"] > uncapped["final_equity"]
+    assert capped["cash_reserved"] > 0
+
+
+def test_rebalanced_sim_reports_cash_per_segment(monkeypatch):
+    monkeypatch.setattr(portfolio_module, "recommend", lambda *a, **k: _fake_rec(action="BUY", confidence=80.0))
+    dfs = {"A": _make_ohlcv(pd.Series([100.0] * 500))}
+
+    report = _run_sim(dfs, portfolio_size=1, rebalance_months=3, max_position_weight=0.4)
+
+    for segment in report["segments"]:
+        if segment["portfolio"]:
+            assert segment["cash_reserved"] == pytest.approx(segment["capital_start"] * 0.6, abs=0.02)
+    assert report["final_equity"] == pytest.approx(9_000.0)
