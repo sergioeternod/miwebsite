@@ -1004,6 +1004,41 @@ con marcador 2-3: rebalanceo trimestral y tilt accionario adoptados;
 frontera de emergencia (dos variantes) y universo global rechazados —
 así se ve un proceso que deja hablar a la evidencia.
 
+### Tope de concentración (40% por símbolo): probado y rechazado
+
+El hueco era real y medido: con pocos candidatos sobre el umbral de
+confianza, el modelo concentra todo en un solo nombre (2004-2007: 100%
+AAPL; semana del 2026-08-03: 100% ^DJI). El arreglo natural —
+`max_position_weight=0.4`, excedente en efectivo, benchmark cargando la
+misma reserva para una comparación justa — existe y funciona
+(`--max-position-weight`), pero la validación lo rechazó
+(`scripts/validate_position_cap.py`, regla pre-registrada de seguro:
+adoptar solo si reduce drawdown en mayoría clara con costo promedio
+menor a 5 pp):
+
+| Periodo | Default | Cap 40% | Delta retorno | Delta drawdown |
+|---|---|---|---|---|
+| 2004-2007 | +76.0% | +38.4% | **-37.6 pp** | +5.9 pp |
+| 2007-2010 (crisis) | +38.6% | +34.1% | -4.5 pp | -1.8 pp |
+| 2010-2013 | +69.9% | +67.9% | -2.0 pp | 0.0 |
+| 2012-2015 | +89.3% | +76.3% | -12.9 pp | +2.7 pp |
+| 2014-2017 | +143.1% | +85.4% | **-57.7 pp** | 0.0 |
+| 2017-2020 (COVID) | +83.4% | +71.7% | -11.7 pp | +1.1 pp |
+| 2019-2022 | +113.4% | +97.6% | -15.7 pp | 0.0 |
+| 2021-2024 | +66.7% | +62.6% | -4.1 pp | **+14.1 pp** |
+| 2023-2026 | +21.7% | +43.0% | **+21.3 pp** | **+13.8 pp** |
+
+Retorno: 1/9 (delta promedio **-13.9 pp**, triple del límite). Drawdown:
+mejor solo en 5/9. La autopsia: el efectivo apareció en 2-11 segmentos
+por ventana, y cada dólar apartado durante un trimestre alcista fue
+retorno regalado — mientras que la protección que compraba ya la dan más
+barata el stop-loss, el régimen de volatilidad y la señal diaria. La
+concentración en un solo candidato es incómoda, pero históricamente fue
+incomodidad *rentable*: el umbral de confianza concentra precisamente
+cuando su única convicción fuerte resultó, en estas ventanas, una buena
+convicción. (Otra vez el patrón conocido: arregló espectacularmente
+2023-2026, +21 pp — y la vara es el conjunto, no el caso doloroso.)
+
 ### Registro de señales hacia adelante (`track`): la única evidencia sin retrovisor
 
 Todas las validaciones anteriores son backtests — calculadas después de los
