@@ -42,7 +42,7 @@ from app.portfolio import (
 )
 from app.config import AssetClass, infer_asset_class
 from app.data.edgar_client import trailing_eps_known_at
-from app.data.yahoo_quote_client import get_calendar_events
+from app.data.yahoo_quote_client import get_calendar_events, get_valuation_metrics
 from app.fundamentals.valuation import CHEAP_PE_MAX, EXPENSIVE_PE_MIN, valuation_report
 from app.fundamentals.valuation_history import _split_adjusted_quarters, get_split_events
 from app.fundamentals.sector_pe import sector_relative_valuation
@@ -242,6 +242,41 @@ def edgar_ttm_detail(symbol: str, as_of: str) -> dict | None:
     return {"quarters": known, "ttm": sum(q["eps"] for q in known), "num_splits": len(splits)}
 
 
+# Índices sin P/E propio: el ETF que replica cada uno sí reporta múltiplo.
+INDEX_PE_PROXY = {"^GSPC": "SPY", "^DJI": "DIA", "^IXIC": "QQQ"}
+
+
+def beta_vs_benchmark(df: pd.DataFrame, bench: pd.DataFrame) -> float | None:
+    """Beta clásica: cov(retornos diarios, benchmark) / var(benchmark),
+    sobre la historia común disponible (~3 años). None con <60 días."""
+    joined = pd.concat(
+        [df["Close"].pct_change(), bench["Close"].pct_change()], axis=1, join="inner"
+    ).dropna()
+    if len(joined) < 60:
+        return None
+    r, m = joined.iloc[:, 0], joined.iloc[:, 1]
+    var = float(m.var())
+    if var == 0:
+        return None
+    return float(r.cov(m) / var)
+
+
+def proxy_pe(symbol: str | None) -> tuple[float | None, str | None]:
+    """(P/E, tipo) para un proxy ETF — forward si Yahoo lo reporta, si no
+    trailing. (None, None) si no hay proxy o la consulta falla."""
+    if not symbol:
+        return None, None
+    try:
+        m = get_valuation_metrics(symbol)
+    except Exception:
+        return None, None
+    if m.get("forward_pe"):
+        return float(m["forward_pe"]), "forward"
+    if m.get("trailing_pe"):
+        return float(m["trailing_pe"]), "trailing"
+    return None, None
+
+
 def signals_log_stats() -> dict | None:
     """Primer día registrado, conteo de señales y fecha estimada de la
     primera calificación oficial (10 barras de mercado después)."""
@@ -323,10 +358,12 @@ CSS = """<style>
   .why { font-size:12.5px; color:var(--ink2); }
   .allclear { background:var(--panel); border:1px solid var(--line); border-radius:8px; padding:14px 16px; color:var(--ink2); }
   .lwrap { overflow-x:auto; }
-  details.pos, details.watch { border:1px solid var(--line); border-radius:8px; background:var(--panel); margin-bottom:8px; min-width:680px; }
+  details.pos, details.watch { border:1px solid var(--line); border-radius:8px; background:var(--panel); margin-bottom:8px; min-width:740px; }
+  .tile.key { border-color:var(--acc); }
+  .tile.key .v { color:var(--acc-ink); }
   details.pos > summary, details.watch > summary { display:grid; gap:10px; padding:12px 14px; cursor:pointer;
     align-items:center; list-style:none; }
-  details.pos > summary { grid-template-columns:1.3fr .9fr 1.1fr .8fr 1fr 1.1fr; }
+  details.pos > summary { grid-template-columns:1.3fr .85fr 1.05fr .75fr 1fr .6fr 1.05fr; }
   details.watch > summary { grid-template-columns:1.5fr .9fr 1fr .8fr 1.3fr 1fr; }
   details.pos > summary::-webkit-details-marker, details.watch > summary::-webkit-details-marker { display:none; }
   details.pos > summary:focus-visible, details.watch > summary:focus-visible { outline:2px solid var(--acc); outline-offset:-2px; border-radius:8px; }
@@ -463,6 +500,7 @@ def main() -> None:
         return next((d for d in dates if d >= as_of), dates[-1] if dates else None)
 
     # --- per-position monitoring rows ---
+    sp_df = dfs.get("^GSPC")
     rows = []
     for s, p in state["positions"].items():
         df = dfs.get(s)
@@ -487,8 +525,37 @@ def main() -> None:
             "stop_level": stop_level, "pe": pe, "is_stock": is_stock,
             "stop_distance_pct": (price / stop_level - 1) * 100,
             "next_earnings": next_earnings(s) if is_stock else None,
+            "beta": beta_vs_benchmark(df, sp_df) if sp_df is not None else None,
         })
     rows.sort(key=lambda r: -r["weight"])
+
+    # --- key indicator: implied expected return (earnings yield + beta) ---
+    market_pe, market_pe_kind = proxy_pe("SPY")
+    market_ey = 1.0 / market_pe if market_pe else None
+    ey_pond, beta_pond, ey_available = 0.0, 0.0, False
+    for r in rows:
+        if r["is_stock"]:
+            vrep = vrep_for(r["symbol"])
+            pe_used = vrep.get("implicit_forward_pe") or vrep.get("trailing_pe")
+            pe_src = "fwd implícito (consenso +1y)" if vrep.get("implicit_forward_pe") else "P/E actual"
+        else:
+            proxy = INDEX_PE_PROXY.get(r["symbol"])
+            pe_used, kind = proxy_pe(proxy)
+            pe_src = f"proxy {proxy} ({kind})" if pe_used else None
+        if pe_used:
+            ey = 1.0 / pe_used
+        elif r["beta"] is not None and market_ey:
+            ey = r["beta"] * market_ey
+            pe_src = "β × implícito S&P (sin P/E propio)"
+        else:
+            ey, pe_src = None, "sin datos"
+        r["ey"], r["pe_used"], r["pe_src"] = ey, pe_used, pe_src
+        if ey is not None:
+            ey_pond += r["weight"] * ey
+            ey_available = True
+        if r["beta"] is not None:
+            beta_pond += r["weight"] * r["beta"]
+    capm_ret = beta_pond * market_ey if market_ey else None
 
     # --- watchlist: universe stocks outside the book ---
     held = set(state["positions"])
@@ -644,6 +711,14 @@ def main() -> None:
             + (f"<li>P/E: precio actual entre EPS de los últimos 4 trimestres presentados a la SEC (EDGAR, ajustado por splits) — drill-down completo en su tarjeta de valuación.</li>" if r["is_stock"] else "<li>P/E: no aplica — un índice no tiene utilidades por acción propias.</li>")
             + "<li>Libro: portfolio_state.json (papel, $10,000 nominales), versionado en el repositorio.</li></ul>"
         )
+        beta_txt = f"{r['beta']:.2f}" if r.get("beta") is not None else "—"
+        beta_read = ""
+        if r.get("beta") is not None:
+            beta_read = (
+                "se mueve casi 1:1 con el índice" if 0.85 <= r["beta"] <= 1.15
+                else ("amplifica los movimientos del índice" if r["beta"] > 1.15 else "amortigua los movimientos del índice")
+            )
+            beta_read = f"<div><b>β vs S&amp;P:</b> {r['beta']:.2f} — {beta_read} (retornos diarios, ~3 años)</div>"
         body = (
             f"<div class='grid2'>"
             f"<div><b>Entrada:</b> {r['entry_price']:,.2f} el {fmt_date(r['entry_date'])}{conf_sel}</div>"
@@ -652,6 +727,7 @@ def main() -> None:
             f"<div><b>Exposición vol.:</b> σ20d {r['sigma20']:.2f}% vs σ100d {r['sigma100']:.2f}% diaria → {r['exposure_pct']:.0f}% del tamaño (piso 25%)</div>"
             f"<div><b>Stop-loss:</b> {r['entry_price']:,.2f} × 0.85 = {r['stop_level']:,.2f} — hoy a {r['stop_distance_pct']:.1f}%</div>"
             f"<div><b>Señal hoy:</b> {r['signal']} con {r['signal_conf']:.0f}% — un SELL ≥55% la saca a efectivo</div>"
+            f"{beta_read}"
             f"{earn}"
             f"</div>{sources}"
         )
@@ -662,6 +738,7 @@ def main() -> None:
             f"<div class='cell'><div class='k'>Actual / entrada</div><div class='v'>{r['price']:,.2f}<span class='sub'> / {r['entry_price']:,.2f}</span></div></div>"
             f"<div class='cell'><div class='k'>P&amp;L</div><div class='v {pnl_cls}'>{r['pnl_pct']:+.2f}%</div></div>"
             f"<div class='cell'><div class='k'>Señal · P/E</div><div class='v {sig_cls}'>{r['signal']} {r['signal_conf']:.0f}%<span class='sub'> · {pe_txt}</span></div></div>"
+            f"<div class='cell'><div class='k'>β vs S&amp;P</div><div class='v'>{beta_txt}</div></div>"
             f"<div class='cell'><div class='k'>Stop-loss</div><div class='v'>{r['stop_level']:,.2f}<span class='sub'> a {r['stop_distance_pct']:.1f}%</span></div></div>"
             f"</summary><div class='posbody'>{body}</div></details>"
         )
@@ -790,7 +867,65 @@ def main() -> None:
         f"<ul class='src'><li>Validación del trimestre: 7/9 contra no rebalancear; el barrido de robustez aprobó 3/6/12 meses y reprobó 1 mes (validate_rebalance_result.json).</li></ul>",
     )
 
-    pos_section = "<div class='lwrap'>" + "".join(pos_html(r) for r in rows) + "</div>" if rows else "<p class='allclear'>Libro sin posiciones — todo en efectivo hasta la próxima re-selección.</p>"
+    # key-indicator tile (implied return + weighted beta) with full arithmetic drilldown
+    def _f(v, fmt=".2f"):
+        return format(v, fmt) if v is not None else "—"
+
+    imp_table_rows = "".join(
+        f"<tr><td>{r['symbol']}</td><td class='num'>{r['weight']*100:.1f}%</td>"
+        f"<td class='num'>{_f(r['pe_used'], '.1f')}</td><td>{r['pe_src']}</td>"
+        f"<td class='num'>{_f(r['ey']*100 if r['ey'] is not None else None, '.1f')}%</td>"
+        f"<td class='num'>{_f(r['beta'])}</td>"
+        f"<td class='num'>{_f(r['weight']*r['ey']*100 if r['ey'] is not None else None, '.2f')}%</td></tr>"
+        for r in rows
+    )
+    cash_row = (
+        f"<tr><td>Efectivo</td><td class='num'>{state['cash_weight']*100:.1f}%</td><td class='num'>—</td>"
+        f"<td>no invertido</td><td class='num'>0.0%</td><td class='num'>0.00</td><td class='num'>0.00%</td></tr>"
+    )
+    market_line = (
+        f"<p><b>Benchmark:</b> S&amp;P 500 vía SPY ({market_pe_kind}): P/E {market_pe:.1f} → rendimiento implícito {market_ey*100:.1f}% anual.</p>"
+        if market_ey else "<p><b>Benchmark:</b> sin lectura de P/E del S&amp;P hoy (SPY no disponible).</p>"
+    )
+    capm_line = (
+        f"<p><b>Verificación CAPM:</b> β ponderada × implícito del S&amp;P = {beta_pond:.2f} × {market_ey*100:.1f}% = <b>{capm_ret*100:.1f}% anual</b>.</p>"
+        if capm_ret is not None else ""
+    )
+    imp_dd = dd(
+        "fuente y cálculo",
+        f"<p><b>Rendimiento implícito por P/E</b> = Σ peso × (1 / P/E): pagar {(1/ey_pond if ey_available and ey_pond else 0):.1f}x utilidades equivale a "
+        f"un rendimiento de utilidades del {ey_pond*100:.1f}% anual si el múltiplo se sostiene.</p>"
+        f"<table class='kv'><tr><th>Símbolo</th><th class='num'>Peso</th><th class='num'>P/E usado</th><th>Fuente del P/E</th>"
+        f"<th class='num'>E/P anual</th><th class='num'>β vs S&amp;P</th><th class='num'>Aporte w·E/P</th></tr>"
+        f"{imp_table_rows}{cash_row}"
+        f"<tr><td><b>Libro</b></td><td class='num'><b>100%</b></td><td class='num'></td><td></td>"
+        f"<td class='num'><b>{ey_pond*100:.1f}%</b></td><td class='num'><b>{beta_pond:.2f}</b></td><td class='num'><b>{ey_pond*100:.1f}%</b></td></tr></table>"
+        f"{market_line}{capm_line}"
+        f"<p><b>β por acción:</b> covarianza de retornos diarios contra el S&amp;P 500 entre la varianza del S&amp;P, "
+        f"~3 años de historia común; la ponderada suma peso × β (el efectivo pondera β 0).</p>"
+        f"<ul class='src'><li>P/E de acciones: consenso de analistas (Yahoo earningsTrend) — forward implícito; respaldo: P/E actual.</li>"
+        f"<li>P/E de índices: su ETF réplica (SPY/DIA/QQQ) vía Yahoo quoteSummary.</li>"
+        f"<li>Retornos para β: cierres diarios ajustados (Yahoo chart API, respaldo Stooq).</li></ul>"
+        f"<p>Indicador informativo: el earnings yield es el rendimiento de largo plazo implícito en el múltiplo, no una promesa a 12 meses, "
+        f"y supone múltiplo y utilidades sostenidos. No entra al modelo ni está validado en las 9 ventanas.</p>",
+    )
+    imp_value = f"{ey_pond*100:.1f}% anual" if ey_available else "—"
+    imp_sub = (
+        f"β ponderada {beta_pond:.2f} vs S&amp;P" + (f" · vía CAPM {capm_ret*100:.1f}%" if capm_ret is not None else "")
+        if rows else "libro sin posiciones"
+    )
+    key_tile = (
+        f"<div class='tile panel key'><div class='k'>Rendimiento implícito esperado</div>"
+        f"<div class='v'>{imp_value}</div><span class='sub'>{imp_sub}</span>{imp_dd}</div>"
+    )
+
+    pos_footer = (
+        f"<div class='chips' style='margin-top:2px'>"
+        f"<span class='chip acc'>β ponderada del libro {beta_pond:.2f} vs S&amp;P</span>"
+        f"<span class='chip'>rendimiento implícito {ey_pond*100:.1f}% anual</span></div>"
+        if rows else ""
+    )
+    pos_section = ("<div class='lwrap'>" + "".join(pos_html(r) for r in rows) + "</div>" + pos_footer) if rows else "<p class='allclear'>Libro sin posiciones — todo en efectivo hasta la próxima re-selección.</p>"
     watch_section = "<div class='lwrap'>" + "".join(watch_html(w) for w in watch) + "</div>" if watch else "<p class='allclear'>Sin candidatas fuera del libro.</p>"
     events_section = "".join(event_html(e) for e in events) + "".join(event_html(e) for e in level_events)
 
@@ -806,6 +941,7 @@ def main() -> None:
         "<li><b>Fundamentales históricos:</b> SEC EDGAR companyfacts (XBRL) — EPS diluido trimestral con fecha de presentación, ajustado por splits (eventos de Yahoo). Es la base del P/E punto-en-tiempo y del tilt del modelo (validado 8/9 ventanas, +2.02 pp promedio).</li>"
         "<li><b>Valuación viva:</b> Yahoo quoteSummary — P/E actual y forward, estimados de analistas (hoy vs hace 90 días), sector/industria, calendario de resultados. Solo informa el presente; nunca entra a los backtests.</li>"
         "<li><b>Referencias de industria:</b> tabla fija de medianas de P/E por industria/sector (estilo Damodaran) en app/fundamentals/sector_pe.py — editable por diff, no ajustada a backtests.</li>"
+        "<li><b>Rendimiento implícito y β:</b> earnings yield = 1 / P/E (forward implícito para acciones; ETF réplica SPY/DIA/QQQ para índices); β = covarianza de retornos diarios contra el S&amp;P 500 / varianza del S&amp;P, ~3 años. Indicadores informativos del resumen — no son insumos del modelo.</li>"
         "<li><b>Libro y señales:</b> portfolio_state.json (libro papel) y signals_log.jsonl (registro forward), ambos versionados en el repositorio.</li>"
         "</ul></div>"
     )
@@ -831,6 +967,7 @@ def main() -> None:
       <div class="tile panel"><div class="k">Régimen</div><div class="v">{regime_txt}</div><span class="sub">{regime_sub}</span>{regime_dd}</div>
       <div class="tile panel"><div class="k">Posiciones / efectivo</div><div class="v">{len(rows)} · {state['cash_weight']*100:.1f}%</div><span class="sub">efectivo {money(state['cash_weight'])} de $10,000</span>{book_dd}</div>
       <div class="tile panel"><div class="k">Próxima re-selección</div><div class="v">{fmt_date(state['next_rebalance'])}</div><span class="sub">o antes si una señal saca una posición</span>{reb_dd}</div>
+      {key_tile}
     </div>
   </section>
 
