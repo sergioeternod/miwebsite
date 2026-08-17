@@ -63,15 +63,18 @@ def pe_history_series(symbol: str, df: pd.DataFrame, bars: int = 750) -> list[tu
     return out
 
 
-def pe_svg(series: list[tuple[str, float]], reference_pe: float | None = None, width: int = 420, height: int = 130) -> str:
+def pe_svg(series: list[tuple[str, float]], reference_pe: float | None = None, forward_pe: float | None = None, width: int = 420, height: int = 130) -> str:
     """Small-multiple SVG of the point-in-time P/E path with the fixed
     cheap/expensive bands shaded — the same bands the tilt uses, so the
-    picture and the rule are one thing."""
+    picture and the rule are one thing. `forward_pe` (el implícito del
+    consenso +1y) se dibuja como rombo hueco al final de la serie: hacia
+    dónde iría el múltiplo si los estimados se cumplen."""
     if len(series) < 20:
         return "<p class='sub'>Sin historial de P/E suficiente para graficar.</p>"
     values = [v for _, v in series]
-    lo = min(10.0, min(values), *([reference_pe] if reference_pe else [])) * 0.95
-    hi = max(EXPENSIVE_PE_MIN + 5, max(values), *([reference_pe] if reference_pe else [])) * 1.05
+    extras = [v for v in (reference_pe, forward_pe) if v]
+    lo = min(10.0, min(values), *extras) * 0.95
+    hi = max(EXPENSIVE_PE_MIN + 5, max(values), *extras) * 1.05
     ml, mr, mt, mb = 34, 46, 8, 18
 
     def x(i):
@@ -109,15 +112,71 @@ def pe_svg(series: list[tuple[str, float]], reference_pe: float | None = None, w
             f"{axis_tick}"
             f"<text x='{ml+6}' y='{y(reference_pe)-5:.1f}' class='pe-label ref halo'>P/E industria {reference_pe:.0f}</text>"
         )
+    fwd_marker = ""
+    if forward_pe and lo <= forward_pe <= hi:
+        fx, fy, ly = x(len(series) - 1), y(forward_pe), y(forward_pe) + 3.5
+        # Si el label del forward cae encima del label del último P/E, se desplaza.
+        if abs(fy - y(values[-1])) < 13:
+            ly = fy + (15 if fy >= y(values[-1]) else -9)
+        fwd_marker = (
+            f"<path d='M {fx:.1f} {fy-4.4:.1f} L {fx+4.4:.1f} {fy:.1f} L {fx:.1f} {fy+4.4:.1f} L {fx-4.4:.1f} {fy:.1f} Z' class='pe-fwd'/>"
+            f"<text x='{fx+7:.1f}' y='{ly:.1f}' class='pe-label fwdlbl'>fwd {forward_pe:.1f}</text>"
+        )
     return (
         f"<svg viewBox='0 0 {width} {height}' role='img' aria-label='P/E histórico punto-en-tiempo'>"
         f"{cheap}{rich}{gridlines}{ref_line}"
         f"<polyline points='{pts}' class='pe-line'/>"
+        f"{fwd_marker}"
         f"<circle cx='{x(len(series)-1):.1f}' cy='{y(values[-1]):.1f}' r='3.4' class='pe-dot'/>"
         f"<text x='{x(len(series)-1)+6:.1f}' y='{y(values[-1])+3.5:.1f}' class='pe-label strong'>{values[-1]:.1f}</text>"
         f"<text x='{ml}' y='{height-4}' class='pe-label'>{series[0][0][:7]}</text>"
         f"<text x='{width-mr}' y='{height-4}' text-anchor='end' class='pe-label'>{series[-1][0][:7]}</text>"
         f"</svg>"
+    )
+
+
+def guidance_svg(estimates: dict, trailing_eps: float | None = None, width: int = 420, height: int = 100) -> str:
+    """Dumbbell del guidance: para cada año fiscal, el EPS consenso hace 90
+    días (punto hueco) contra el de hoy (punto sólido), sobre una escala
+    común de EPS. La dirección y magnitud del desplazamiento ES la señal de
+    guidance; el EPS de los últimos 12 meses ancla la escala como referencia
+    de lo ya reportado."""
+    rows = []
+    for key, label in (("0y", "FY en curso"), ("+1y", "FY siguiente")):
+        e = estimates.get(key) or {}
+        if e.get("eps_avg") and e.get("eps_avg_90d_ago"):
+            rows.append((label, float(e["eps_avg_90d_ago"]), float(e["eps_avg"])))
+    if not rows:
+        return "<p class='sub'>Sin estimados de analistas para graficar guidance.</p>"
+    vals = [v for _, a, b in rows for v in (a, b)]
+    if trailing_eps and trailing_eps > 0:
+        vals.append(float(trailing_eps))
+    lo, hi = min(vals), max(vals)
+    pad = (hi - lo) * 0.15 or max(abs(hi), 1.0) * 0.05
+    lo, hi = lo - pad, hi + pad
+    ml, mr, mt, mb = 92, 104, 8, 20
+
+    def x(v):
+        return ml + (v - lo) / (hi - lo) * (width - ml - mr)
+
+    row_h = (height - mt - mb) / len(rows)
+    parts = []
+    if trailing_eps and trailing_eps > 0 and lo <= trailing_eps <= hi:
+        parts.append(f"<line x1='{x(trailing_eps):.1f}' x2='{x(trailing_eps):.1f}' y1='{mt}' y2='{height-mb}' class='pe-grid'/>")
+        parts.append(f"<text x='{x(trailing_eps):.1f}' y='{height-6}' text-anchor='middle' class='pe-label'>EPS 12m {trailing_eps:.2f}</text>")
+    for i, (label, a, b) in enumerate(rows):
+        cy = mt + row_h * (i + 0.5)
+        chg = (b - a) / abs(a) * 100 if a else 0.0
+        cls = " up" if chg > 0.5 else (" down" if chg < -0.5 else "")
+        parts.append(f"<text x='{ml-8}' y='{cy+3.5:.1f}' text-anchor='end' class='pe-label'>{label}</text>")
+        parts.append(f"<line x1='{x(a):.1f}' x2='{x(b):.1f}' y1='{cy:.1f}' y2='{cy:.1f}' class='g-link{cls}'/>")
+        parts.append(f"<circle cx='{x(a):.1f}' cy='{cy:.1f}' r='3' class='g-old'/>")
+        parts.append(f"<circle cx='{x(b):.1f}' cy='{cy:.1f}' r='3.6' class='g-new{cls}'/>")
+        parts.append(f"<text x='{width-mr+8:.1f}' y='{cy+3.5:.1f}' class='pe-label{cls}'>{b:.2f} ({chg:+.1f}%)</text>")
+    return (
+        f"<svg viewBox='0 0 {width} {height}' role='img' aria-label='Guidance: estimados EPS hace 90 días contra hoy'>"
+        + "".join(parts)
+        + "</svg>"
     )
 
 
@@ -275,7 +334,8 @@ def main() -> None:
             "relative_reading": rel.get("reading", "sin referencia"),
             "relative_ratio": rel.get("ratio"),
             "reference_pe": rel.get("reference_pe"),
-            "svg": pe_svg(pe_history_series(s, dfs[s]), rel.get("reference_pe")),
+            "svg": pe_svg(pe_history_series(s, dfs[s]), rel.get("reference_pe"), vrep.get("implicit_forward_pe")),
+            "guidance_svg": guidance_svg(vrep.get("estimates") or {}, vrep.get("trailing_eps")),
         })
 
     STATE_PATH.write_text(json.dumps(state, indent=2, ensure_ascii=False) + "\n")
@@ -301,7 +361,9 @@ def main() -> None:
             f"<span class='chip2'>fwd implícito {fw}</span>"
             f"<span class='chip2{warn}'>guidance: {c['guidance_txt']}</span>"
             f"<span class='chip2{rel_cls}'>vs industria: {c['relative_reading']}{ratio_txt}</span></div>"
-            f"{c['svg']}</div>"
+            f"{c['svg']}"
+            f"<div class='sub gcap'>Guidance: EPS consenso, hace 90 días (hueco) → hoy (sólido)</div>"
+            f"{c['guidance_svg']}</div>"
         )
 
     valuation_html = (
@@ -379,6 +441,14 @@ def main() -> None:
   .pe-label.strong {{ fill:var(--ink); font-weight:600; font-size:11.5px; }}
   .pe-label.ref {{ fill:var(--ink2); font-weight:600; }}
   .pe-label.halo {{ paint-order:stroke; stroke:var(--card); stroke-width:3px; stroke-linejoin:round; }}
+  .pe-fwd {{ fill:var(--card); stroke:var(--pos); stroke-width:1.8; }}
+  .pe-label.fwdlbl {{ fill:var(--pos); font-weight:600; }}
+  .gcap {{ margin:10px 0 2px; }}
+  .g-link {{ stroke:var(--ink3); stroke-width:2; }}
+  .g-link.up {{ stroke:var(--pos); }} .g-link.down {{ stroke:var(--neg); }}
+  .g-old {{ fill:var(--card); stroke:var(--ink3); stroke-width:1.5; }}
+  .g-new {{ fill:var(--ink2); }} .g-new.up {{ fill:var(--pos); }} .g-new.down {{ fill:var(--neg); }}
+  text.pe-label.up {{ fill:var(--pos); }} text.pe-label.down {{ fill:var(--neg); }}
   .zone-cheap {{ fill:var(--soft); opacity:.55; }}
   .zone-rich {{ fill:var(--softneg); opacity:.55; }}
   svg {{ display:block; width:100%; height:auto; }}
@@ -407,8 +477,10 @@ def main() -> None:
   <p class="sub" style="font-size:13px;margin:0 0 12px;">La línea es el P/E <em>punto-en-tiempo</em>
   (precio del día entre las utilidades que eran públicas ese día, SEC EDGAR, últimos 3 años). Zona azul: barata
   (&lt;{CHEAP_PE_MAX:.0f}); zona roja: cara (&gt;{EXPENSIVE_PE_MIN:.0f}) — las mismas bandas fijas que usa la señal.
-  "Guidance" es la dirección de las revisiones de estimados de analistas en 90 días; "fwd implícito" = precio entre
-  el EPS consenso del próximo año. La línea punteada es la <em>mediana de referencia de su industria</em>
+  "Guidance" es la dirección de las revisiones de estimados de analistas en 90 días — el gráfico de puntos por
+  tarjeta muestra ese desplazamiento por año fiscal (hueco = hace 90 días, sólido = hoy, contra el EPS ya
+  reportado de los últimos 12 meses). "Fwd implícito" = precio entre el EPS consenso del próximo año; el rombo
+  hueco al final de la línea de P/E marca a dónde iría el múltiplo si esos estimados se cumplen. La línea punteada es la <em>mediana de referencia de su industria</em>
   (tabla fija tipo Damodaran) y el chip "vs industria" lee el cociente: &lt;0.8x barata para su industria,
   &gt;1.2x cara — porque un P/E de 27 es normal en software y carísimo en automotrices.</p>
   {valuation_html}
