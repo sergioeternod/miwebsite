@@ -92,3 +92,29 @@ def test_overlay_non_stock_is_noop_without_fetch(monkeypatch):
     out = apply_valuation_overlay({"overall_action": "BUY", "confidence_pct": 88.0}, "BTC-USD")
     assert out["confidence_pct"] == 88.0
     assert out["valuation"]["applicable"] is False
+
+
+def test_sector_relative_reading_thresholds():
+    from app.fundamentals.sector_pe import relative_reading
+
+    assert relative_reading(20.0, 30.0)["reading"] == "barata para su industria"  # 0.67x
+    assert relative_reading(30.0, 30.0)["reading"] == "en línea con su industria"
+    assert relative_reading(45.0, 30.0)["reading"] == "cara para su industria"  # 1.5x
+    assert relative_reading(None, 30.0)["reading"] == "sin referencia"
+    assert relative_reading(20.0, None)["reading"] == "sin referencia"
+
+
+def test_sector_reference_prefers_industry_over_sector():
+    from app.fundamentals.sector_pe import reference_pe_for
+
+    ref, label = reference_pe_for("Technology", "Semiconductors")
+    assert (ref, label) == (28.0, "Semiconductors")
+    ref2, label2 = reference_pe_for("Technology", "Industria Desconocida")
+    assert (ref2, label2) == (27.0, "Technology")
+    assert reference_pe_for(None, None) == (None, None)
+
+
+def test_sector_relative_not_applicable_for_non_stocks():
+    from app.fundamentals.sector_pe import sector_relative_valuation
+
+    assert sector_relative_valuation("^GSPC", 25.0) == {"applicable": False}

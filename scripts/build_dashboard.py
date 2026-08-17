@@ -37,6 +37,7 @@ from app.config import AssetClass, infer_asset_class
 from app.data.edgar_client import trailing_eps_known_at
 from app.fundamentals.valuation import CHEAP_PE_MAX, EXPENSIVE_PE_MIN, valuation_report
 from app.fundamentals.valuation_history import _split_adjusted_quarters
+from app.fundamentals.sector_pe import sector_relative_valuation
 from app.recommend.engine import recommend
 
 STATE_PATH = Path("portfolio_state.json")
@@ -62,15 +63,15 @@ def pe_history_series(symbol: str, df: pd.DataFrame, bars: int = 750) -> list[tu
     return out
 
 
-def pe_svg(series: list[tuple[str, float]], width: int = 420, height: int = 130) -> str:
+def pe_svg(series: list[tuple[str, float]], reference_pe: float | None = None, width: int = 420, height: int = 130) -> str:
     """Small-multiple SVG of the point-in-time P/E path with the fixed
     cheap/expensive bands shaded — the same bands the tilt uses, so the
     picture and the rule are one thing."""
     if len(series) < 20:
         return "<p class='sub'>Sin historial de P/E suficiente para graficar.</p>"
     values = [v for _, v in series]
-    lo = min(10.0, min(values)) * 0.95
-    hi = max(EXPENSIVE_PE_MIN + 5, max(values)) * 1.05
+    lo = min(10.0, min(values), *([reference_pe] if reference_pe else [])) * 0.95
+    hi = max(EXPENSIVE_PE_MIN + 5, max(values), *([reference_pe] if reference_pe else [])) * 1.05
     ml, mr, mt, mb = 34, 46, 8, 18
 
     def x(i):
@@ -95,9 +96,15 @@ def pe_svg(series: list[tuple[str, float]], width: int = 420, height: int = 130)
         for v in (CHEAP_PE_MAX, EXPENSIVE_PE_MIN)
         if lo <= v <= hi
     )
+    ref_line = ""
+    if reference_pe and lo <= reference_pe <= hi:
+        ref_line = (
+            f"<line x1='{ml}' x2='{width-mr}' y1='{y(reference_pe):.1f}' y2='{y(reference_pe):.1f}' class='pe-ref'/>"
+            f"<text x='{width-mr}' y='{y(reference_pe)-4:.1f}' text-anchor='end' class='pe-label'>mediana industria {reference_pe:.0f}</text>"
+        )
     return (
         f"<svg viewBox='0 0 {width} {height}' role='img' aria-label='P/E histórico punto-en-tiempo'>"
-        f"{cheap}{rich}{gridlines}"
+        f"{cheap}{rich}{gridlines}{ref_line}"
         f"<polyline points='{pts}' class='pe-line'/>"
         f"<circle cx='{x(len(series)-1):.1f}' cy='{y(values[-1]):.1f}' r='3.4' class='pe-dot'/>"
         f"<text x='{x(len(series)-1)+6:.1f}' y='{y(values[-1])+3.5:.1f}' class='pe-label strong'>{values[-1]:.1f}</text>"
@@ -250,13 +257,18 @@ def main() -> None:
         guidance_txt = {"bullish": "revisiones al alza", "bearish": "revisiones a la baja", "neutral": "revisiones estables"}.get(
             vrep.get("guidance_signal", "neutral"), "sin lectura"
         )
+        rel = sector_relative_valuation(s, vrep.get("trailing_pe"))
         valuation_cards.append({
             "symbol": s,
             "trailing_pe": vrep.get("trailing_pe"),
             "implicit_forward_pe": vrep.get("implicit_forward_pe"),
             "guidance_txt": guidance_txt,
             "guidance_signal": vrep.get("guidance_signal", "neutral"),
-            "svg": pe_svg(pe_history_series(s, dfs[s])),
+            "industry": rel.get("industry") or rel.get("sector") or "",
+            "relative_reading": rel.get("reading", "sin referencia"),
+            "relative_ratio": rel.get("ratio"),
+            "reference_pe": rel.get("reference_pe"),
+            "svg": pe_svg(pe_history_series(s, dfs[s]), rel.get("reference_pe")),
         })
 
     STATE_PATH.write_text(json.dumps(state, indent=2, ensure_ascii=False) + "\n")
@@ -270,11 +282,14 @@ def main() -> None:
         tr = f"{c['trailing_pe']:.1f}" if c.get("trailing_pe") else "—"
         fw = f"{c['implicit_forward_pe']:.1f}" if c.get("implicit_forward_pe") else "—"
         warn = " warn" if c["guidance_signal"] == "bearish" else ""
+        ratio_txt = f" ({c['relative_ratio']:.2f}x)" if c.get("relative_ratio") else ""
+        rel_cls = " good" if "barata" in c["relative_reading"] else (" warn" if "cara" in c["relative_reading"] else "")
         return (
-            f"<div class='valcard'><h3>{c['symbol']}</h3>"
+            f"<div class='valcard'><h3>{c['symbol']} <span class='sub'>{c['industry']}</span></h3>"
             f"<div class='chips'><span class='chip2'>P/E actual {tr}</span>"
             f"<span class='chip2'>fwd implícito {fw}</span>"
-            f"<span class='chip2{warn}'>guidance: {c['guidance_txt']}</span></div>"
+            f"<span class='chip2{warn}'>guidance: {c['guidance_txt']}</span>"
+            f"<span class='chip2{rel_cls}'>vs industria: {c['relative_reading']}{ratio_txt}</span></div>"
             f"{c['svg']}</div>"
         )
 
@@ -344,6 +359,8 @@ def main() -> None:
   .chips {{ display:flex; flex-wrap:wrap; gap:6px; margin-bottom:10px; }}
   .chip2 {{ font-size:12px; padding:2px 9px; border-radius:6px; background:var(--soft); }}
   .chip2.warn {{ background:var(--softneg); }}
+  .chip2.good {{ background:var(--soft); font-weight:600; }}
+  .pe-ref {{ stroke:var(--ink2); stroke-width:1.4; stroke-dasharray:6 4; }}
   .pe-line {{ fill:none; stroke:var(--pos); stroke-width:2; stroke-linejoin:round; }}
   .pe-dot {{ fill:var(--pos); }}
   .pe-grid {{ stroke:var(--ink3); stroke-width:1; stroke-dasharray:3 4; opacity:.6; }}
@@ -378,7 +395,9 @@ def main() -> None:
   (precio del día entre las utilidades que eran públicas ese día, SEC EDGAR, últimos 3 años). Zona azul: barata
   (&lt;{CHEAP_PE_MAX:.0f}); zona roja: cara (&gt;{EXPENSIVE_PE_MIN:.0f}) — las mismas bandas fijas que usa la señal.
   "Guidance" es la dirección de las revisiones de estimados de analistas en 90 días; "fwd implícito" = precio entre
-  el EPS consenso del próximo año.</p>
+  el EPS consenso del próximo año. La línea punteada es la <em>mediana de referencia de su industria</em>
+  (tabla fija tipo Damodaran) y el chip "vs industria" lee el cociente: &lt;0.8x barata para su industria,
+  &gt;1.2x cara — porque un P/E de 27 es normal en software y carísimo en automotrices.</p>
   {valuation_html}
 
   <p class="note"><strong>Cómo leerlo:</strong> "Señal hoy" es la lectura diaria del ensemble — un SELL ≥55% genera

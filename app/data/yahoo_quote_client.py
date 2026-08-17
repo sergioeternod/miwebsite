@@ -30,6 +30,7 @@ _TIMEOUT_SECONDS = 20
 
 _opener: urllib.request.OpenerDirector | None = None
 _crumb: str | None = None
+_profile_cache: dict[str, dict] = {}
 
 
 class QuoteSummaryUnavailableError(RuntimeError):
@@ -107,3 +108,37 @@ def get_valuation_metrics(symbol: str) -> dict:
         "previous_close": _raw(summary.get("previousClose")),
         "estimates": estimates,
     }
+
+
+def get_asset_profile(symbol: str) -> dict:
+    """Sector/industry classification for `symbol` (Yahoo assetProfile),
+    cached in-process: {"sector": str | None, "industry": str | None}.
+    Raises QuoteSummaryUnavailableError on endpoint failure."""
+    cached = _profile_cache.get(symbol.upper())
+    if cached is not None:
+        return cached
+    global _opener, _crumb
+    if _opener is None or _crumb is None:
+        _opener, _crumb = _fresh_session()
+    url = (
+        _QUOTE_SUMMARY_URL.format(symbol=urllib.parse.quote(symbol))
+        + "?modules=assetProfile&crumb="
+        + urllib.parse.quote(_crumb)
+    )
+    try:
+        try:
+            payload = json.loads(_opener.open(url, timeout=_TIMEOUT_SECONDS).read())
+        except urllib.error.HTTPError as exc:
+            if exc.code == 401:
+                _opener, _crumb = _fresh_session()
+                url = url.rsplit("crumb=", 1)[0] + "crumb=" + urllib.parse.quote(_crumb)
+                payload = json.loads(_opener.open(url, timeout=_TIMEOUT_SECONDS).read())
+            else:
+                raise
+    except Exception as exc:
+        raise QuoteSummaryUnavailableError(f"No se pudo consultar el perfil de {symbol}: {exc}") from exc
+    results = (payload.get("quoteSummary") or {}).get("result") or []
+    profile = (results[0].get("assetProfile") or {}) if results else {}
+    out = {"sector": profile.get("sector"), "industry": profile.get("industry")}
+    _profile_cache[symbol.upper()] = out
+    return out
