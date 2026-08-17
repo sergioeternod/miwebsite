@@ -474,6 +474,7 @@ def test_select_portfolio_applies_earnings_overlay_when_enabled(monkeypatch, lon
     portfolio = _select_portfolio(
         {"AAPL": long_uptrend_df}, {"AAPL": 200}, portfolio_size=1, allow_short=True,
         initial_capital=10000.0, commission_bps=5.0, min_confidence_pct=60.0, include_earnings=True,
+        fundamental_pe_tilt=False,
     )
     # Raw confidence (50) is below the 60 threshold; only the overlay-boosted
     # confidence (90) clears it — proves the overlay runs before the filter.

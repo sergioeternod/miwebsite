@@ -254,7 +254,7 @@ def _select_portfolio(
     include_news: bool = False,
     max_per_asset_class: int | None = DEFAULT_MAX_PER_ASSET_CLASS,
     short_confidence_premium: float = 0.0,
-    fundamental_pe_tilt: bool = False,
+    fundamental_pe_tilt: bool = True,
 ) -> list[dict]:
     """Ranks symbols using only data strictly before the simulation's start
     index (no lookahead), and returns the top `portfolio_size` — BUY and
@@ -722,7 +722,7 @@ def _run_simulation(
     equity_regime_tilt: bool = False,
     emergency_reselect: bool = False,
     max_position_weight: float | None = None,
-    fundamental_pe_tilt: bool = False,
+    fundamental_pe_tilt: bool = True,
 ) -> dict:
     if step < 1:
         raise ValueError("step debe ser >= 1")
@@ -881,7 +881,7 @@ def _run_rebalanced_simulation(
     equity_regime_tilt: bool = False,
     emergency_reselect: bool = False,
     max_position_weight: float | None = None,
-    fundamental_pe_tilt: bool = False,
+    fundamental_pe_tilt: bool = True,
 ) -> dict:
     """Same day-by-day walk-forward, but instead of marrying the portfolio
     chosen on day one for the whole period, the selection is redone every
@@ -1170,7 +1170,7 @@ def simulate_portfolio_real(
     equity_regime_tilt: bool = True,
     emergency_reselect: bool = False,
     max_position_weight: float | None = None,
-    fundamental_pe_tilt: bool = False,
+    fundamental_pe_tilt: bool = True,
 ) -> dict:
     """Auto-selects a portfolio (from real symbols, defaulting to the full
     example universe) using only data before `start_date`, then walks
@@ -1278,7 +1278,7 @@ def simulate_portfolio_synthetic(
     equity_regime_tilt: bool = True,
     emergency_reselect: bool = False,
     max_position_weight: float | None = None,
-    fundamental_pe_tilt: bool = False,
+    fundamental_pe_tilt: bool = True,
 ) -> dict:
     """Same simulation, but over synthetic profiles reaching into 2026 —
     usable with no network access. Real dates only line up exactly with

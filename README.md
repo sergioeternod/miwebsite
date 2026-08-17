@@ -903,6 +903,55 @@ caro el latigazo. Ese es el trato completo: más retorno esperado y
 ganarle al índice casi siempre, a cambio de caídas más profundas cuando
 el régimen cambia rápido. 9 ventanas no garantizan la décima.
 
+### Tilt de P/E punto-en-tiempo (SEC EDGAR): el primer fundamental validado y adoptado
+
+Los overlays de earnings, noticias y valuación viva son *now-only*: sus
+fuentes solo reportan el presente, así que nunca pudieron enfrentar las 9
+ventanas históricas. Este tilt rompe esa barrera: reconstruye el P/E de
+cada acción **como se veía en cada fecha pasada** — precio del día entre
+el EPS de los últimos 4 trimestres cuyos reportes ya eran públicos ese día
+(SEC EDGAR, compuertas por fecha de presentación `filed`, EPS reajustado
+por splits a unidades de hoy). Sin lookahead: un 10-Q presentado en agosto
+no puede influir una decisión de julio. En cada (re)selección, el tilt
+ajusta la confianza de cada acción con las mismas bandas fijas del overlay
+vivo (<15 refuerza compras, >30 las contradice, ±10 pts máximo).
+
+**Regla pre-registrada** (escrita antes de ver un solo número): se adopta
+solo si gana o empata (≥ −0.5 pp) en la mayoría de las 9 ventanas **y** el
+delta promedio de retorno es ≥ 0. Resultado (`scripts/validate_pe_tilt.py`
+→ `validate_pe_tilt_result.json`): **gana o empata 8/9, delta promedio
++2.02 pp → adoptado como default** (`--no-pe-tilt` lo apaga).
+
+| Ventana | Con tilt P/E | Sin tilt | Delta (pp) | S&P 500 |
+|---|---|---|---|---|
+| 2004–2007 (virgen) | +75.97% | +75.97% | 0.00 | +33.78% |
+| 2007–2010 (crisis) | +38.60% | +38.60% | 0.00 | −25.26% |
+| 2010–2013 (virgen) | +73.66% | +69.91% | **+3.75** | +53.05% |
+| 2012–2015 (virgen) | +99.67% | +89.25% | **+10.42** | +52.21% |
+| 2014–2017 | +143.88% | +143.09% | +0.79 | +25.48% |
+| 2017–2020 (COVID) | +63.18% | +83.40% | **−20.22** | +31.41% |
+| 2019–2022 | +122.72% | +113.36% | **+9.36** | +37.07% |
+| 2021–2024 | +66.68% | +66.68% | 0.00 | +23.69% |
+| 2023–2026 | +35.74% | +21.66% | **+14.08** | +62.08% |
+| **Promedio** | **+80.0%** | **+78.0%** | **+2.02** | **+32.6%** |
+
+Notas honestas, en ambas direcciones:
+
+- Las dos ventanas pre-2009 dan delta exactamente 0.00: la cobertura XBRL
+  de EDGAR empieza ~2008-2009, el tilt lee "sin dato" → neutral → mismas
+  decisiones. Eso también funciona como prueba de integridad del pipeline
+  (mismos datos, mismo motor, solo cambia el tilt).
+- El efecto está concentrado: 4 ventanas aportan casi todo el beneficio y
+  una (COVID) pierde fuerte (−20.22 pp) — el tilt bajó la confianza de
+  acciones "caras" justo cuando eran las que más rebotaron. El promedio
+  positivo y 8/9 cumplen la regla, pero la varianza por ventana es real.
+- Los precios ajustados de Yahoo también incorporan dividendos, lo que
+  sesga los P/E históricos reconstruidos ligeramente a la baja (en el
+  orden del yield acumulado desde la fecha) — distorsión uniforme y
+  documentada, no una perilla ajustable.
+- Mejoró también el peor caso reciente: 2023–2026 pasó de +21.66% a
+  +35.74%, aunque sigue por debajo del S&P en esa ventana.
+
 ### Frontera de emergencia: probada y rechazada
 
 La hipótesis sonaba impecable: el punto ciego del tilt son los cambios de

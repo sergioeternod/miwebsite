@@ -109,7 +109,7 @@ def test_combine_tilts_opposing_readings_partially_cancel():
     assert combined["confidence_tilt_pct"] == pytest.approx(2.0)
 
 
-def test_selection_applies_pe_tilt_only_when_enabled(monkeypatch):
+def test_selection_applies_pe_tilt_by_default_and_gates_off(monkeypatch):
     import numpy as np
 
     import app.portfolio as portfolio_module
@@ -130,9 +130,11 @@ def test_selection_applies_pe_tilt_only_when_enabled(monkeypatch):
     df.index = pd.date_range("2023-01-01", periods=len(df), freq="D")
     dfs = {"AAPL": df}
 
-    _select_portfolio(dfs, {"AAPL": 300}, 1, False, 10_000.0, None, 55.0)
+    # Adoptado como default (validate_pe_tilt_result.json: 8/9, +2.02 pp):
+    # sin kwargs el tilt corre; fundamental_pe_tilt=False lo apaga.
+    _select_portfolio(dfs, {"AAPL": 300}, 1, False, 10_000.0, None, 55.0, fundamental_pe_tilt=False)
     assert calls == []
-    _select_portfolio(dfs, {"AAPL": 300}, 1, False, 10_000.0, None, 55.0, fundamental_pe_tilt=True)
+    _select_portfolio(dfs, {"AAPL": 300}, 1, False, 10_000.0, None, 55.0)
     assert calls == ["AAPL"]
 
 

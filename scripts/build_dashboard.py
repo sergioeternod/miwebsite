@@ -103,7 +103,7 @@ def pe_svg(series: list[tuple[str, float]], reference_pe: float | None = None, f
     if reference_pe and lo <= reference_pe <= hi:
         # Eje: el valor del benchmark, salvo que ya exista un tick 15/30 pegado a él.
         axis_tick = ""
-        if not any(abs(reference_pe - v) < 2 for v in (CHEAP_PE_MAX, EXPENSIVE_PE_MIN) if lo <= v <= hi):
+        if not any(abs(reference_pe - v) < 3.5 for v in (CHEAP_PE_MAX, EXPENSIVE_PE_MIN) if lo <= v <= hi):
             axis_tick = (
                 f"<text x='{ml-5}' y='{y(reference_pe)+3.5:.1f}' text-anchor='end' class='pe-label ref'>{reference_pe:.0f}</text>"
             )

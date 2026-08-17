@@ -158,8 +158,8 @@ class PortfolioSimulateRequest(BaseModel):
         description="Frontera de emergencia: si el S&P 500 cruza su media de 200 días a mitad de un segmento (en cualquier dirección), corta el segmento ahí y re-selecciona de inmediato en vez de esperar al corte programado. Requiere rebalance_months. Desactivado por defecto, pendiente de validación",
     )
     fundamental_pe_tilt: bool = Field(
-        False,
-        description="Ajusta la confianza de cada acción en la (re)selección con su P/E histórico punto-en-tiempo (SEC EDGAR, con fechas de presentación — causal, sin lookahead). Solo afecta acciones. Desactivado por defecto, pendiente de validación",
+        True,
+        description="Ajusta la confianza de cada acción en la (re)selección con su P/E histórico punto-en-tiempo (SEC EDGAR, con fechas de presentación — causal, sin lookahead). Solo afecta acciones. Activado por defecto (validado: gana o empata 8/9 ventanas, +2.02 pp promedio)",
     )
     max_position_weight: float | None = Field(
         None,
