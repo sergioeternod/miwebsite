@@ -98,9 +98,16 @@ def pe_svg(series: list[tuple[str, float]], reference_pe: float | None = None, w
     )
     ref_line = ""
     if reference_pe and lo <= reference_pe <= hi:
+        # Eje: el valor del benchmark, salvo que ya exista un tick 15/30 pegado a él.
+        axis_tick = ""
+        if not any(abs(reference_pe - v) < 2 for v in (CHEAP_PE_MAX, EXPENSIVE_PE_MIN) if lo <= v <= hi):
+            axis_tick = (
+                f"<text x='{ml-5}' y='{y(reference_pe)+3.5:.1f}' text-anchor='end' class='pe-label ref'>{reference_pe:.0f}</text>"
+            )
         ref_line = (
             f"<line x1='{ml}' x2='{width-mr}' y1='{y(reference_pe):.1f}' y2='{y(reference_pe):.1f}' class='pe-ref'/>"
-            f"<text x='{width-mr}' y='{y(reference_pe)-4:.1f}' text-anchor='end' class='pe-label'>mediana industria {reference_pe:.0f}</text>"
+            f"{axis_tick}"
+            f"<text x='{ml+6}' y='{y(reference_pe)-5:.1f}' class='pe-label ref halo'>P/E industria {reference_pe:.0f}</text>"
         )
     return (
         f"<svg viewBox='0 0 {width} {height}' role='img' aria-label='P/E histórico punto-en-tiempo'>"
@@ -284,9 +291,13 @@ def main() -> None:
         warn = " warn" if c["guidance_signal"] == "bearish" else ""
         ratio_txt = f" ({c['relative_ratio']:.2f}x)" if c.get("relative_ratio") else ""
         rel_cls = " good" if "barata" in c["relative_reading"] else (" warn" if "cara" in c["relative_reading"] else "")
+        ref_chip = (
+            f"<span class='chip2'>P/E industria {c['reference_pe']:.0f}</span>" if c.get("reference_pe") else ""
+        )
         return (
             f"<div class='valcard'><h3>{c['symbol']} <span class='sub'>{c['industry']}</span></h3>"
             f"<div class='chips'><span class='chip2'>P/E actual {tr}</span>"
+            f"{ref_chip}"
             f"<span class='chip2'>fwd implícito {fw}</span>"
             f"<span class='chip2{warn}'>guidance: {c['guidance_txt']}</span>"
             f"<span class='chip2{rel_cls}'>vs industria: {c['relative_reading']}{ratio_txt}</span></div>"
@@ -366,6 +377,8 @@ def main() -> None:
   .pe-grid {{ stroke:var(--ink3); stroke-width:1; stroke-dasharray:3 4; opacity:.6; }}
   .pe-label {{ fill:var(--ink3); font-size:10.5px; font-variant-numeric:tabular-nums; }}
   .pe-label.strong {{ fill:var(--ink); font-weight:600; font-size:11.5px; }}
+  .pe-label.ref {{ fill:var(--ink2); font-weight:600; }}
+  .pe-label.halo {{ paint-order:stroke; stroke:var(--card); stroke-width:3px; stroke-linejoin:round; }}
   .zone-cheap {{ fill:var(--soft); opacity:.55; }}
   .zone-rich {{ fill:var(--softneg); opacity:.55; }}
   svg {{ display:block; width:100%; height:auto; }}
