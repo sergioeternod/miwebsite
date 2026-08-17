@@ -31,6 +31,7 @@ _TIMEOUT_SECONDS = 20
 _opener: urllib.request.OpenerDirector | None = None
 _crumb: str | None = None
 _profile_cache: dict[str, dict] = {}
+_calendar_cache: dict[str, dict] = {}
 
 
 class QuoteSummaryUnavailableError(RuntimeError):
@@ -141,4 +142,46 @@ def get_asset_profile(symbol: str) -> dict:
     profile = (results[0].get("assetProfile") or {}) if results else {}
     out = {"sector": profile.get("sector"), "industry": profile.get("industry")}
     _profile_cache[symbol.upper()] = out
+    return out
+
+
+def get_calendar_events(symbol: str) -> dict:
+    """Próximas fechas de reporte de resultados para `symbol` (Yahoo
+    calendarEvents), cacheado in-process: {"earnings_dates": [iso, ...]}.
+    Yahoo suele devolver una ventana de 1-2 fechas candidatas. Raises
+    QuoteSummaryUnavailableError on endpoint failure."""
+    cached = _calendar_cache.get(symbol.upper())
+    if cached is not None:
+        return cached
+    global _opener, _crumb
+    if _opener is None or _crumb is None:
+        _opener, _crumb = _fresh_session()
+    url = (
+        _QUOTE_SUMMARY_URL.format(symbol=urllib.parse.quote(symbol))
+        + "?modules=calendarEvents&crumb="
+        + urllib.parse.quote(_crumb)
+    )
+    try:
+        try:
+            payload = json.loads(_opener.open(url, timeout=_TIMEOUT_SECONDS).read())
+        except urllib.error.HTTPError as exc:
+            if exc.code == 401:
+                _opener, _crumb = _fresh_session()
+                url = url.rsplit("crumb=", 1)[0] + "crumb=" + urllib.parse.quote(_crumb)
+                payload = json.loads(_opener.open(url, timeout=_TIMEOUT_SECONDS).read())
+            else:
+                raise
+    except Exception as exc:
+        raise QuoteSummaryUnavailableError(f"No se pudo consultar el calendario de {symbol}: {exc}") from exc
+    from datetime import datetime, timezone
+
+    results = (payload.get("quoteSummary") or {}).get("result") or []
+    earnings = ((results[0].get("calendarEvents") or {}).get("earnings") or {}) if results else {}
+    dates = []
+    for d in earnings.get("earningsDate") or []:
+        raw = d.get("raw") if isinstance(d, dict) else None
+        if raw:
+            dates.append(datetime.fromtimestamp(int(raw), tz=timezone.utc).date().isoformat())
+    out = {"earnings_dates": sorted(set(dates))}
+    _calendar_cache[symbol.upper()] = out
     return out
