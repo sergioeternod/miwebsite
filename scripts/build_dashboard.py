@@ -277,6 +277,46 @@ def proxy_pe(symbol: str | None) -> tuple[float | None, str | None]:
     return None, None
 
 
+def sma_cross_state(df: pd.DataFrame, fast: int = 20, slow: int = 50) -> dict | None:
+    """Estado del cruce de medias móviles de la estrategia original
+    (SmaCrossoverStrategy 20/50): lado actual, distancia entre medias y
+    fecha del último cruce. Señal puramente del propio activo."""
+    close = df["Close"]
+    if len(close) < slow + 5:
+        return None
+    f = close.rolling(fast).mean()
+    l = close.rolling(slow).mean()
+    above = (f > l).astype(int)
+    flips = above.diff()
+    flips = flips[flips != 0].dropna()
+    last_cross = flips.index[-1] if len(flips) else None
+    return {
+        "bull": bool(above.iloc[-1]),
+        "fast": float(f.iloc[-1]),
+        "slow": float(l.iloc[-1]),
+        "dist_pct": (float(f.iloc[-1]) / float(l.iloc[-1]) - 1) * 100,
+        "last_cross": str(last_cross.date()) if last_cross is not None else None,
+    }
+
+
+def risk_split_vs_benchmark(df: pd.DataFrame, bench: pd.DataFrame) -> dict | None:
+    """Descomposición de varianza del modelo de mercado: la parte exógena
+    (sistemática) es β²·var(S&P)/var(activo) — el R² de la regresión
+    diaria — y el resto es idiosincrática (propia del activo)."""
+    joined = pd.concat(
+        [df["Close"].pct_change(), bench["Close"].pct_change()], axis=1, join="inner"
+    ).dropna()
+    if len(joined) < 60:
+        return None
+    r, m = joined.iloc[:, 0], joined.iloc[:, 1]
+    var_m, var_r = float(m.var()), float(r.var())
+    if var_m == 0 or var_r == 0:
+        return None
+    beta = float(r.cov(m) / var_m)
+    sys_share = min(max(beta * beta * var_m / var_r, 0.0), 1.0)
+    return {"beta": beta, "systematic_pct": sys_share * 100, "idio_pct": (1 - sys_share) * 100, "days": len(joined)}
+
+
 def signals_log_stats() -> dict | None:
     """Primer día registrado, conteo de señales y fecha estimada de la
     primera calificación oficial (10 barras de mercado después)."""
@@ -361,6 +401,22 @@ CSS = """<style>
   details.pos, details.watch { border:1px solid var(--line); border-radius:8px; background:var(--panel); margin-bottom:8px; min-width:740px; }
   .tile.key { border-color:var(--acc); }
   .tile.key .v { color:var(--acc-ink); }
+  .decomp { margin-bottom:10px; }
+  .decomp.book { border-color:var(--acc); }
+  .drow { display:flex; align-items:center; gap:14px; margin-bottom:8px; flex-wrap:wrap; }
+  .split { display:flex; height:10px; border-radius:5px; overflow:hidden; background:var(--panel2);
+    border:1px solid var(--line); flex:1; min-width:150px; }
+  .seg.exo { background:var(--ink3); }
+  .seg.idio { background:var(--acc); }
+  .splitv { font-family:var(--mono); font-size:12px; color:var(--ink2); white-space:nowrap; }
+  .dcols { display:grid; grid-template-columns:repeat(auto-fit,minmax(300px,1fr)); gap:8px 24px; }
+  .dcols h4 { margin:0 0 4px; font-size:10.5px; letter-spacing:.12em; text-transform:uppercase;
+    color:var(--ink3); font-family:var(--mono); font-weight:600; }
+  .dcols .src { margin-top:0; font-size:12.5px; color:var(--ink2); }
+  .legend { display:flex; flex-wrap:wrap; gap:16px; font-size:12px; color:var(--ink3); margin-bottom:10px; }
+  .swatch { display:inline-block; width:10px; height:10px; border-radius:3px; margin-right:6px; }
+  .swatch.exo { background:var(--ink3); }
+  .swatch.idio { background:var(--acc); }
   details.pos > summary, details.watch > summary { display:grid; gap:10px; padding:12px 14px; cursor:pointer;
     align-items:center; list-style:none; }
   details.pos > summary { grid-template-columns:1.3fr .85fr 1.05fr .75fr 1fr .6fr 1.05fr; }
@@ -556,6 +612,32 @@ def main() -> None:
         if r["beta"] is not None:
             beta_pond += r["weight"] * r["beta"]
     capm_ret = beta_pond * market_ey if market_ey else None
+
+    # --- idiosyncratic vs exogenous decomposition per position + book ---
+    for r in rows:
+        df = dfs[r["symbol"]]
+        r["split"] = risk_split_vs_benchmark(df, sp_df) if sp_df is not None else None
+        r["cross"] = sma_cross_state(df)
+        r["alpha_imp_pp"] = (
+            (r["ey"] - r["beta"] * market_ey) * 100
+            if r["ey"] is not None and r["beta"] is not None and market_ey
+            else None
+        )
+        if r["is_stock"]:
+            rel = sector_relative_valuation(r["symbol"], r["pe"])
+            r["rel_reading"], r["rel_ratio"] = rel.get("reading"), rel.get("ratio")
+        else:
+            r["rel_reading"], r["rel_ratio"] = None, None
+    book_split = None
+    invested = {r["symbol"]: r["weight"] for r in rows}
+    total_w = sum(invested.values())
+    if total_w > 0 and sp_df is not None and rows:
+        rets = pd.concat(
+            [dfs[s]["Close"].pct_change().rename(s) for s in invested], axis=1, join="inner"
+        ).dropna()
+        port_ret = sum(rets[s] * (w / total_w) for s, w in invested.items())
+        pseudo = pd.DataFrame({"Close": (1 + port_ret).cumprod()})
+        book_split = risk_split_vs_benchmark(pseudo, sp_df.loc[pseudo.index[0]:])
 
     # --- watchlist: universe stocks outside the book ---
     held = set(state["positions"])
@@ -778,6 +860,62 @@ def main() -> None:
             f"</summary><div class='posbody'>{body}</div></details>"
         )
 
+    def split_bar(split: dict | None) -> str:
+        if not split:
+            return "<span class='sub'>sin datos</span>"
+        return (
+            f"<div class='split'><div class='seg exo' style='width:{split['systematic_pct']:.0f}%'></div>"
+            f"<div class='seg idio' style='width:{split['idio_pct']:.0f}%'></div></div>"
+            f"<span class='v splitv'>{split['systematic_pct']:.0f}% / {split['idio_pct']:.0f}%</span>"
+        )
+
+    def decomp_html(r: dict) -> str:
+        split, cross = r.get("split"), r.get("cross")
+        exo_items = []
+        if r.get("beta") is not None:
+            exo_items.append(f"β {r['beta']:.2f}: cada 1% del S&amp;P la mueve ~{r['beta']:.2f}%")
+        if regime_detail:
+            exo_items.append(
+                f"régimen de mercado {regime_txt} — S&amp;P {regime_detail['dist_pct']:+.1f}% sobre su SMA200 (señal compartida por todo el libro)"
+            )
+        if r.get("beta") is not None and market_ey:
+            exo_items.append(f"rendimiento explicado por mercado: β × implícito S&amp;P = {r['beta']:.2f} × {market_ey*100:.1f}% = {r['beta']*market_ey*100:.1f}% anual")
+        idio_items = []
+        if cross:
+            lado = "alcista" if cross["bull"] else "bajista"
+            desde = f" desde {fmt_date(cross['last_cross'])}" if cross.get("last_cross") else ""
+            idio_items.append(
+                f"cruce SMA20/50 propio: <b>{lado}</b>{desde} (media rápida {cross['dist_pct']:+.1f}% vs lenta) — la señal de la estrategia original sobre su propia serie"
+            )
+        if r.get("rel_ratio"):
+            idio_items.append(f"valuación propia: {r['rel_ratio']:.2f}x la mediana de su industria → {r['rel_reading']}")
+        elif not r["is_stock"]:
+            idio_items.append("valuación propia: n/a — es un índice; su múltiplo se lee vía ETF réplica en el resumen")
+        if r.get("alpha_imp_pp") is not None:
+            sign_cls = "up" if r["alpha_imp_pp"] >= 0 else "down"
+            idio_items.append(
+                f"alpha implícito por valuación: E/P − β·S&amp;P = <span class='{sign_cls}'>{r['alpha_imp_pp']:+.1f} pp</span> anual"
+            )
+        exo_li = "".join(f"<li>{x}</li>" for x in exo_items) or "<li>sin datos</li>"
+        idio_li = "".join(f"<li>{x}</li>" for x in idio_items) or "<li>sin datos</li>"
+        days = f" ({split['days']} días comunes)" if split else ""
+        detail = dd(
+            "fuente y cálculo",
+            f"<p><b>Parte exógena (R²)</b> = β²·var(S&amp;P) / var(activo), retornos diarios ~3 años{days}. "
+            f"Lo que no explica el mercado es idiosincrático. El alpha implícito compara el rendimiento por P/E del "
+            f"activo (E/P) contra lo que su β exigiría del S&amp;P — positivo = pagas menos múltiplo del que su riesgo "
+            f"sistemático justificaría.</p>"
+            f"<ul class='src'><li>{PRICE_SRC}</li><li>Cruce SMA20/50: SmaCrossoverStrategy, las mismas ventanas de la estrategia original.</li>"
+            f"<li>E/P y β: los mismos del indicador de rendimiento implícito del resumen.</li></ul>",
+        )
+        return (
+            f"<div class='panel decomp'>"
+            f"<div class='drow'><span class='sym'>{r['symbol']}</span>{split_bar(split)}</div>"
+            f"<div class='dcols'><div><h4>Exógeno (mercado)</h4><ul class='src'>{exo_li}</ul></div>"
+            f"<div><h4>Idiosincrático (propio)</h4><ul class='src'>{idio_li}</ul></div></div>"
+            f"{detail}</div>"
+        )
+
     def event_html(e: dict) -> str:
         return (
             f"<div class='event'><div class='ewhen'>{e['when']}<span class='sub'>{e['kind']}</span></div>"
@@ -935,6 +1073,21 @@ def main() -> None:
         else "<p class='allclear'>El libro actual no tiene acciones individuales — los índices no tienen P/E por símbolo.</p>"
     )
 
+    # idiosyncratic vs exogenous section
+    legend = (
+        "<div class='legend'><span><span class='swatch exo'></span>exógeno — lo que explica el S&amp;P 500</span>"
+        "<span><span class='swatch idio'></span>idiosincrático — lo propio del activo</span></div>"
+    )
+    book_line = ""
+    if book_split:
+        book_line = (
+            f"<div class='panel decomp book'><div class='drow'><span class='sym'>Libro completo</span>{split_bar(book_split)}</div>"
+            f"<p class='enow'>Con β ponderada {beta_pond:.2f} y {book_split['systematic_pct']:.0f}% de la varianza explicada por el índice, "
+            f"el resultado del libro lo decide sobre todo el <b>mercado</b> (componente exógeno: régimen y β). El "
+            f"{book_split['idio_pct']:.0f}% restante es <b>selección</b>: qué acciones, a qué múltiplo y con qué señal propia.</p></div>"
+        )
+    decomp_section = legend + book_line + "".join(decomp_html(r) for r in rows) if rows else "<p class='allclear'>Libro sin posiciones.</p>"
+
     sources_html = (
         "<div class='panel'><ul class='src' style='margin-top:0'>"
         "<li><b>Precios:</b> Yahoo Finance chart API, cierres diarios ajustados; respaldo automático Stooq cuando Yahoo falla. Sin API key.</li>"
@@ -942,6 +1095,7 @@ def main() -> None:
         "<li><b>Valuación viva:</b> Yahoo quoteSummary — P/E actual y forward, estimados de analistas (hoy vs hace 90 días), sector/industria, calendario de resultados. Solo informa el presente; nunca entra a los backtests.</li>"
         "<li><b>Referencias de industria:</b> tabla fija de medianas de P/E por industria/sector (estilo Damodaran) en app/fundamentals/sector_pe.py — editable por diff, no ajustada a backtests.</li>"
         "<li><b>Rendimiento implícito y β:</b> earnings yield = 1 / P/E (forward implícito para acciones; ETF réplica SPY/DIA/QQQ para índices); β = covarianza de retornos diarios contra el S&amp;P 500 / varianza del S&amp;P, ~3 años. Indicadores informativos del resumen — no son insumos del modelo.</li>"
+        "<li><b>Descomposición idiosincrático/exógeno:</b> R² del modelo de mercado (β²·var(S&amp;P)/var(activo)) sobre los mismos retornos diarios; cruce SMA20/50 con las ventanas de la estrategia original (SmaCrossoverStrategy); alpha implícito = E/P − β × implícito del S&amp;P. Informativa — no es insumo del modelo.</li>"
         "<li><b>Libro y señales:</b> portfolio_state.json (libro papel) y signals_log.jsonl (registro forward), ambos versionados en el repositorio.</li>"
         "</ul></div>"
     )
@@ -995,6 +1149,14 @@ def main() -> None:
     <p class="lede">Lo que el modelo está esperando observar y qué decisión dispara cada cosa. Primero los eventos con
     fecha; después los de nivel, que pueden ocurrir cualquier día.</p>
     {events_section}
+  </section>
+
+  <section>
+    <div class="shead"><h2>Componente idiosincrático vs exógeno</h2></div>
+    <p class="lede">Cuánto de cada posición lo mueve el mercado (exógeno: β y régimen, medido como el R² de su
+    regresión diaria contra el S&amp;P 500) y cuánto es propio del activo (idiosincrático: su cruce SMA20/50 — la
+    estrategia original sobre su propia serie —, su valuación contra su industria y el alpha implícito de su P/E).</p>
+    {decomp_section}
   </section>
 
   <section>
