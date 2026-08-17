@@ -34,7 +34,9 @@ from app.portfolio import (
     _vol_regime_exposure,
 )
 from app.config import AssetClass, infer_asset_class
-from app.fundamentals.valuation import valuation_report
+from app.data.edgar_client import trailing_eps_known_at
+from app.fundamentals.valuation import CHEAP_PE_MAX, EXPENSIVE_PE_MIN, valuation_report
+from app.fundamentals.valuation_history import _split_adjusted_quarters
 from app.recommend.engine import recommend
 
 STATE_PATH = Path("portfolio_state.json")
@@ -42,6 +44,67 @@ NOMINAL_CAPITAL = 10_000.0
 REBALANCE_MONTHS = 3
 
 MONTHS_ES = {1: "ene", 2: "feb", 3: "mar", 4: "abr", 5: "may", 6: "jun", 7: "jul", 8: "ago", 9: "sep", 10: "oct", 11: "nov", 12: "dic"}
+
+
+def pe_history_series(symbol: str, df: pd.DataFrame, bars: int = 750) -> list[tuple[str, float]]:
+    """Point-in-time trailing P/E for the last `bars` sessions: each day's
+    close divided by the TTM EPS whose SEC filings were public that day
+    (split-adjusted into today's units). Empty on any data failure."""
+    try:
+        quarters = _split_adjusted_quarters(symbol)
+    except Exception:
+        return []
+    out = []
+    for d, close in df["Close"].tail(bars).items():
+        eps = trailing_eps_known_at(quarters, str(d.date()))
+        if eps and eps > 0:
+            out.append((str(d.date()), float(close) / eps))
+    return out
+
+
+def pe_svg(series: list[tuple[str, float]], width: int = 420, height: int = 130) -> str:
+    """Small-multiple SVG of the point-in-time P/E path with the fixed
+    cheap/expensive bands shaded — the same bands the tilt uses, so the
+    picture and the rule are one thing."""
+    if len(series) < 20:
+        return "<p class='sub'>Sin historial de P/E suficiente para graficar.</p>"
+    values = [v for _, v in series]
+    lo = min(10.0, min(values)) * 0.95
+    hi = max(EXPENSIVE_PE_MIN + 5, max(values)) * 1.05
+    ml, mr, mt, mb = 34, 46, 8, 18
+
+    def x(i):
+        return ml + i / (len(series) - 1) * (width - ml - mr)
+
+    def y(v):
+        return mt + (1 - (v - lo) / (hi - lo)) * (height - mt - mb)
+
+    pts = " ".join(f"{x(i):.1f},{y(v):.1f}" for i, (_, v) in enumerate(series))
+
+    def band(v0, v1, cls):
+        top, bottom = y(min(v1, hi)), y(max(v0, lo))
+        if bottom <= top:
+            return ""
+        return f"<rect x='{ml}' y='{top:.1f}' width='{width-ml-mr}' height='{bottom-top:.1f}' class='{cls}'/>"
+
+    cheap = band(lo, CHEAP_PE_MAX, "zone-cheap") if lo < CHEAP_PE_MAX else ""
+    rich = band(EXPENSIVE_PE_MIN, hi, "zone-rich") if hi > EXPENSIVE_PE_MIN else ""
+    gridlines = "".join(
+        f"<line x1='{ml}' x2='{width-mr}' y1='{y(v):.1f}' y2='{y(v):.1f}' class='pe-grid'/>"
+        f"<text x='{ml-5}' y='{y(v)+3.5:.1f}' text-anchor='end' class='pe-label'>{v:.0f}</text>"
+        for v in (CHEAP_PE_MAX, EXPENSIVE_PE_MIN)
+        if lo <= v <= hi
+    )
+    return (
+        f"<svg viewBox='0 0 {width} {height}' role='img' aria-label='P/E histórico punto-en-tiempo'>"
+        f"{cheap}{rich}{gridlines}"
+        f"<polyline points='{pts}' class='pe-line'/>"
+        f"<circle cx='{x(len(series)-1):.1f}' cy='{y(values[-1]):.1f}' r='3.4' class='pe-dot'/>"
+        f"<text x='{x(len(series)-1)+6:.1f}' y='{y(values[-1])+3.5:.1f}' class='pe-label strong'>{values[-1]:.1f}</text>"
+        f"<text x='{ml}' y='{height-4}' class='pe-label'>{series[0][0][:7]}</text>"
+        f"<text x='{width-mr}' y='{height-4}' text-anchor='end' class='pe-label'>{series[-1][0][:7]}</text>"
+        f"</svg>"
+    )
 
 
 def fmt_date(iso: str) -> str:
@@ -174,12 +237,52 @@ def main() -> None:
         })
     rows.sort(key=lambda r: -r["weight"])
 
+    # --- fundamental valuation cards for stock positions ---
+    valuation_cards = []
+    for r in rows:
+        s = r["symbol"]
+        if infer_asset_class(s) is not AssetClass.STOCK or s not in dfs:
+            continue
+        try:
+            vrep = valuation_report(s)
+        except Exception:
+            vrep = {}
+        guidance_txt = {"bullish": "revisiones al alza", "bearish": "revisiones a la baja", "neutral": "revisiones estables"}.get(
+            vrep.get("guidance_signal", "neutral"), "sin lectura"
+        )
+        valuation_cards.append({
+            "symbol": s,
+            "trailing_pe": vrep.get("trailing_pe"),
+            "implicit_forward_pe": vrep.get("implicit_forward_pe"),
+            "guidance_txt": guidance_txt,
+            "guidance_signal": vrep.get("guidance_signal", "neutral"),
+            "svg": pe_svg(pe_history_series(s, dfs[s])),
+        })
+
     STATE_PATH.write_text(json.dumps(state, indent=2, ensure_ascii=False) + "\n")
 
     # --- render ---
     regime_txt = "ALCISTA — 100% acciones e índices" if state["regime_risk_on"] else ("DEFENSIVO — universo completo" if state["regime_risk_on"] is False else "sin lectura")
     def money(w):
         return f"${w*NOMINAL_CAPITAL:,.0f}"
+
+    def valcard_html(c: dict) -> str:
+        tr = f"{c['trailing_pe']:.1f}" if c.get("trailing_pe") else "—"
+        fw = f"{c['implicit_forward_pe']:.1f}" if c.get("implicit_forward_pe") else "—"
+        warn = " warn" if c["guidance_signal"] == "bearish" else ""
+        return (
+            f"<div class='valcard'><h3>{c['symbol']}</h3>"
+            f"<div class='chips'><span class='chip2'>P/E actual {tr}</span>"
+            f"<span class='chip2'>fwd implícito {fw}</span>"
+            f"<span class='chip2{warn}'>guidance: {c['guidance_txt']}</span></div>"
+            f"{c['svg']}</div>"
+        )
+
+    valuation_html = (
+        "<div class='valgrid'>" + "".join(valcard_html(c) for c in valuation_cards) + "</div>"
+        if valuation_cards
+        else "<p class='allclear'>El libro actual no tiene acciones individuales — los índices no tienen P/E por símbolo.</p>"
+    )
 
     action_html = "".join(
         f"<div class='action {a['tipo'].lower()}'><span class='badge'>{a['tipo']}</span>"
@@ -235,6 +338,20 @@ def main() -> None:
   .up {{ color:var(--pos); }} .down {{ color:var(--neg); }}
   .sub {{ font-size:11.5px; color:var(--ink3); }}
   .note {{ background:var(--card); border-radius:10px; padding:13px 16px; color:var(--ink2); font-size:13px; margin-top:28px; }}
+  .valgrid {{ display:grid; grid-template-columns:repeat(auto-fit,minmax(300px,1fr)); gap:14px; }}
+  .valcard {{ background:var(--card); border-radius:10px; padding:14px 16px; }}
+  .valcard h3 {{ margin:0 0 8px; font-size:15px; }}
+  .chips {{ display:flex; flex-wrap:wrap; gap:6px; margin-bottom:10px; }}
+  .chip2 {{ font-size:12px; padding:2px 9px; border-radius:6px; background:var(--soft); }}
+  .chip2.warn {{ background:var(--softneg); }}
+  .pe-line {{ fill:none; stroke:var(--pos); stroke-width:2; stroke-linejoin:round; }}
+  .pe-dot {{ fill:var(--pos); }}
+  .pe-grid {{ stroke:var(--ink3); stroke-width:1; stroke-dasharray:3 4; opacity:.6; }}
+  .pe-label {{ fill:var(--ink3); font-size:10.5px; font-variant-numeric:tabular-nums; }}
+  .pe-label.strong {{ fill:var(--ink); font-weight:600; font-size:11.5px; }}
+  .zone-cheap {{ fill:var(--soft); opacity:.55; }}
+  .zone-rich {{ fill:var(--softneg); opacity:.55; }}
+  svg {{ display:block; width:100%; height:auto; }}
   .tablewrap {{ overflow-x:auto; }}
 </style>
 <main>
@@ -255,6 +372,14 @@ def main() -> None:
     <th class="num">P&amp;L</th><th>Señal hoy</th><th class="num">Exposición vol.</th><th class="num">P/E</th><th class="num">Stop-loss</th></tr></thead>
     <tbody>{pos_html}</tbody>
   </table></div>
+
+  <h2>Valuación fundamental (acciones del libro)</h2>
+  <p class="sub" style="font-size:13px;margin:0 0 12px;">La línea es el P/E <em>punto-en-tiempo</em>
+  (precio del día entre las utilidades que eran públicas ese día, SEC EDGAR, últimos 3 años). Zona azul: barata
+  (&lt;{CHEAP_PE_MAX:.0f}); zona roja: cara (&gt;{EXPENSIVE_PE_MIN:.0f}) — las mismas bandas fijas que usa la señal.
+  "Guidance" es la dirección de las revisiones de estimados de analistas en 90 días; "fwd implícito" = precio entre
+  el EPS consenso del próximo año.</p>
+  {valuation_html}
 
   <p class="note"><strong>Cómo leerlo:</strong> "Señal hoy" es la lectura diaria del ensemble — un SELL ≥55% genera
   la orden de salida a efectivo al día siguiente. "Exposición vol." es el ajuste del régimen de volatilidad (100% =
