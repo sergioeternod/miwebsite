@@ -713,10 +713,34 @@ def main() -> None:
             a.append("confianza <50%")
         return {"c": c, "n": n, "a": a}
 
+    # Score 0-100 por perfil: mismos ingredientes, pesos distintos. Esto es
+    # lo que diferencia a los perfiles incluso cuando ninguna candidata tiene
+    # BUY (los vetos convergen, los scores no).
+    def profile_scores(w: dict) -> dict[str, float]:
+        conf = float(w["signal_conf"])
+        ratio = w.get("ratio")
+        val = max(0.0, min(1.0, 1.5 - ratio)) * 100 if ratio else 50.0
+        b = w.get("beta")
+        beta_low = max(0.0, min(1.0, (1.6 - b))) * 100 if b is not None else 50.0
+        beta_high = 100.0 - beta_low
+        cross = w.get("cross")
+        if cross:
+            d = max(-10.0, min(10.0, cross["dist_pct"]))
+            trend = max(0.0, min(100.0, 50.0 + d * 5.0))
+        else:
+            trend = 50.0
+        return {
+            "c": 0.20 * conf + 0.35 * val + 0.25 * beta_low + 0.20 * trend,
+            "n": conf,
+            "a": 0.40 * conf + 0.35 * trend + 0.25 * beta_high,
+            "_parts": {"conf": conf, "val": val, "beta_low": beta_low, "beta_high": beta_high, "trend": trend},
+        }
+
     for w in watch:
         w["fails"] = profile_fails(w)
+        w["scores"] = profile_scores(w)
     for key in ("c", "n", "a"):
-        ranked = sorted(watch, key=lambda w: (bool(w["fails"][key]), -w["signal_conf"]))
+        ranked = sorted(watch, key=lambda w: (bool(w["fails"][key]), -w["scores"][key]))
         for i, w in enumerate(ranked, start=1):
             w[f"order_{key}"] = i
 
@@ -894,15 +918,22 @@ def main() -> None:
             lado = "alcista" if w["cross"]["bull"] else "bajista"
             desde = f" desde {fmt_date(w['cross']['last_cross'])}" if w["cross"].get("last_cross") else ""
             cross_txt = f"<div><b>Cruce SMA20/50 propio:</b> {lado}{desde} ({w['cross']['dist_pct']:+.1f}%)</div>"
+        p = w["scores"]["_parts"]
         prof_defs = [
-            ("c", "Conservador", "BUY ≥65% · β ≤1.1 · no cara vs industria · SMA alcista"),
-            ("n", "Neutral (modelo)", "BUY ≥55% — el corte del modelo validado"),
-            ("a", "Agresivo", "BUY ≥50% · sin vetos de β ni valuación"),
+            ("c", "Conservador",
+             f"score = 35%·valuación({p['val']:.0f}) + 25%·β baja({p['beta_low']:.0f}) + 20%·confianza({p['conf']:.0f}) + 20%·tendencia({p['trend']:.0f})",
+             "vetos: BUY ≥65% · β ≤1.1 · no cara vs industria · SMA alcista"),
+            ("n", "Neutral (modelo)",
+             f"score = 100%·confianza técnica({p['conf']:.0f})",
+             "veto: BUY ≥55% — el corte del modelo validado"),
+            ("a", "Agresivo",
+             f"score = 40%·confianza({p['conf']:.0f}) + 35%·tendencia({p['trend']:.0f}) + 25%·β alta({p['beta_high']:.0f})",
+             "veto: BUY ≥50% — sin vetos de β ni valuación"),
         ]
         prof_table = "".join(
-            f"<tr><td>{label}</td><td>{crit}</td>"
+            f"<tr><td>{label}</td><td class='num'><b>{w['scores'][k]:.0f}</b> <span class='sub'>#{w['order_' + k]}</span></td><td>{formula}<br><span class='sub'>{veto}</span></td>"
             f"<td>{'<b>apta</b>' if not w['fails'][k] else 'no apta — ' + ', '.join(w['fails'][k])}</td></tr>"
-            for k, label, crit in prof_defs
+            for k, label, formula, veto in prof_defs
         )
         body = (
             f"<div class='grid2'>"
@@ -913,8 +944,8 @@ def main() -> None:
             f"{cross_txt}"
             + (f"<div><b>Próximo reporte:</b> {fmt_date(w['next_earnings'])}</div>" if w.get("next_earnings") else "")
             + f"</div>"
-            f"<p><b>Veredicto por perfil de selección:</b></p>"
-            f"<table class='kv'><tr><th>Perfil</th><th>Criterios</th><th>Veredicto</th></tr>{prof_table}</table>"
+            f"<p><b>Score y veredicto por perfil de selección</b> (los ingredientes 0-100 son los mismos; cada perfil los pondera distinto):</p>"
+            f"<table class='kv'><tr><th>Perfil</th><th class='num'>Score · rank</th><th>Fórmula y vetos</th><th>Veredicto de entrada</th></tr>{prof_table}</table>"
             f"<p><b>Cómo entra al libro:</b> compite en la re-selección del {fmt_date(state['next_rebalance'])} por confianza "
             f"ajustada (técnica + tilt de P/E). El libro real opera siempre el perfil Neutral — el validado en las 9 ventanas; "
             f"no hay entradas a mitad de trimestre (el redespliegue inmediato se validó y rechazó).</p>"
@@ -923,8 +954,8 @@ def main() -> None:
             f"<li>β y cruce SMA20/50: los mismos cálculos de las secciones de resumen y descomposición.</li></ul>"
         )
         ev_chips = "".join(
-            (f"<span class='ev {k} okc'>apta</span>" if not w["fails"][k]
-             else f"<span class='ev {k} noc'>no apta · {w['fails'][k][0]}</span>")
+            (f"<span class='ev {k} okc'>#{w['order_' + k]} · score {w['scores'][k]:.0f} · apta</span>" if not w["fails"][k]
+             else f"<span class='ev {k} noc'>#{w['order_' + k]} · score {w['scores'][k]:.0f} · no apta</span>")
             for k in ("c", "n", "a")
         )
         return (
@@ -1149,12 +1180,13 @@ def main() -> None:
         "<input type='radio' name='perfil' id='p-agr' class='profile-radio'>"
         "<div class='seg' role='group' aria-label='Perfil de selección'>"
         "<label for='p-con'>Conservador</label><label for='p-neu'>Neutral</label><label for='p-agr'>Agresivo</label></div>"
-        "<p class='lede pdesc c'><b>Conservador:</b> exige señal BUY con ≥65% de confianza, β ≤1.1, valuación no cara "
-        "contra su industria y cruce SMA20/50 alcista. Menos candidatas, menos sustos.</p>"
-        "<p class='lede pdesc n'><b>Neutral:</b> el corte del modelo validado — señal BUY con ≥55% de confianza; la "
-        "valuación entra como tilt de confianza, no como veto. <b>Es el perfil con el que opera el libro real.</b></p>"
-        "<p class='lede pdesc a'><b>Agresivo:</b> señal BUY con ≥50% basta; sin vetos de β ni de valuación. Más "
-        "candidatas, más riesgo — y sin respaldo de validación propia.</p>"
+        "<p class='lede pdesc c'><b>Conservador</b> pondera 35% valuación barata + 25% β baja + 20% confianza técnica "
+        "+ 20% tendencia propia; para entrar exige además BUY ≥65%, β ≤1.1, no cara vs industria y SMA alcista. "
+        "Premia pagar poco y moverse poco.</p>"
+        "<p class='lede pdesc n'><b>Neutral</b> es el modelo validado tal cual: el score es 100% la confianza técnica "
+        "del ensemble y la entrada exige BUY ≥55%. <b>Es el perfil con el que opera el libro real.</b></p>"
+        "<p class='lede pdesc a'><b>Agresivo</b> pondera 40% confianza + 35% tendencia propia + 25% β alta (busca "
+        "amplificar el mercado); para entrar basta BUY ≥50%, sin vetos de valuación. Más riesgo, sin validación propia.</p>"
         + ("<div class='lwrap'><div class='wlist'>" + "".join(watch_html(w) for w in watch) + "</div></div>" if watch else "<p class='allclear'>Sin candidatas fuera del libro.</p>")
     )
     events_section = "".join(event_html(e) for e in events) + "".join(event_html(e) for e in level_events)
@@ -1188,7 +1220,7 @@ def main() -> None:
         "<li><b>Referencias de industria:</b> tabla fija de medianas de P/E por industria/sector (estilo Damodaran) en app/fundamentals/sector_pe.py — editable por diff, no ajustada a backtests.</li>"
         "<li><b>Rendimiento implícito y β:</b> earnings yield = 1 / P/E (forward implícito para acciones; ETF réplica SPY/DIA/QQQ para índices); β = covarianza de retornos diarios contra el S&amp;P 500 / varianza del S&amp;P, ~3 años. Indicadores informativos del resumen — no son insumos del modelo.</li>"
         "<li><b>Descomposición idiosincrático/exógeno:</b> R² del modelo de mercado (β²·var(S&amp;P)/var(activo)) sobre los mismos retornos diarios; cruce SMA20/50 con las ventanas de la estrategia original (SmaCrossoverStrategy); alpha implícito = E/P − β × implícito del S&amp;P. Informativa — no es insumo del modelo.</li>"
-        "<li><b>Perfiles de selección (watchlist):</b> Conservador (BUY ≥65%, β ≤1.1, no cara vs industria, SMA alcista), Neutral (BUY ≥55% — el modelo validado, el que opera el libro) y Agresivo (BUY ≥50%, sin vetos). Los perfiles no-neutrales son lentes exploratorias sin validación propia.</li>"
+        "<li><b>Perfiles de selección (watchlist):</b> cada perfil pondera los mismos ingredientes 0-100 (confianza técnica, valuación vs industria, β, tendencia SMA20/50) con pesos distintos — Conservador 35/25/20/20 hacia lo barato y estable, Neutral 100% confianza (el modelo validado, el que opera el libro), Agresivo 40/35/25 hacia momentum y β alta — además de sus vetos de entrada (BUY ≥65/55/50%). Los perfiles no-neutrales son lentes exploratorias sin validación propia.</li>"
         "<li><b>Libro y señales:</b> portfolio_state.json (libro papel) y signals_log.jsonl (registro forward), ambos versionados en el repositorio.</li>"
         "</ul></div>"
     )
