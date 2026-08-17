@@ -313,6 +313,7 @@ def cmd_portfolio_sim(args: argparse.Namespace) -> None:
         equity_regime_tilt=not args.no_equity_tilt,
         emergency_reselect=args.emergency_reselect,
         max_position_weight=args.max_position_weight,
+        fundamental_pe_tilt=args.pe_tilt,
     )
     if args.max_per_asset_class is not None:
         # Omit otherwise so each path's own smart default applies (2 for
@@ -641,6 +642,10 @@ def build_parser() -> argparse.ArgumentParser:
     portfolio_sim_parser.add_argument(
         "--equity-tilt", action="store_true",
         help="Restringe el universo a acciones e índices cuando el S&P 500 está sobre su media de 200 días (ya es el default; se mantiene por compatibilidad)",
+    )
+    portfolio_sim_parser.add_argument(
+        "--pe-tilt", action="store_true",
+        help="Ajusta la confianza de cada acción en la (re)selección con su P/E histórico punto-en-tiempo (SEC EDGAR, causal — mismas bandas que el overlay vivo). Desactivado por defecto, pendiente de validación",
     )
     portfolio_sim_parser.add_argument(
         "--max-position-weight", type=float, default=None,

@@ -67,7 +67,7 @@ def get_valuation_metrics(symbol: str) -> dict:
 
     url = (
         _QUOTE_SUMMARY_URL.format(symbol=urllib.parse.quote(symbol))
-        + "?modules=summaryDetail,defaultKeyStatistics&crumb="
+        + "?modules=summaryDetail,defaultKeyStatistics,earningsTrend&crumb="
         + urllib.parse.quote(_crumb)
     )
     try:
@@ -88,8 +88,22 @@ def get_valuation_metrics(symbol: str) -> dict:
         raise QuoteSummaryUnavailableError(f"Yahoo no devolvió datos de valuación para {symbol}.")
     summary = results[0].get("summaryDetail") or {}
     key_stats = results[0].get("defaultKeyStatistics") or {}
+    trend_rows = ((results[0].get("earningsTrend") or {}).get("trend")) or []
+    estimates = {}
+    for row in trend_rows:
+        period = row.get("period")
+        if period in ("0y", "+1y"):
+            est = row.get("earningsEstimate") or {}
+            eps_trend = row.get("epsTrend") or {}
+            estimates[period] = {
+                "eps_avg": _raw(est.get("avg")),
+                "num_analysts": _raw(est.get("numberOfAnalysts")),
+                "eps_avg_90d_ago": _raw(eps_trend.get("90daysAgo")),
+            }
     return {
         "trailing_pe": _raw(summary.get("trailingPE")),
         "forward_pe": _raw(summary.get("forwardPE")),
         "trailing_eps": _raw(key_stats.get("trailingEps")),
+        "previous_close": _raw(summary.get("previousClose")),
+        "estimates": estimates,
     }

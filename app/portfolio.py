@@ -42,6 +42,7 @@ from app.data.providers import get_ohlcv
 from app.data.synthetic import generate_ohlcv
 from app.fundamentals.earnings import apply_earnings_overlay
 from app.fundamentals.news_sentiment import apply_news_overlay
+from app.fundamentals.valuation_history import apply_pe_history_tilt
 from app.recommend.engine import recommend
 from app.validation.trade_accuracy import annotate_trade_hindsight, hindsight_summary
 
@@ -253,6 +254,7 @@ def _select_portfolio(
     include_news: bool = False,
     max_per_asset_class: int | None = DEFAULT_MAX_PER_ASSET_CLASS,
     short_confidence_premium: float = 0.0,
+    fundamental_pe_tilt: bool = False,
 ) -> list[dict]:
     """Ranks symbols using only data strictly before the simulation's start
     index (no lookahead), and returns the top `portfolio_size` — BUY and
@@ -292,6 +294,11 @@ def _select_portfolio(
             rec = apply_earnings_overlay(rec, symbol)
         if include_news:
             rec = apply_news_overlay(rec, symbol)
+        if fundamental_pe_tilt:
+            # Point-in-time P/E from SEC filings public before this window's
+            # end — the causal, validatable cousin of the live valuation
+            # overlay (see app.fundamentals.valuation_history).
+            rec = apply_pe_history_tilt(rec, symbol, window)
 
         required_confidence = min_confidence_pct
         if rec["overall_action"] == "SELL":
@@ -715,6 +722,7 @@ def _run_simulation(
     equity_regime_tilt: bool = False,
     emergency_reselect: bool = False,
     max_position_weight: float | None = None,
+    fundamental_pe_tilt: bool = False,
 ) -> dict:
     if step < 1:
         raise ValueError("step debe ser >= 1")
@@ -727,6 +735,7 @@ def _run_simulation(
             include_earnings, include_news, max_per_asset_class, risk_parity_sizing,
             stop_loss_pct, short_confidence_premium, risk_regime_sizing, rebalance_months,
             equity_regime_tilt, emergency_reselect, max_position_weight,
+            fundamental_pe_tilt,
         )
 
     if end_date:
@@ -760,6 +769,7 @@ def _run_simulation(
         include_news,
         selection_cap,
         short_confidence_premium,
+        fundamental_pe_tilt=fundamental_pe_tilt,
     )
     if not portfolio:
         raise ValueError(
@@ -871,6 +881,7 @@ def _run_rebalanced_simulation(
     equity_regime_tilt: bool = False,
     emergency_reselect: bool = False,
     max_position_weight: float | None = None,
+    fundamental_pe_tilt: bool = False,
 ) -> dict:
     """Same day-by-day walk-forward, but instead of marrying the portfolio
     chosen on day one for the whole period, the selection is redone every
@@ -984,6 +995,7 @@ def _run_rebalanced_simulation(
             include_news and k == 0,
             selection_cap,
             short_confidence_premium,
+            fundamental_pe_tilt=fundamental_pe_tilt,
         )
         if k == 0 and not portfolio:
             raise ValueError(
@@ -1158,6 +1170,7 @@ def simulate_portfolio_real(
     equity_regime_tilt: bool = True,
     emergency_reselect: bool = False,
     max_position_weight: float | None = None,
+    fundamental_pe_tilt: bool = False,
 ) -> dict:
     """Auto-selects a portfolio (from real symbols, defaulting to the full
     example universe) using only data before `start_date`, then walks
@@ -1238,6 +1251,7 @@ def simulate_portfolio_real(
         equity_regime_tilt,
         emergency_reselect,
         max_position_weight,
+        fundamental_pe_tilt,
     )
 
 
@@ -1264,6 +1278,7 @@ def simulate_portfolio_synthetic(
     equity_regime_tilt: bool = True,
     emergency_reselect: bool = False,
     max_position_weight: float | None = None,
+    fundamental_pe_tilt: bool = False,
 ) -> dict:
     """Same simulation, but over synthetic profiles reaching into 2026 —
     usable with no network access. Real dates only line up exactly with
@@ -1311,4 +1326,5 @@ def simulate_portfolio_synthetic(
         equity_regime_tilt,
         emergency_reselect,
         max_position_weight,
+        fundamental_pe_tilt,
     )

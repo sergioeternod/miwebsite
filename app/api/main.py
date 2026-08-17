@@ -331,6 +331,7 @@ def post_simulate_portfolio(request: PortfolioSimulateRequest) -> dict:
         equity_regime_tilt=request.equity_regime_tilt,
         emergency_reselect=request.emergency_reselect,
         max_position_weight=request.max_position_weight,
+        fundamental_pe_tilt=request.fundamental_pe_tilt,
     )
     if request.max_per_asset_class is not None:
         # Omit otherwise so each path's own smart default applies (2 for

@@ -34,6 +34,16 @@ CHEAP_PE_MAX = 15.0
 EXPENSIVE_PE_MIN = 30.0
 MAX_CONFIDENCE_TILT_PCT = 10.0
 
+# Guidance proxy: analyst consensus EPS estimates and their 90-day revision
+# direction (Yahoo earningsTrend). Companies guide, analysts move their
+# numbers — sustained upward revisions for both this year and next are the
+# closest keyless observable to "guidance is improving". Fixed thresholds,
+# not tuned: revisions must move at least REVISION_STRONG_PCT in the same
+# direction for both periods to count, and contribute at most
+# REVISION_TILT_PCT confidence points.
+REVISION_STRONG_PCT = 2.0
+REVISION_TILT_PCT = 3.0
+
 
 def valuation_tilt(trailing_pe: float | None, forward_pe: float | None) -> dict:
     """Fixed-band tilt from the trailing P/E. The forward P/E only colors
@@ -72,6 +82,51 @@ def valuation_tilt(trailing_pe: float | None, forward_pe: float | None) -> dict:
     return {"signal": signal, "confidence_tilt_pct": tilt, "rationale": rationale}
 
 
+def guidance_tilt(estimates: dict) -> dict:
+    """Revision-direction reading from consensus estimates for the current
+    (0y) and next (+1y) fiscal years. Both must have moved at least
+    REVISION_STRONG_PCT in the same direction over the last 90 days to
+    produce a signal; anything else — including missing data — is neutral."""
+    changes = []
+    for period in ("0y", "+1y"):
+        est = estimates.get(period) or {}
+        avg, ago = est.get("eps_avg"), est.get("eps_avg_90d_ago")
+        if avg is None or ago is None or ago == 0:
+            return {"signal": "neutral", "confidence_tilt_pct": 0.0,
+                    "rationale": "Sin estimaciones de analistas suficientes para leer revisiones."}
+        changes.append((avg / ago - 1) * 100)
+
+    if all(c >= REVISION_STRONG_PCT for c in changes):
+        return {"signal": "bullish", "confidence_tilt_pct": REVISION_TILT_PCT,
+                "rationale": f"Los analistas revisaron al alza sus estimados de utilidades ({changes[0]:+.1f}% este año, {changes[1]:+.1f}% el próximo, últimos 90 días)."}
+    if all(c <= -REVISION_STRONG_PCT for c in changes):
+        return {"signal": "bearish", "confidence_tilt_pct": REVISION_TILT_PCT,
+                "rationale": f"Los analistas revisaron a la baja sus estimados de utilidades ({changes[0]:+.1f}% este año, {changes[1]:+.1f}% el próximo, últimos 90 días)."}
+    return {"signal": "neutral", "confidence_tilt_pct": 0.0,
+            "rationale": f"Revisiones de estimados mixtas o planas ({changes[0]:+.1f}% / {changes[1]:+.1f}% en 90 días)."}
+
+
+def combine_tilts(band: dict, guidance: dict) -> dict:
+    """Combines the P/E-band tilt and the guidance tilt on a signed scale
+    (bullish positive, bearish negative), capping the total at
+    MAX_CONFIDENCE_TILT_PCT. Opposing readings partially cancel — a cheap
+    stock whose estimates are being cut is a weaker buy case than cheap
+    alone, and that should show in the number."""
+    signed = 0.0
+    for tilt in (band, guidance):
+        if tilt["signal"] == "bullish":
+            signed += tilt["confidence_tilt_pct"]
+        elif tilt["signal"] == "bearish":
+            signed -= tilt["confidence_tilt_pct"]
+    if signed == 0:
+        signal = "neutral"
+    else:
+        signal = "bullish" if signed > 0 else "bearish"
+    magnitude = round(min(abs(signed), MAX_CONFIDENCE_TILT_PCT), 1)
+    rationale = " ".join(t["rationale"] for t in (band, guidance))
+    return {"signal": signal, "confidence_tilt_pct": magnitude if signal != "neutral" else 0.0, "rationale": rationale}
+
+
 def valuation_report(symbol: str) -> dict:
     """Current valuation reading for `symbol`. Raises
     QuoteSummaryUnavailableError when Yahoo can't provide data; returns a
@@ -85,16 +140,28 @@ def valuation_report(symbol: str) -> dict:
             "rationale": "La valuación por múltiplos aplica solo a acciones individuales.",
         }
     metrics = get_valuation_metrics(symbol)
-    tilt = valuation_tilt(metrics["trailing_pe"], metrics["forward_pe"])
+    band = valuation_tilt(metrics["trailing_pe"], metrics["forward_pe"])
+    guidance = guidance_tilt(metrics.get("estimates") or {})
+    combined = combine_tilts(band, guidance)
+
+    implicit_forward_pe = None
+    next_year = (metrics.get("estimates") or {}).get("+1y") or {}
+    if metrics.get("previous_close") and next_year.get("eps_avg"):
+        if next_year["eps_avg"] > 0:
+            implicit_forward_pe = round(metrics["previous_close"] / next_year["eps_avg"], 2)
+
     return {
         "symbol": symbol,
         "applicable": True,
         "trailing_pe": metrics["trailing_pe"],
         "forward_pe": metrics["forward_pe"],
+        "implicit_forward_pe": implicit_forward_pe,
         "trailing_eps": metrics["trailing_eps"],
-        "signal": tilt["signal"],
-        "confidence_tilt_pct": tilt["confidence_tilt_pct"],
-        "rationale": tilt["rationale"],
+        "estimates": metrics.get("estimates") or {},
+        "guidance_signal": guidance["signal"],
+        "signal": combined["signal"],
+        "confidence_tilt_pct": combined["confidence_tilt_pct"],
+        "rationale": combined["rationale"],
     }
 
 
@@ -135,6 +202,8 @@ def apply_valuation_overlay(recommendation: dict, symbol: str) -> dict:
         "applicable": report["applicable"],
         "trailing_pe": report.get("trailing_pe"),
         "forward_pe": report.get("forward_pe"),
+        "implicit_forward_pe": report.get("implicit_forward_pe"),
+        "guidance_signal": report.get("guidance_signal"),
         "signal": report["signal"],
         "rationale": report["rationale"],
         "confidence_adjustment_pct": round(adjustment, 1),
