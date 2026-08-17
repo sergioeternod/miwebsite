@@ -85,6 +85,7 @@ class OpportunitiesRequest(BaseModel):
     allow_short: bool = True
     with_earnings: bool = Field(False, description="Ajusta cada símbolo con el historial de earnings (Finnhub)")
     with_news: bool = Field(False, description="Ajusta cada símbolo con el sentimiento de noticias (Alpha Vantage)")
+    with_valuation: bool = Field(False, description="Ajusta cada acción con su valuación por múltiplos (P/E de Yahoo, sin API key; solo acciones)")
     top_n: int = Field(5, description="Cuántos símbolos mostrar en cada lista (compra/venta)")
 
 

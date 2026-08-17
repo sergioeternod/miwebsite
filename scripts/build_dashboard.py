@@ -33,6 +33,8 @@ from app.portfolio import (
     _select_portfolio,
     _vol_regime_exposure,
 )
+from app.config import AssetClass, infer_asset_class
+from app.fundamentals.valuation import valuation_report
 from app.recommend.engine import recommend
 
 STATE_PATH = Path("portfolio_state.json")
@@ -158,10 +160,16 @@ def main() -> None:
         rec = recommend(df, symbol=s, initial_capital=NOMINAL_CAPITAL, commission_bps=None, allow_short=False)
         exposure = float(_vol_regime_exposure(df["Close"]).iloc[-1]) * 100
         stop_level = p["entry_price"] * (1 - DEFAULT_STOP_LOSS_PCT / 100)
+        pe = None
+        if infer_asset_class(s) is AssetClass.STOCK:
+            try:
+                pe = valuation_report(s).get("trailing_pe")
+            except Exception:
+                pe = None
         rows.append({
             "symbol": s, "weight": p["weight"], "entry_price": p["entry_price"], "entry_date": p["entry_date"],
             "price": price, "pnl_pct": pnl, "signal": rec["overall_action"], "signal_conf": rec["confidence_pct"],
-            "exposure_pct": exposure, "stop_level": stop_level,
+            "exposure_pct": exposure, "stop_level": stop_level, "pe": pe,
             "stop_distance_pct": (price / stop_level - 1) * 100,
         })
     rows.sort(key=lambda r: -r["weight"])
@@ -179,16 +187,20 @@ def main() -> None:
         for a in actions
     ) or "<p class='allclear'>Sin movimientos hoy: todas las posiciones conservan su señal, ningún stop-loss disparado y la próxima re-selección no ha llegado.</p>"
 
-    pos_html = "".join(
-        f"<tr><td><strong>{r['symbol']}</strong><div class='sub'>desde {fmt_date(r['entry_date'])}</div></td>"
-        f"<td class='num'>{r['weight']*100:.1f}%<div class='sub'>{money(r['weight'])}</div></td>"
-        f"<td class='num'>{r['entry_price']:,.2f}</td><td class='num'>{r['price']:,.2f}</td>"
-        f"<td class='num {'up' if r['pnl_pct'] >= 0 else 'down'}'>{r['pnl_pct']:+.2f}%</td>"
-        f"<td>{r['signal']} <span class='sub'>{r['signal_conf']:.0f}%</span></td>"
-        f"<td class='num'>{r['exposure_pct']:.0f}%</td>"
-        f"<td class='num'>{r['stop_level']:,.2f}<div class='sub'>a {r['stop_distance_pct']:.1f}%</div></td></tr>"
-        for r in rows
-    )
+    def row_html(r: dict) -> str:
+        pe_txt = f"{r['pe']:.1f}" if r["pe"] else "—"
+        return (
+            f"<tr><td><strong>{r['symbol']}</strong><div class='sub'>desde {fmt_date(r['entry_date'])}</div></td>"
+            f"<td class='num'>{r['weight']*100:.1f}%<div class='sub'>{money(r['weight'])}</div></td>"
+            f"<td class='num'>{r['entry_price']:,.2f}</td><td class='num'>{r['price']:,.2f}</td>"
+            f"<td class='num {'up' if r['pnl_pct'] >= 0 else 'down'}'>{r['pnl_pct']:+.2f}%</td>"
+            f"<td>{r['signal']} <span class='sub'>{r['signal_conf']:.0f}%</span></td>"
+            f"<td class='num'>{r['exposure_pct']:.0f}%</td>"
+            f"<td class='num'>{pe_txt}</td>"
+            f"<td class='num'>{r['stop_level']:,.2f}<div class='sub'>a {r['stop_distance_pct']:.1f}%</div></td></tr>"
+        )
+
+    pos_html = "".join(row_html(r) for r in rows)
 
     html = f"""<title>Monitor del portafolio</title>
 <style>
@@ -240,13 +252,14 @@ def main() -> None:
   <h2>Posiciones bajo monitoreo</h2>
   <div class="tablewrap"><table>
     <thead><tr><th>Símbolo</th><th class="num">Peso</th><th class="num">Entrada</th><th class="num">Actual</th>
-    <th class="num">P&amp;L</th><th>Señal hoy</th><th class="num">Exposición vol.</th><th class="num">Stop-loss</th></tr></thead>
+    <th class="num">P&amp;L</th><th>Señal hoy</th><th class="num">Exposición vol.</th><th class="num">P/E</th><th class="num">Stop-loss</th></tr></thead>
     <tbody>{pos_html}</tbody>
   </table></div>
 
   <p class="note"><strong>Cómo leerlo:</strong> "Señal hoy" es la lectura diaria del ensemble — un SELL ≥55% genera
   la orden de salida a efectivo al día siguiente. "Exposición vol." es el ajuste del régimen de volatilidad (100% =
-  tamaño completo). El stop-loss marca el precio que fuerza la salida (−15% desde la entrada) y a qué distancia está.
+  tamaño completo). "P/E" es el múltiplo precio/utilidades actual (solo acciones; informativo — bandas clásicas:
+  &lt;15 barata, &gt;30 cara). El stop-loss marca el precio que fuerza la salida (−15% desde la entrada) y a qué distancia está.
   El efectivo liberado espera hasta la re-selección trimestral — el redespliegue inmediato se probó y se rechazó.
   Libro de papel con precios de cierre; no es asesoría financiera ni garantiza resultados futuros.</p>
 </main>

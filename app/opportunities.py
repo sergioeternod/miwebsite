@@ -14,6 +14,7 @@ from app.data.providers import get_ohlcv
 from app.data.synthetic import generate_ohlcv
 from app.fundamentals.earnings import apply_earnings_overlay
 from app.fundamentals.news_sentiment import apply_news_overlay
+from app.fundamentals.valuation import apply_valuation_overlay
 from app.ranking import DEFAULT_SYMBOL_PROFILES
 from app.recommend.engine import recommend
 
@@ -36,6 +37,7 @@ def _evaluate(
     allow_short: bool,
     include_earnings: bool,
     include_news: bool,
+    include_valuation: bool,
 ) -> dict:
     result = recommend(
         df, symbol=symbol, initial_capital=initial_capital, commission_bps=commission_bps, allow_short=allow_short
@@ -44,6 +46,8 @@ def _evaluate(
         result = apply_earnings_overlay(result, symbol)
     if include_news:
         result = apply_news_overlay(result, symbol)
+    if include_valuation:
+        result = apply_valuation_overlay(result, symbol)
     # per_strategy is verbose (5 entries with backtest stats each) and not
     # needed to rank/scan — callers wanting the full picture on one symbol
     # should follow up with recommend_for_symbol / GET /recommend/{symbol}.
@@ -71,6 +75,7 @@ def find_opportunities_real(
     allow_short: bool = True,
     include_earnings: bool = False,
     include_news: bool = False,
+    include_valuation: bool = False,
     top_n: int = 5,
 ) -> dict:
     """Scans real symbols (defaults to the full example universe) and ranks
@@ -85,7 +90,7 @@ def find_opportunities_real(
         try:
             df = get_ohlcv(symbol, period=period, interval=interval)
             entries.append(
-                _evaluate(df, symbol, initial_capital, commission_bps, allow_short, include_earnings, include_news)
+                _evaluate(df, symbol, initial_capital, commission_bps, allow_short, include_earnings, include_news, include_valuation)
             )
         except Exception as exc:  # data provider/network failures are per-symbol, not fatal for the whole scan
             errors[symbol] = str(exc)
@@ -101,6 +106,7 @@ def find_opportunities_synthetic(
     allow_short: bool = True,
     include_earnings: bool = False,
     include_news: bool = False,
+    include_valuation: bool = False,
     top_n: int = 5,
 ) -> dict:
     """Same ranking, but over synthetic market-character profiles — usable
@@ -119,6 +125,7 @@ def find_opportunities_synthetic(
             allow_short,
             include_earnings,
             include_news,
+            include_valuation,
         )
         for profile in profiles
     ]

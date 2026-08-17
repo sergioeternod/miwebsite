@@ -32,6 +32,7 @@ from app.data.finnhub_client import FinnhubUnavailableError
 from app.data.providers import DataUnavailableError, get_ohlcv
 from app.fundamentals.earnings import apply_earnings_overlay, earnings_report
 from app.fundamentals.news_sentiment import apply_news_overlay, news_report
+from app.fundamentals.valuation import apply_valuation_overlay, valuation_report
 from app.opportunities import find_opportunities_real, find_opportunities_synthetic
 from app.portfolio import simulate_portfolio_real, simulate_portfolio_synthetic
 from app.ranking import rank_real_symbols, rank_synthetic_profiles
@@ -95,6 +96,8 @@ def cmd_recommend(args: argparse.Namespace) -> None:
         result = apply_earnings_overlay(result, args.symbol, api_key=args.finnhub_key)
     if args.with_news:
         result = apply_news_overlay(result, args.symbol, api_key=args.av_key)
+    if args.with_valuation:
+        result = apply_valuation_overlay(result, args.symbol)
     _print_json(result)
 
 
@@ -106,6 +109,10 @@ def cmd_earnings(args: argparse.Namespace) -> None:
 def cmd_news(args: argparse.Namespace) -> None:
     report = news_report(args.symbol, api_key=args.av_key)
     _print_json(report)
+
+
+def cmd_valuation(args: argparse.Namespace) -> None:
+    _print_json(valuation_report(args.symbol))
 
 
 def cmd_simulate(args: argparse.Namespace) -> None:
@@ -271,6 +278,7 @@ def cmd_opportunities(args: argparse.Namespace) -> None:
         allow_short=not args.no_short,
         include_earnings=args.with_earnings,
         include_news=args.with_news,
+        include_valuation=args.with_valuation,
         top_n=args.top_n,
     )
     if args.synthetic:
@@ -413,6 +421,9 @@ def build_parser() -> argparse.ArgumentParser:
         "--with-news", action="store_true", help="Ajusta la confianza con el sentimiento de noticias recientes (Alpha Vantage)"
     )
     recommend_parser.add_argument(
+        "--with-valuation", action="store_true", help="Ajusta la confianza con la valuación por múltiplos (P/E de Yahoo, sin API key; solo acciones)"
+    )
+    recommend_parser.add_argument(
         "--av-key", default=None, help="API key de Alpha Vantage (si se omite, usa la variable de entorno ALPHAVANTAGE_API_KEY)"
     )
     recommend_parser.set_defaults(func=cmd_recommend)
@@ -434,6 +445,12 @@ def build_parser() -> argparse.ArgumentParser:
         "--av-key", default=None, help="API key de Alpha Vantage (si se omite, usa la variable de entorno ALPHAVANTAGE_API_KEY)"
     )
     news_parser.set_defaults(func=cmd_news)
+
+    valuation_parser = subparsers.add_parser(
+        "valuation", help="Valuación por múltiplos (P/E trailing/forward, Yahoo sin API key; solo acciones)"
+    )
+    valuation_parser.add_argument("--symbol", required=True)
+    valuation_parser.set_defaults(func=cmd_valuation)
 
     simulate_parser = subparsers.add_parser(
         "simulate", help="Simula una estrategia (o todas) sobre datos históricos reales o sintéticos"
@@ -536,6 +553,9 @@ def build_parser() -> argparse.ArgumentParser:
     )
     opportunities_parser.add_argument(
         "--with-news", action="store_true", help="Ajusta cada símbolo con el sentimiento de noticias (Alpha Vantage)"
+    )
+    opportunities_parser.add_argument(
+        "--with-valuation", action="store_true", help="Ajusta cada acción con su valuación por múltiplos (P/E de Yahoo, sin API key)"
     )
     opportunities_parser.add_argument("--top-n", type=int, default=5, help="Cuántos símbolos mostrar por lista (compra/venta)")
     opportunities_parser.add_argument("--out", default=None, help="Ruta donde guardar el reporte completo en JSON")

@@ -1107,6 +1107,33 @@ buen reporte → sube" funcionó en el pasado haría falta un archivo histórico
 de sorpresas con timestamp exacto por fecha (no solo el estado actual), que
 es un dataset aparte. Queda fuera de este alcance inicial.
 
+## Señal de valuación por múltiplos (P/E, sin API key)
+
+La tercera señal fundamental, junto a earnings y noticias: qué tan cara o
+barata está una acción respecto a sus utilidades. Usa el P/E trailing y
+forward de Yahoo Finance (endpoint quoteSummary con cookie+crumb — sin
+API key), y sigue el mismo contrato que los otros overlays: nunca cambia
+el BUY/SELL/HOLD técnico, solo ajusta la confianza y reporta el porqué.
+
+```bash
+python -m app.cli valuation --symbol AAPL          # reporte directo de múltiplos
+python -m app.cli recommend --symbol AAPL --with-valuation
+python -m app.cli opportunities --with-valuation   # el escaneo ajusta cada acción
+```
+
+Reglas fijas (bandas clásicas, sin ajustar): P/E < 15 lee **barata**
+(refuerza BUY / contradice SELL), > 30 lee **cara** (lo inverso), en
+medio — o sin dato, o con utilidades negativas — neutral. El ajuste crece
+con la distancia a la banda, tope ±10 puntos de confianza. Solo aplica a
+acciones individuales (índices, cripto, divisas y commodities no tienen
+P/E por símbolo en esta fuente y el overlay se marca no-aplicable).
+
+Reglas de honestidad: es una señal *now-only* — Yahoo no ofrece múltiplos
+"a fecha pasada", así que **nunca entra al walk-forward histórico** (sería
+lookahead) y su utilidad en vivo la juzga el registro de señales hacia
+adelante, no un backtest. El dashboard diario muestra el P/E de cada
+posición accionaria como columna informativa.
+
 ## Recomendaciones con sentimiento de noticias (Alpha Vantage)
 
 Mismo mecanismo que el overlay de earnings, pero con la señal complementaria:

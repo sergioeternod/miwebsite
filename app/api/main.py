@@ -25,7 +25,9 @@ from app.data.alphavantage_client import AlphaVantageUnavailableError
 from app.data.finnhub_client import FinnhubUnavailableError
 from app.data.providers import DataUnavailableError, get_ohlcv
 from app.fundamentals.earnings import apply_earnings_overlay, earnings_report
+from app.data.yahoo_quote_client import QuoteSummaryUnavailableError
 from app.fundamentals.news_sentiment import apply_news_overlay, news_report
+from app.fundamentals.valuation import apply_valuation_overlay, valuation_report
 from app.opportunities import find_opportunities_real, find_opportunities_synthetic
 from app.portfolio import simulate_portfolio_real, simulate_portfolio_synthetic
 from app.ranking import rank_real_symbols, rank_synthetic_profiles
@@ -78,6 +80,7 @@ def get_recommendation(
     allow_short: bool = True,
     with_earnings: bool = False,
     with_news: bool = False,
+    with_valuation: bool = False,
 ) -> dict:
     try:
         df = get_ohlcv(symbol, period=period, interval=interval)
@@ -95,6 +98,8 @@ def get_recommendation(
         result = apply_earnings_overlay(result, symbol)
     if with_news:
         result = apply_news_overlay(result, symbol)
+    if with_valuation:
+        result = apply_valuation_overlay(result, symbol)
     return result
 
 
@@ -105,6 +110,16 @@ def get_earnings(symbol: str) -> dict:
     try:
         return earnings_report(symbol)
     except FinnhubUnavailableError as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
+
+
+@app.get("/valuation/{symbol}")
+def get_valuation(symbol: str) -> dict:
+    """Valuación por múltiplos (P/E trailing/forward) vía Yahoo, sin API key;
+    aplica solo a acciones individuales."""
+    try:
+        return valuation_report(symbol)
+    except QuoteSummaryUnavailableError as exc:
         raise HTTPException(status_code=503, detail=str(exc)) from exc
 
 
@@ -277,6 +292,7 @@ def post_opportunities(request: OpportunitiesRequest) -> dict:
         allow_short=request.allow_short,
         include_earnings=request.with_earnings,
         include_news=request.with_news,
+        include_valuation=request.with_valuation,
         top_n=request.top_n,
     )
     try:
