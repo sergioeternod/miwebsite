@@ -417,10 +417,29 @@ CSS = """<style>
   .swatch { display:inline-block; width:10px; height:10px; border-radius:3px; margin-right:6px; }
   .swatch.exo { background:var(--ink3); }
   .swatch.idio { background:var(--acc); }
+  .profile-radio { position:absolute; opacity:0; pointer-events:none; }
+  .seg { display:inline-flex; border:1px solid var(--line); border-radius:8px; overflow:hidden; margin-bottom:12px; background:var(--panel); }
+  .seg label { padding:6px 16px; font-size:12px; font-family:var(--mono); cursor:pointer; color:var(--ink2); border-right:1px solid var(--line); }
+  .seg label:last-child { border-right:none; }
+  #p-con:checked ~ .seg label[for="p-con"], #p-neu:checked ~ .seg label[for="p-neu"],
+  #p-agr:checked ~ .seg label[for="p-agr"] { background:var(--acc-soft); color:var(--acc-ink); font-weight:650; }
+  #p-con:focus-visible ~ .seg label[for="p-con"], #p-neu:focus-visible ~ .seg label[for="p-neu"],
+  #p-agr:focus-visible ~ .seg label[for="p-agr"] { outline:2px solid var(--acc); outline-offset:-2px; }
+  .pdesc { display:none; }
+  #p-con:checked ~ .pdesc.c, #p-neu:checked ~ .pdesc.n, #p-agr:checked ~ .pdesc.a { display:block; }
+  .wlist { display:flex; flex-direction:column; }
+  #p-con:checked ~ .lwrap .wl { order:var(--oc); }
+  #p-neu:checked ~ .lwrap .wl { order:var(--on); }
+  #p-agr:checked ~ .lwrap .wl { order:var(--oa); }
+  .ev { display:none; font-size:11px; font-family:var(--mono); padding:2px 8px; border-radius:6px; }
+  .ev.okc { background:var(--up-soft); color:var(--up); font-weight:650; }
+  .ev.noc { background:var(--panel2); color:var(--ink3); border:1px solid var(--line); }
+  #p-con:checked ~ .lwrap .ev.c, #p-neu:checked ~ .lwrap .ev.n, #p-agr:checked ~ .lwrap .ev.a { display:inline-block; }
   details.pos > summary, details.watch > summary { display:grid; gap:10px; padding:12px 14px; cursor:pointer;
     align-items:center; list-style:none; }
   details.pos > summary { grid-template-columns:1.3fr .85fr 1.05fr .75fr 1fr .6fr 1.05fr; }
-  details.watch > summary { grid-template-columns:1.5fr .9fr 1fr .8fr 1.3fr 1fr; }
+  details.watch > summary { grid-template-columns:1.4fr .75fr .9fr .65fr 1.15fr .85fr 1.3fr; }
+  details.watch { min-width:840px; }
   details.pos > summary::-webkit-details-marker, details.watch > summary::-webkit-details-marker { display:none; }
   details.pos > summary:focus-visible, details.watch > summary:focus-visible { outline:2px solid var(--acc); outline-offset:-2px; border-radius:8px; }
   details.pos[open], details.watch[open] { border-color:var(--acc); }
@@ -651,6 +670,7 @@ def main() -> None:
         guidance_txt = {"bullish": "revisiones al alza", "bearish": "revisiones a la baja", "neutral": "revisiones estables"}.get(
             vrep.get("guidance_signal", "neutral"), "sin lectura"
         )
+        sp_bench = dfs.get("^GSPC")
         watch.append({
             "symbol": s,
             "price": float(df["Close"].iloc[-1]),
@@ -664,9 +684,41 @@ def main() -> None:
             "reference_pe": rel.get("reference_pe"),
             "guidance_txt": guidance_txt,
             "next_earnings": next_earnings(s),
+            "beta": beta_vs_benchmark(df, sp_bench) if sp_bench is not None else None,
+            "cross": sma_cross_state(df),
         })
     order = {"BUY": 0, "HOLD": 1, "SELL": 2}
     watch.sort(key=lambda w: (order.get(w["signal"], 3), -w["signal_conf"]))
+
+    # --- strategy-profile evaluation for the watchlist (informational lens) ---
+    # El libro real opera siempre el perfil Neutral (el modelo validado:
+    # BUY >=55%). Conservador y Agresivo son lentes de exploración sobre la
+    # watchlist: mismos datos, cortes distintos.
+    def profile_fails(w: dict) -> dict[str, list[str]]:
+        base = [] if w["signal"] == "BUY" else [f"señal {w['signal']}, no BUY"]
+        c = list(base)
+        if w["signal_conf"] < 65:
+            c.append("confianza <65%")
+        if w.get("beta") is not None and w["beta"] > 1.1:
+            c.append(f"β {w['beta']:.2f} >1.1")
+        if w.get("reading") and "cara" in w["reading"]:
+            c.append("cara vs su industria")
+        if w.get("cross") and not w["cross"]["bull"]:
+            c.append("cruce SMA20/50 bajista")
+        n = list(base)
+        if w["signal_conf"] < 55:
+            n.append("confianza <55%")
+        a = list(base)
+        if w["signal_conf"] < 50:
+            a.append("confianza <50%")
+        return {"c": c, "n": n, "a": a}
+
+    for w in watch:
+        w["fails"] = profile_fails(w)
+    for key in ("c", "n", "a"):
+        ranked = sorted(watch, key=lambda w: (bool(w["fails"][key]), -w["signal_conf"]))
+        for i, w in enumerate(ranked, start=1):
+            w[f"order_{key}"] = i
 
     # --- regime detail (S&P vs its 200-day SMA) ---
     regime_detail = None
@@ -836,27 +888,54 @@ def main() -> None:
             f"<div><b>Vs industria:</b> {w['pe']:.1f} / {w['reference_pe']:.0f} (mediana {w['industry']}) = {w['ratio']:.2f}x → {w['reading']}</div>"
             if w.get("ratio") and w.get("reference_pe") and w.get("pe") else ""
         )
+        beta_txt = f"{w['beta']:.2f}" if w.get("beta") is not None else "—"
+        cross_txt = ""
+        if w.get("cross"):
+            lado = "alcista" if w["cross"]["bull"] else "bajista"
+            desde = f" desde {fmt_date(w['cross']['last_cross'])}" if w["cross"].get("last_cross") else ""
+            cross_txt = f"<div><b>Cruce SMA20/50 propio:</b> {lado}{desde} ({w['cross']['dist_pct']:+.1f}%)</div>"
+        prof_defs = [
+            ("c", "Conservador", "BUY ≥65% · β ≤1.1 · no cara vs industria · SMA alcista"),
+            ("n", "Neutral (modelo)", "BUY ≥55% — el corte del modelo validado"),
+            ("a", "Agresivo", "BUY ≥50% · sin vetos de β ni valuación"),
+        ]
+        prof_table = "".join(
+            f"<tr><td>{label}</td><td>{crit}</td>"
+            f"<td>{'<b>apta</b>' if not w['fails'][k] else 'no apta — ' + ', '.join(w['fails'][k])}</td></tr>"
+            for k, label, crit in prof_defs
+        )
         body = (
             f"<div class='grid2'>"
             f"<div><b>Señal hoy:</b> {w['signal']} con {w['signal_conf']:.0f}% (ensemble técnico)</div>"
             f"<div><b>Valuación:</b> P/E {pe_txt} · fwd implícito {fwd_txt} · guidance: {w['guidance_txt']}</div>"
             f"{ratio_math}"
+            f"<div><b>β vs S&amp;P:</b> {beta_txt}</div>"
+            f"{cross_txt}"
             + (f"<div><b>Próximo reporte:</b> {fmt_date(w['next_earnings'])}</div>" if w.get("next_earnings") else "")
             + f"</div>"
+            f"<p><b>Veredicto por perfil de selección:</b></p>"
+            f"<table class='kv'><tr><th>Perfil</th><th>Criterios</th><th>Veredicto</th></tr>{prof_table}</table>"
             f"<p><b>Cómo entra al libro:</b> compite en la re-selección del {fmt_date(state['next_rebalance'])} por confianza "
-            f"ajustada (técnica + tilt de P/E). En la selección vigente el tope de 2 acciones por clase dejó dentro a las de mayor "
-            f"confianza ajustada; no hay entradas a mitad de trimestre (el redespliegue inmediato se validó y rechazó).</p>"
+            f"ajustada (técnica + tilt de P/E). El libro real opera siempre el perfil Neutral — el validado en las 9 ventanas; "
+            f"no hay entradas a mitad de trimestre (el redespliegue inmediato se validó y rechazó).</p>"
             f"<ul class='src'><li>{PRICE_SRC}</li><li>{SIGNAL_SRC}</li>"
-            f"<li>Valuación: Yahoo quoteSummary (P/E, estimados de analistas, calendario de resultados); mediana de industria: tabla fija en app/fundamentals/sector_pe.py.</li></ul>"
+            f"<li>Valuación: Yahoo quoteSummary (P/E, estimados de analistas, calendario de resultados); mediana de industria: tabla fija en app/fundamentals/sector_pe.py.</li>"
+            f"<li>β y cruce SMA20/50: los mismos cálculos de las secciones de resumen y descomposición.</li></ul>"
+        )
+        ev_chips = "".join(
+            (f"<span class='ev {k} okc'>apta</span>" if not w["fails"][k]
+             else f"<span class='ev {k} noc'>no apta · {w['fails'][k][0]}</span>")
+            for k in ("c", "n", "a")
         )
         return (
-            f"<details class='watch'><summary>"
+            f"<details class='watch wl' style='--oc:{w['order_c']};--on:{w['order_n']};--oa:{w['order_a']}'><summary>"
             f"<div class='cell'><span class='sym'>{w['symbol']}</span><div class='sub'>{w['industry']}</div></div>"
             f"<div class='cell'><div class='k'>Precio</div><div class='v'>{w['price']:,.2f}</div></div>"
             f"<div class='cell'><div class='k'>Señal hoy</div><div class='v {sig_cls}'>{w['signal']} {w['signal_conf']:.0f}%</div></div>"
             f"<div class='cell'><div class='k'>P/E</div><div class='v'>{pe_txt}</div></div>"
             f"<div class='cell'><div class='k'>Vs industria</div><div class='v {rel_cls}'>{ratio_txt}<span class='sub'> {w['reading'].replace(' para su industria','').replace(' con su industria','')}</span></div></div>"
             f"<div class='cell'><div class='k'>Próx. reporte</div><div class='v'>{earn_txt}</div></div>"
+            f"<div class='cell'><div class='k'>Perfil activo</div><div class='v'>{ev_chips}</div></div>"
             f"</summary><div class='posbody'>{body}</div></details>"
         )
 
@@ -1064,7 +1143,20 @@ def main() -> None:
         if rows else ""
     )
     pos_section = ("<div class='lwrap'>" + "".join(pos_html(r) for r in rows) + "</div>" + pos_footer) if rows else "<p class='allclear'>Libro sin posiciones — todo en efectivo hasta la próxima re-selección.</p>"
-    watch_section = "<div class='lwrap'>" + "".join(watch_html(w) for w in watch) + "</div>" if watch else "<p class='allclear'>Sin candidatas fuera del libro.</p>"
+    watch_section = (
+        "<input type='radio' name='perfil' id='p-con' class='profile-radio'>"
+        "<input type='radio' name='perfil' id='p-neu' class='profile-radio' checked>"
+        "<input type='radio' name='perfil' id='p-agr' class='profile-radio'>"
+        "<div class='seg' role='group' aria-label='Perfil de selección'>"
+        "<label for='p-con'>Conservador</label><label for='p-neu'>Neutral</label><label for='p-agr'>Agresivo</label></div>"
+        "<p class='lede pdesc c'><b>Conservador:</b> exige señal BUY con ≥65% de confianza, β ≤1.1, valuación no cara "
+        "contra su industria y cruce SMA20/50 alcista. Menos candidatas, menos sustos.</p>"
+        "<p class='lede pdesc n'><b>Neutral:</b> el corte del modelo validado — señal BUY con ≥55% de confianza; la "
+        "valuación entra como tilt de confianza, no como veto. <b>Es el perfil con el que opera el libro real.</b></p>"
+        "<p class='lede pdesc a'><b>Agresivo:</b> señal BUY con ≥50% basta; sin vetos de β ni de valuación. Más "
+        "candidatas, más riesgo — y sin respaldo de validación propia.</p>"
+        + ("<div class='lwrap'><div class='wlist'>" + "".join(watch_html(w) for w in watch) + "</div></div>" if watch else "<p class='allclear'>Sin candidatas fuera del libro.</p>")
+    )
     events_section = "".join(event_html(e) for e in events) + "".join(event_html(e) for e in level_events)
 
     valuation_html = (
@@ -1096,6 +1188,7 @@ def main() -> None:
         "<li><b>Referencias de industria:</b> tabla fija de medianas de P/E por industria/sector (estilo Damodaran) en app/fundamentals/sector_pe.py — editable por diff, no ajustada a backtests.</li>"
         "<li><b>Rendimiento implícito y β:</b> earnings yield = 1 / P/E (forward implícito para acciones; ETF réplica SPY/DIA/QQQ para índices); β = covarianza de retornos diarios contra el S&amp;P 500 / varianza del S&amp;P, ~3 años. Indicadores informativos del resumen — no son insumos del modelo.</li>"
         "<li><b>Descomposición idiosincrático/exógeno:</b> R² del modelo de mercado (β²·var(S&amp;P)/var(activo)) sobre los mismos retornos diarios; cruce SMA20/50 con las ventanas de la estrategia original (SmaCrossoverStrategy); alpha implícito = E/P − β × implícito del S&amp;P. Informativa — no es insumo del modelo.</li>"
+        "<li><b>Perfiles de selección (watchlist):</b> Conservador (BUY ≥65%, β ≤1.1, no cara vs industria, SMA alcista), Neutral (BUY ≥55% — el modelo validado, el que opera el libro) y Agresivo (BUY ≥50%, sin vetos). Los perfiles no-neutrales son lentes exploratorias sin validación propia.</li>"
         "<li><b>Libro y señales:</b> portfolio_state.json (libro papel) y signals_log.jsonl (registro forward), ambos versionados en el repositorio.</li>"
         "</ul></div>"
     )
@@ -1138,9 +1231,10 @@ def main() -> None:
 
   <section>
     <div class="shead"><h2>Watchlist — candidatas fuera del libro</h2></div>
-    <p class="lede">Las acciones del universo que hoy no están en el libro, con su señal y valuación al día. No hay
-    entradas a mitad de trimestre: compiten en la re-selección del {fmt_date(state['next_rebalance'])} por confianza
-    ajustada (técnica + tilt de P/E).</p>
+    <p class="lede">Las acciones del universo que hoy no están en el libro, con su señal y valuación al día. Elige un
+    perfil de selección para re-evaluar y reordenar las candidatas — el veredicto por fila y el detalle de criterios
+    cambian con el perfil. No hay entradas a mitad de trimestre: compiten en la re-selección del
+    {fmt_date(state['next_rebalance'])}.</p>
     {watch_section}
   </section>
 
