@@ -604,6 +604,20 @@ def main() -> None:
         })
     rows.sort(key=lambda r: -r["weight"])
 
+    # --- book vs S&P 500 since inception (informational) ---
+    inception = min((p["entry_date"] for p in state["positions"].values()), default=state.get("created", as_of))
+    book_ret_pct = sum(r["weight"] * r["pnl_pct"] for r in rows) if rows else None
+    spx_entry_price = spx_last_price = spx_ret_pct = book_vs_sp_pp = None
+    if sp_df is not None:
+        sp_since = sp_df.loc[sp_df.index >= inception, "Close"]
+        if len(sp_since):
+            # si el S&P es posición del libro, su precio de entrada real es la referencia exacta
+            spx_entry_price = state["positions"].get("^GSPC", {}).get("entry_price") or float(sp_since.iloc[0])
+            spx_last_price = float(sp_since.iloc[-1])
+            spx_ret_pct = (spx_last_price / spx_entry_price - 1) * 100
+    if book_ret_pct is not None and spx_ret_pct is not None:
+        book_vs_sp_pp = book_ret_pct - spx_ret_pct
+
     # --- key indicator: implied expected return (earnings yield + beta) ---
     market_pe, market_pe_kind = proxy_pe("SPY")
     market_ey = 1.0 / market_pe if market_pe else None
@@ -1167,6 +1181,44 @@ def main() -> None:
         f"<div class='v'>{imp_value}</div><span class='sub'>{imp_sub}</span>{imp_dd}</div>"
     )
 
+    # book vs S&P tile
+    if book_ret_pct is not None and spx_ret_pct is not None:
+        cmp_cls = "up" if book_vs_sp_pp >= 0 else "down"
+        cmp_rows = "".join(
+            f"<tr><td>{r['symbol']}</td><td class='num'>{r['weight']*100:.1f}%</td>"
+            f"<td class='num'>{r['entry_price']:,.2f}</td><td class='num'>{r['price']:,.2f}</td>"
+            f"<td class='num'>{r['pnl_pct']:+.2f}%</td>"
+            f"<td class='num'>{r['weight']*r['pnl_pct']:+.2f} pp</td></tr>"
+            for r in rows
+        )
+        cmp_dd = dd(
+            "fuente y cálculo",
+            f"<p><b>Retorno del libro</b> = Σ peso × P&amp;L de cada posición desde su entrada "
+            f"(el efectivo, {state['cash_weight']*100:.1f}%, aporta 0). Mismos precios de entrada y cierre que la sección de posiciones.</p>"
+            f"<table class='kv'><tr><th>Símbolo</th><th class='num'>Peso</th><th class='num'>Entrada</th>"
+            f"<th class='num'>Hoy</th><th class='num'>P&amp;L</th><th class='num'>Aporte w·P&amp;L</th></tr>"
+            f"{cmp_rows}"
+            f"<tr><td><b>Libro</b></td><td class='num'><b>100%</b></td><td class='num'></td><td class='num'></td>"
+            f"<td class='num'></td><td class='num'><b>{book_ret_pct:+.2f}%</b></td></tr></table>"
+            f"<p><b>S&amp;P 500 en el mismo periodo:</b> {spx_entry_price:,.2f} ({fmt_date(inception)}) → "
+            f"{spx_last_price:,.2f} = <b>{spx_ret_pct:+.2f}%</b>.</p>"
+            f"<p><b>Diferencia:</b> {book_ret_pct:+.2f}% − ({spx_ret_pct:+.2f}%) = <b>{book_vs_sp_pp:+.2f} pp</b>.</p>"
+            f"<ul class='src'><li>{PRICE_SRC}</li>"
+            f"<li>Libro: portfolio_state.json (papel, $10,000 nominales, cierres diarios), versionado en el repositorio.</li></ul>"
+            f"<p>Indicador informativo: pocas semanas de diferencia contra el índice son ruido, no evidencia — la ventaja "
+            f"validada del modelo (régimen, stop-loss, selección trimestral con tilt de P/E) se mide en horizontes de años.</p>",
+        )
+        cmp_tile = (
+            f"<div class='tile panel key'><div class='k'>Libro vs S&amp;P 500</div>"
+            f"<div class='v {cmp_cls}'>{book_vs_sp_pp:+.2f} pp</div>"
+            f"<span class='sub'>libro {book_ret_pct:+.2f}% · S&amp;P {spx_ret_pct:+.2f}% desde {fmt_date(inception)}</span>{cmp_dd}</div>"
+        )
+    else:
+        cmp_tile = (
+            "<div class='tile panel'><div class='k'>Libro vs S&amp;P 500</div><div class='v'>—</div>"
+            "<span class='sub'>sin lectura del S&amp;P hoy</span></div>"
+        )
+
     pos_footer = (
         f"<div class='chips' style='margin-top:2px'>"
         f"<span class='chip acc'>β ponderada del libro {beta_pond:.2f} vs S&amp;P</span>"
@@ -1221,6 +1273,7 @@ def main() -> None:
         "<li><b>Rendimiento implícito y β:</b> earnings yield = 1 / P/E (forward implícito para acciones; ETF réplica SPY/DIA/QQQ para índices); β = covarianza de retornos diarios contra el S&amp;P 500 / varianza del S&amp;P, ~3 años. Indicadores informativos del resumen — no son insumos del modelo.</li>"
         "<li><b>Descomposición idiosincrático/exógeno:</b> R² del modelo de mercado (β²·var(S&amp;P)/var(activo)) sobre los mismos retornos diarios; cruce SMA20/50 con las ventanas de la estrategia original (SmaCrossoverStrategy); alpha implícito = E/P − β × implícito del S&amp;P. Informativa — no es insumo del modelo.</li>"
         "<li><b>Perfiles de selección (watchlist):</b> cada perfil pondera los mismos ingredientes 0-100 (confianza técnica, valuación vs industria, β, tendencia SMA20/50) con pesos distintos — Conservador 35/25/20/20 hacia lo barato y estable, Neutral 100% confianza (el modelo validado, el que opera el libro), Agresivo 40/35/25 hacia momentum y β alta — además de sus vetos de entrada (BUY ≥65/55/50%). Los perfiles no-neutrales son lentes exploratorias sin validación propia.</li>"
+        "<li><b>Libro vs S&amp;P:</b> retorno ponderado del libro (Σ peso × P&amp;L desde la entrada de cada posición) contra el S&amp;P 500 desde la fecha de selección, con cierres diarios. Informativa — diferencias de pocas semanas son ruido.</li>"
         "<li><b>Libro y señales:</b> portfolio_state.json (libro papel) y signals_log.jsonl (registro forward), ambos versionados en el repositorio.</li>"
         "</ul></div>"
     )
@@ -1247,6 +1300,7 @@ def main() -> None:
       <div class="tile panel"><div class="k">Posiciones / efectivo</div><div class="v">{len(rows)} · {state['cash_weight']*100:.1f}%</div><span class="sub">efectivo {money(state['cash_weight'])} de $10,000</span>{book_dd}</div>
       <div class="tile panel"><div class="k">Próxima re-selección</div><div class="v">{fmt_date(state['next_rebalance'])}</div><span class="sub">o antes si una señal saca una posición</span>{reb_dd}</div>
       {key_tile}
+      {cmp_tile}
     </div>
   </section>
 
