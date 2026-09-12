@@ -804,7 +804,8 @@ def main() -> None:
         events.append({
             "when": fmt_date(r["next_earnings"]), "kind": "posición", "sort": r["next_earnings"],
             "title": f"Resultados trimestrales de {r['symbol']}",
-            "now": f"P/E actual {r['pe']:.1f}" + (f" · señal {r['signal']} {r['signal_conf']:.0f}%" if r.get("signal") else ""),
+            "now": (f"P/E actual {r['pe']:.1f}" if r.get("pe") else "P/E sin lectura hoy")
+                   + (f" · señal {r['signal']} {r['signal_conf']:.0f}%" if r.get("signal") else ""),
             "then": "El EPS reportado actualiza el P/E punto-en-tiempo (EDGAR) y el consenso de guidance; "
                     "una sorpresa fuerte puede mover la señal de valuación y la confianza en la próxima re-selección.",
         })
