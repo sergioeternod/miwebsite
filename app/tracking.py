@@ -88,7 +88,11 @@ def evaluate_signals(
     errors = {}
     for symbol in symbols:
         try:
-            dfs[symbol] = get_ohlcv(symbol, period=period)
+            df = get_ohlcv(symbol, period=period)
+            # yfinance moderno puede devolver el índice tz-aware; el log guarda fechas naive
+            if getattr(df.index, "tz", None) is not None:
+                df.index = df.index.tz_localize(None)
+            dfs[symbol] = df
         except Exception as exc:
             errors[symbol] = str(exc)
 
