@@ -56,16 +56,22 @@ context = {
     "numUpDays": num_up_days,
     "numDownDays": num_down_days,
     "portfolio": report["portfolio"],
-    "perSymbol": [
+    "segments": [
         {
-            "symbol": p["symbol"],
-            "finalEquity": p["final_equity"],
-            "pnlAmount": p["pnl_amount"],
-            "numTrades": p["metrics"]["num_trades"],
-            "winRatePct": p["metrics"]["win_rate_pct"],
+            "startDate": s["start_date"],
+            "capitalStart": s["capital_start"],
+            "symbols": (
+                [p["symbol"] for p in s["portfolio"]]
+                if s.get("portfolio") and isinstance(s["portfolio"][0], dict)
+                else (s.get("portfolio") or [])
+            ),
         }
-        for p in report["per_symbol"]
+        for s in report["segments"]
     ],
+    "benchmark": {
+        "returnPct": report["benchmark_buy_hold"]["total_return_pct"],
+        "vsPoints": report["vs_benchmark_pct_points"],
+    },
     "hindsight": report["hindsight_summary"],
     "disclaimer": report["disclaimer"],
     "oldComparison": None
@@ -238,12 +244,13 @@ html = r"""<title>Simulación 3 años — datos reales</title>
     </div>
 
     <div class="card">
-      <h2>Portafolio seleccionado (antes del inicio, sin ver datos futuros)</h2>
+      <h2>Portafolio seleccionado y cortes trimestrales</h2>
+      <p class="card-sub">Arriba, la selección inicial (hecha antes del inicio, sin ver datos futuros); abajo, el portafolio elegido en cada re-selección trimestral. "Efectivo" = ese trimestre ninguna señal superó el corte.</p>
       <ul class="portfolio-list" id="portfolioList"></ul>
       <div style="overflow-x:auto; margin-top: 12px;">
         <table class="data-table sym-table" id="symTable">
           <thead>
-            <tr><th>Símbolo</th><th>Capital final</th><th>P&amp;L</th><th># operaciones</th><th>% acierto</th></tr>
+            <tr><th>Trimestre desde</th><th>Capital al inicio</th><th>Portafolio del trimestre</th></tr>
           </thead>
           <tbody></tbody>
         </table>
@@ -307,6 +314,7 @@ const stats = [
   {label: "Días con ganancia / pérdida", value: CTX.numUpDays + " / " + CTX.numDownDays},
   {label: "Mejor día", value: fmtMoney(CTX.bestDay.pnl), cls: "pos"},
   {label: "Peor día", value: fmtMoney(CTX.worstDay.pnl), cls: "neg"},
+  {label: "Vs. comprar y mantener", value: fmtPct(CTX.benchmark.vsPoints) + " pp (B&H " + fmtPct(CTX.benchmark.returnPct) + ")", cls: CTX.benchmark.vsPoints >= 0 ? "pos" : "neg"},
 ];
 const statRow = document.getElementById("statRow");
 stats.forEach(s => {
@@ -337,13 +345,13 @@ CTX.portfolio.forEach(p => {
 });
 
 const symTbody = document.querySelector("#symTable tbody");
-CTX.perSymbol.forEach(p => {
+CTX.segments.forEach(s => {
   const tr = document.createElement("tr");
-  const cells = [p.symbol, fmtMoney(p.finalEquity), fmtMoney(p.pnlAmount), String(p.numTrades), p.winRatePct.toFixed(1) + "%"];
+  const cells = [s.startDate, fmtMoney(s.capitalStart), s.symbols.length ? s.symbols.join(", ") : "efectivo"];
   cells.forEach((c, i) => {
     const td = document.createElement("td");
     td.textContent = c;
-    if (i === 2) td.style.color = p.pnlAmount >= 0 ? "var(--good-text)" : "var(--series-red)";
+    if (i === 2 && !s.symbols.length) td.style.color = "var(--text-muted)";
     tr.appendChild(td);
   });
   symTbody.appendChild(tr);
