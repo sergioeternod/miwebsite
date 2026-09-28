@@ -1,0 +1,297 @@
+<title>Ganancias últimos 12 meses — modelo actual</title>
+<style>
+  :root {
+    color-scheme: light;
+    --surface: #fcfcfb; --card: #f4f3f0; --ink: #0b0b0b; --ink-2: #52514e; --ink-3: #8a8880;
+    --grid: #e6e4df; --pos: #2a78d6; --neg: #e34948; --line: #2a78d6; --area: rgba(42,120,214,.10);
+    --s2: #eb6834; --s3: #1baf7a; --s4: #eda100;
+    --mid: #f0efec; --accent-soft: rgba(42,120,214,.14);
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:where(:not([data-theme="light"])) {
+      color-scheme: dark;
+      --surface: #1a1a19; --card: #232322; --ink: #ffffff; --ink-2: #c3c2b7; --ink-3: #8a8880;
+      --grid: #33332f; --pos: #3987e5; --neg: #e66767; --line: #3987e5; --area: rgba(57,135,229,.14);
+      --s2: #d95926; --s3: #199e70; --s4: #c98500;
+      --mid: #383835; --accent-soft: rgba(57,135,229,.22);
+    }
+  }
+  :root[data-theme="dark"] {
+    color-scheme: dark;
+    --surface: #1a1a19; --card: #232322; --ink: #ffffff; --ink-2: #c3c2b7; --ink-3: #8a8880;
+    --grid: #33332f; --pos: #3987e5; --neg: #e66767; --line: #3987e5; --area: rgba(57,135,229,.14);
+    --s2: #d95926; --s3: #199e70; --s4: #c98500;
+    --mid: #383835; --accent-soft: rgba(57,135,229,.22);
+  }
+  :root[data-theme="light"] {
+    color-scheme: light;
+    --surface: #fcfcfb; --card: #f4f3f0; --ink: #0b0b0b; --ink-2: #52514e; --ink-3: #8a8880;
+    --grid: #e6e4df; --pos: #2a78d6; --neg: #e34948; --line: #2a78d6; --area: rgba(42,120,214,.10);
+    --s2: #eb6834; --s3: #1baf7a; --s4: #eda100;
+    --mid: #f0efec; --accent-soft: rgba(42,120,214,.14);
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--surface); color: var(--ink);
+    font: 15px/1.55 "Avenir Next", "Segoe UI", system-ui, sans-serif;
+  }
+  main { max-width: 980px; margin: 0 auto; padding: 40px 24px 64px; }
+  .eyebrow { font-size: 12px; letter-spacing: .14em; text-transform: uppercase; color: var(--ink-3); margin: 0 0 6px; }
+  h1 { font-size: clamp(24px, 4vw, 34px); line-height: 1.15; margin: 0 0 6px; text-wrap: balance; font-weight: 700; }
+  .sub { color: var(--ink-2); margin: 0 0 28px; max-width: 62ch; }
+  .tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 12px; margin-bottom: 32px; }
+  .tile { background: var(--card); border-radius: 10px; padding: 14px 16px; }
+  .tile .k { font-size: 11px; letter-spacing: .1em; text-transform: uppercase; color: var(--ink-3); margin-bottom: 4px; }
+  .tile .v { font-size: 22px; font-weight: 700; font-variant-numeric: tabular-nums; }
+  .tile .n { font-size: 12px; color: var(--ink-2); margin-top: 2px; }
+  .v.up { color: var(--pos); } .v.down { color: var(--neg); }
+  section { margin-bottom: 40px; }
+  h2 { font-size: 17px; margin: 0 0 4px; }
+  .desc { color: var(--ink-2); font-size: 13.5px; margin: 0 0 10px; max-width: 70ch; }
+  .legend { display: flex; flex-wrap: wrap; gap: 14px; font-size: 12.5px; color: var(--ink-2); margin-bottom: 10px; }
+  .legend span::before { content: ""; display: inline-block; width: 14px; height: 3px; border-radius: 2px; margin-right: 6px; vertical-align: middle; background: var(--c); }
+  .legend span.dashed::before { background: repeating-linear-gradient(90deg, var(--c) 0 4px, transparent 4px 7px); }
+  .chartwrap { position: relative; }
+  svg { display: block; width: 100%; height: auto; }
+  .gridline { stroke: var(--grid); stroke-width: 1; }
+  .axis-label { fill: var(--ink-3); font-size: 11px; font-variant-numeric: tabular-nums; }
+  .endlabel { font-size: 11.5px; font-weight: 600; }
+  .tooltip {
+    position: absolute; pointer-events: none; background: var(--card); color: var(--ink);
+    border: 1px solid var(--grid); border-radius: 8px; padding: 7px 10px; font-size: 12.5px;
+    box-shadow: 0 2px 10px rgba(0,0,0,.12); opacity: 0; transition: opacity .1s; white-space: nowrap;
+    font-variant-numeric: tabular-nums; z-index: 3;
+  }
+  .tooltip .sw { display: inline-block; width: 9px; height: 9px; border-radius: 2px; margin-right: 5px; }
+  table { border-collapse: collapse; width: 100%; font-size: 13.5px; }
+  th, td { text-align: left; padding: 8px 12px; border-bottom: 1px solid var(--grid); }
+  th { font-size: 11px; letter-spacing: .08em; text-transform: uppercase; color: var(--ink-3); font-weight: 600; }
+  td.num { font-variant-numeric: tabular-nums; text-align: right; }
+  th.num { text-align: right; }
+  .chip { display: inline-block; background: var(--accent-soft); border-radius: 6px; padding: 1px 7px; margin: 1px 3px 1px 0; font-size: 12.5px; }
+  .note { background: var(--card); border-radius: 10px; padding: 14px 18px; color: var(--ink-2); font-size: 13.5px; }
+  .verdict { display: inline-block; border-radius: 6px; padding: 1px 8px; font-size: 11.5px; font-weight: 600; letter-spacing: .04em; text-transform: uppercase; }
+  .verdict.ok { background: var(--accent-soft); color: var(--pos); }
+  .verdict.no { background: rgba(227,73,72,.14); color: var(--neg); }
+  .score-note { font-size: 12.5px; color: var(--ink-3); margin-top: 8px; }
+  .note strong { color: var(--ink); }
+  .tablewrap { overflow-x: auto; }
+</style>
+<main>
+  <p class="eyebrow">Simulación diaria · __WINDOW__ · datos reales</p>
+  <h1>Ganancias de los últimos 12 meses</h1>
+  <p class="sub">El modelo actualizado — solo largos, régimen de riesgo, stop-loss 15%, re-selección
+  trimestral y tilt accionario (100% acciones cuando el S&amp;P 500 está sobre su media de 200 días) y tilt de P/E punto-en-tiempo (SEC EDGAR) —
+  recalculado cada día de mercado sobre $10,000 iniciales, comisiones incluidas, comparado contra el
+  modelo anterior y los principales índices.</p>
+
+  <div class="tiles">
+__TILES__
+  </div>
+
+  <section>
+    <h2>Curva de capital: modelo nuevo vs anterior vs índices</h2>
+    <p class="desc">Todas las series parten de los mismos $10,000. Las marcas verticales son las
+    re-selecciones trimestrales. __REGIME_LINE__</p>
+    <div class="legend">
+      <span style="--c: var(--line)">Modelo nuevo</span>
+      <span class="dashed" style="--c: var(--ink-3)">Modelo anterior</span>
+      <span style="--c: var(--s2)">S&amp;P 500</span>
+      <span style="--c: var(--s3)">Nasdaq</span>
+      <span style="--c: var(--s4)">Dow Jones</span>
+    </div>
+    <div class="chartwrap" id="eqwrap"><svg id="eq" viewBox="0 0 960 380" role="img" aria-label="Capital del modelo comparado con S&P 500, Nasdaq y Dow Jones, agosto 2025 a agosto 2026"></svg><div class="tooltip" id="eqtip"></div></div>
+  </section>
+
+  <section>
+    <h2>Ganancia del modelo nuevo por mes</h2>
+    <p class="desc">Cambio porcentual del capital total en cada mes calendario (el primer y el último mes son parciales).</p>
+    <div class="chartwrap" id="mowrap"><svg id="mo" viewBox="0 0 960 300" role="img" aria-label="Ganancia porcentual mensual del modelo"></svg><div class="tooltip" id="motip"></div></div>
+  </section>
+
+  <section>
+    <h2>Qué eligió el modelo en cada trimestre</h2>
+    <div class="tablewrap"><table>
+      <thead><tr><th>Desde</th><th>Régimen</th><th>Portafolio seleccionado</th><th class="num">Retorno del segmento</th></tr></thead>
+      <tbody id="segbody"></tbody>
+    </table></div>
+  </section>
+
+  <section>
+    <h2>Marcador de validación: qué sobrevivió a la evidencia</h2>
+    <p class="desc">Cada pieza del modelo se propuso como hipótesis y se corrió contra las 9 ventanas
+    históricas (2004-2026, incluidas 3 vírgenes y la crisis de 2008) con reglas de adopción escritas
+    antes de ver los números. Lo adoptado y lo rechazado, con su evidencia:</p>
+    <div class="tablewrap"><table>
+      <thead><tr><th>Hipótesis</th><th>Veredicto</th><th>Evidencia</th></tr></thead>
+      <tbody>
+        <tr><td>Solo largos (sin posiciones en corto)</td><td><span class="verdict ok">Adoptada</span></td><td>ganó 6/6 ventanas; los shorts perdían incluso en la crisis de 2008</td></tr>
+        <tr><td>Régimen de volatilidad (reducir tamaño en picos)</td><td><span class="verdict ok">Adoptada</span></td><td>drawdown máximo menor en 6/6 ventanas, retorno promedio +1.2 pp</td></tr>
+        <tr><td>Re-selección trimestral del portafolio</td><td><span class="verdict ok">Adoptada</span></td><td>7/9 vs sin rebalanceo; 6/9 vs buy &amp; hold — la primera config que vence al benchmark</td></tr>
+        <tr><td>Tilt accionario (100% acciones en mercado alcista)</td><td><span class="verdict ok">Adoptada</span></td><td>6/9 vs sin tilt (+17 pp promedio); 8/9 contra el S&amp;P 500 directo</td></tr>
+        <tr><td>Tilt de P/E punto-en-tiempo (SEC EDGAR, causal)</td><td><span class="verdict ok">Adoptada</span></td><td>gana o empata 8/9 ventanas, +2.02 pp promedio; las 2 ventanas pre-2009 dan 0.00 exacto (sin cobertura EDGAR) — prueba de integridad del pipeline</td></tr>
+        <tr><td>Rebalanceo mensual (más frecuente)</td><td><span class="verdict no">Rechazada</span></td><td>3/9 — a 30 días los indicadores no tienen información nueva y la rotación cobra 12x/año</td></tr>
+        <tr><td>Frontera de emergencia (cruce crudo de la media 200d)</td><td><span class="verdict no">Rechazada</span></td><td>2/9 — 91 falsas alarmas acumuladas se comieron de 13 a 79 pp por ventana</td></tr>
+        <tr><td>Frontera de emergencia v2 (banda 2% + 5 días)</td><td><span class="verdict no">Rechazada</span></td><td>2/9 — pocos cortes pero cada uno una apuesta de varianza enorme (+103 / −52 pp)</td></tr>
+        <tr><td>Universo global (Nikkei, FTSE, DAX, Hang Seng)</td><td><span class="verdict no">Rechazada</span></td><td>1/9 — el selector sí los elegía, pero EEUU rindió estructuralmente más en casi todas las décadas</td></tr>
+        <tr><td>Tope de concentración (máx 40% por símbolo)</td><td><span class="verdict no">Rechazada</span></td><td>1/9 en retorno (−13.9 pp promedio) — el efectivo apartado regaló rallies; la protección ya la dan más barata el stop-loss y el régimen de volatilidad</td></tr>
+      </tbody>
+    </table></div>
+    <p class="score-note">Marcador: 5 adoptadas, 5 rechazadas. Un proceso donde todo se adopta no está
+    validando nada — lo rechazado queda en el repositorio con su evidencia negativa al lado.</p>
+  </section>
+
+  <section>
+    <p class="note"><strong>Lectura honesta:</strong> __NOTE__</p>
+  </section>
+</main>
+<script>
+const DATA = __DATA__;
+const css = v => getComputedStyle(document.documentElement).getPropertyValue(v).trim();
+const fmt$ = v => '$' + v.toLocaleString('en-US', {maximumFractionDigits: 0});
+const day = d => Math.floor(new Date(d + 'T00:00:00Z').getTime() / 86400000);
+
+function drawEquity() {
+  const svg = document.getElementById('eq'); svg.innerHTML = '';
+  const W = 960, H = 380, m = {t: 16, r: 128, b: 28, l: 56};
+  const series = [
+    {label: 'Modelo nuevo', pts: DATA.daily, color: css('--line'), width: 2.4, area: true},
+    {label: 'Modelo anterior', pts: DATA.old_daily, color: css('--ink-3'), width: 1.6, dash: '5 4'},
+    {label: 'S&P 500', pts: DATA.indexes[0].pts, color: css('--s2'), width: 1.6},
+    {label: 'Nasdaq', pts: DATA.indexes[1].pts, color: css('--s3'), width: 1.6},
+    {label: 'Dow Jones', pts: DATA.indexes[2].pts, color: css('--s4'), width: 1.6},
+  ];
+  const t0 = day(DATA.daily[0].d), t1 = day(DATA.daily[DATA.daily.length - 1].d);
+  const allVals = series.flatMap(s => s.pts.map(p => p.e)).concat([DATA.initial]);
+  const ymin = Math.min(...allVals) * 0.99, ymax = Math.max(...allVals) * 1.005;
+  const x = d => m.l + (day(d) - t0) / (t1 - t0) * (W - m.l - m.r);
+  const y = v => m.t + (1 - (v - ymin) / (ymax - ymin)) * (H - m.t - m.b);
+  const NS = 'http://www.w3.org/2000/svg';
+  const el = (tag, attrs) => { const e = document.createElementNS(NS, tag); for (const k in attrs) e.setAttribute(k, attrs[k]); svg.appendChild(e); return e; };
+
+  for (let i = 0; i <= 4; i++) {
+    const v = ymin + (i / 4) * (ymax - ymin);
+    el('line', {x1: m.l, x2: W - m.r, y1: y(v), y2: y(v), class: 'gridline'});
+    const t = el('text', {x: m.l - 8, y: y(v) + 4, 'text-anchor': 'end', class: 'axis-label'});
+    t.textContent = fmt$(v);
+  }
+  let lastMonth = '';
+  DATA.daily.forEach((p, i) => {
+    const mo = p.d.slice(0, 7);
+    if (mo !== lastMonth) {
+      lastMonth = mo;
+      const mn = parseInt(mo.slice(5), 10);
+      if (mn % 2 === 0) { const t = el('text', {x: x(p.d), y: H - 8, 'text-anchor': 'middle', class: 'axis-label'}); t.textContent = mo.slice(5) + '/' + mo.slice(2, 4); }
+    }
+  });
+
+  el('line', {x1: m.l, x2: W - m.r, y1: y(DATA.initial), y2: y(DATA.initial), stroke: css('--ink-3'), 'stroke-width': 1, 'stroke-dasharray': '3 4'});
+  DATA.rebalances.forEach(rd => {
+    const xi = x(rd);
+    if (xi > m.l && xi < W - m.r) {
+      el('line', {x1: xi, x2: xi, y1: m.t, y2: H - m.b, stroke: css('--ink-3'), 'stroke-width': 1, 'stroke-dasharray': '2 4', opacity: .7});
+      if (xi < W - m.r - 95) { const t = el('text', {x: xi + 4, y: m.t + 11, class: 'axis-label'}); t.textContent = 'reselección'; }
+    }
+  });
+
+  series.forEach(s => {
+    const line = s.pts.map((p, i) => (i ? 'L' : 'M') + x(p.d).toFixed(1) + ' ' + y(p.e).toFixed(1)).join('');
+    if (s.area) el('path', {d: line + `L${x(s.pts[s.pts.length-1].d)} ${H-m.b}L${x(s.pts[0].d)} ${H-m.b}Z`, fill: css('--area'), stroke: 'none'});
+    const attrs = {d: line, fill: 'none', stroke: s.color, 'stroke-width': s.width, 'stroke-linejoin': 'round'};
+    if (s.dash) attrs['stroke-dasharray'] = s.dash;
+    el('path', attrs);
+  });
+
+  const labels = series.map(s => ({label: s.label, color: s.color, val: s.pts[s.pts.length-1].e, y: y(s.pts[s.pts.length-1].e)})).sort((a, b) => a.y - b.y);
+  for (let i = 1; i < labels.length; i++) if (labels[i].y - labels[i-1].y < 15) labels[i].y = labels[i-1].y + 15;
+  labels.forEach(L => {
+    el('circle', {cx: W - m.r, cy: y(L.val), r: 3.5, fill: L.color});
+    const t = el('text', {x: W - m.r + 8, y: L.y + 4, class: 'axis-label endlabel', fill: L.color});
+    t.textContent = L.label;
+  });
+
+  const tip = document.getElementById('eqtip');
+  const cross = el('line', {x1: 0, x2: 0, y1: m.t, y2: H - m.b, stroke: css('--ink-3'), 'stroke-width': 1, opacity: 0});
+  const lastAt = (pts, d) => { let v = pts[0].e; for (const p of pts) { if (p.d > d) break; v = p.e; } return v; };
+  svg.addEventListener('mousemove', ev => {
+    const r = svg.getBoundingClientRect();
+    const px = (ev.clientX - r.left) / r.width * W;
+    const i = Math.max(0, Math.min(DATA.daily.length - 1, Math.round((px - m.l) / (W - m.l - m.r) * (DATA.daily.length - 1))));
+    const d = DATA.daily[i].d;
+    cross.setAttribute('x1', x(d)); cross.setAttribute('x2', x(d)); cross.setAttribute('opacity', .5);
+    tip.style.opacity = 1;
+    const rows = series.map(s => {
+      const v = lastAt(s.pts, d);
+      const pct = ((v / DATA.initial - 1) * 100).toFixed(1);
+      return '<span class="sw" style="background:' + s.color + '"></span>' + s.label + ' ' + fmt$(v) + ' (' + (pct >= 0 ? '+' : '') + pct + '%)';
+    }).join('<br>');
+    tip.innerHTML = '<strong>' + d + '</strong><br>' + rows;
+    const lx = (x(d) / W) * r.width;
+    tip.style.left = Math.min(r.width - 230, Math.max(0, lx + 12)) + 'px';
+    tip.style.top = '30px';
+  });
+  svg.addEventListener('mouseleave', () => { tip.style.opacity = 0; cross.setAttribute('opacity', 0); });
+}
+
+function drawMonths() {
+  const svg = document.getElementById('mo'); svg.innerHTML = '';
+  const W = 960, H = 300, m = {t: 18, r: 16, b: 30, l: 48};
+  const ms = DATA.months;
+  const maxAbs = Math.max(...ms.map(x => Math.abs(x.pct))) * 1.15;
+  const NS = 'http://www.w3.org/2000/svg';
+  const el = (tag, attrs) => { const e = document.createElementNS(NS, tag); for (const k in attrs) e.setAttribute(k, attrs[k]); svg.appendChild(e); return e; };
+  const y = v => m.t + (1 - (v + maxAbs) / (2 * maxAbs)) * (H - m.t - m.b);
+  const bw = (W - m.l - m.r) / ms.length;
+
+  [-maxAbs/1.15, -maxAbs/2.3, 0, maxAbs/2.3, maxAbs/1.15].forEach(v => {
+    el('line', {x1: m.l, x2: W - m.r, y1: y(v), y2: y(v), class: 'gridline', opacity: v === 0 ? 0 : 1});
+    const t = el('text', {x: m.l - 8, y: y(v) + 4, 'text-anchor': 'end', class: 'axis-label'});
+    t.textContent = (v > 0 ? '+' : '') + v.toFixed(1) + '%';
+  });
+  el('line', {x1: m.l, x2: W - m.r, y1: y(0), y2: y(0), stroke: css('--ink-3'), 'stroke-width': 1.2});
+
+  const tip = document.getElementById('motip');
+  ms.forEach((mo, i) => {
+    const cx = m.l + i * bw + bw / 2;
+    const h = Math.abs(y(mo.pct) - y(0));
+    el('rect', {
+      x: cx - Math.min(26, bw * .34), width: Math.min(52, bw * .68),
+      y: mo.pct >= 0 ? y(mo.pct) : y(0),
+      height: Math.max(h, 1), rx: 4,
+      fill: mo.pct >= 0 ? css('--pos') : css('--neg'),
+    });
+    const t = el('text', {x: cx, y: H - 10, 'text-anchor': 'middle', class: 'axis-label'});
+    t.textContent = mo.m;
+    const vt = el('text', {x: cx, y: mo.pct >= 0 ? y(mo.pct) - 6 : y(mo.pct) + 14, 'text-anchor': 'middle', class: 'axis-label'});
+    if (Math.abs(mo.pct) >= 1.5) vt.textContent = (mo.pct > 0 ? '+' : '') + mo.pct.toFixed(1) + '%';
+    const hit = el('rect', {x: m.l + i * bw, width: bw, y: m.t, height: H - m.t - m.b, fill: 'transparent'});
+    hit.addEventListener('mousemove', () => {
+      const r = svg.getBoundingClientRect();
+      tip.style.opacity = 1;
+      tip.innerHTML = '<strong>' + mo.m + '</strong><br>' + (mo.pct >= 0 ? '+' : '') + mo.pct.toFixed(2) + '% del capital';
+      tip.style.left = Math.min(r.width - 150, (cx / W) * r.width + 10) + 'px';
+      tip.style.top = (y(Math.max(mo.pct, 0)) / H * r.height - 52) + 'px';
+    });
+    hit.addEventListener('mouseleave', () => tip.style.opacity = 0);
+  });
+}
+
+function fillSegments() {
+  const tb = document.getElementById('segbody');
+  const monthNames = {'01':'ene','02':'feb','03':'mar','04':'abr','05':'may','06':'jun','07':'jul','08':'ago','09':'sep','10':'oct','11':'nov','12':'dic'};
+  DATA.segments.forEach(s => {
+    const tr = document.createElement('tr');
+    const dd = s.date.split('-');
+    const chips = s.portfolio.map(p => '<span class="chip">' + p + '</span>').join('');
+    const regime = s.risk_on === true ? 'alcista → 100% acciones' : (s.risk_on === false ? 'defensivo' : '—');
+    tr.innerHTML = '<td>' + dd[2] + ' ' + monthNames[dd[1]] + ' ' + dd[0] + '</td><td>' + regime + '</td><td>' + (chips || '<em>efectivo</em>') + '</td>' +
+      '<td class="num">' + (s.ret >= 0 ? '+' : '') + s.ret.toFixed(2) + '%</td>';
+    tb.appendChild(tr);
+  });
+}
+
+function drawAll() { drawEquity(); drawMonths(); }
+drawAll(); fillSegments();
+new MutationObserver(drawAll).observe(document.documentElement, {attributes: true, attributeFilter: ['data-theme']});
+if (window.matchMedia) window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', drawAll);
+</script>
