@@ -1088,6 +1088,42 @@ cuando su única convicción fuerte resultó, en estas ventanas, una buena
 convicción. (Otra vez el patrón conocido: arregló espectacularmente
 2023-2026, +21 pp — y la vara es el conjunto, no el caso doloroso.)
 
+### Freno de drawdown (exposición 50% a −6% del pico): probado y rechazado
+
+La hipótesis nació del punto ciego documentado (correcciones rápidas con
+el mercado sobre su SMA200, como mar/jun 2026): en vez de tocar la
+*selección* — todo lo que ya se probó ahí perdió —, tocar el *tamaño*:
+si el capital cierra ≥6% debajo de su pico, todas las posiciones bajan a
+50%; se restaura al recuperar −3%. Overlay causal sobre la curva del
+modelo (la decisión del cierre t escala el retorno de t+1), ambos brazos
+sobre datos idénticos (`scripts/validate_drawdown_brake.py`, regla
+pre-registrada: adoptar solo si el drawdown mejora en ≥7/9 ventanas, con
+mejora promedio ≥2 pp y costo de retorno promedio ≤1 pp):
+
+| Periodo | Default | Freno | Delta retorno | Mejora drawdown |
+|---|---|---|---|---|
+| 2004-2007 | +76.0% | +76.1% | +0.1 pp | +9.7 pp |
+| 2007-2010 (crisis) | +38.6% | +28.0% | -10.6 pp | +6.5 pp |
+| 2010-2013 | +73.7% | +56.7% | -17.0 pp | +4.6 pp |
+| 2012-2015 | +101.5% | +51.6% | **-49.9 pp** | +3.0 pp |
+| 2014-2017 | +143.9% | +72.4% | **-71.5 pp** | +3.2 pp |
+| 2017-2020 (COVID) | +60.0% | +34.8% | -25.2 pp | +5.3 pp |
+| 2019-2022 | +127.8% | +69.9% | **-57.9 pp** | +5.1 pp |
+| 2021-2024 | +67.7% | +36.4% | -31.3 pp | +10.0 pp |
+| 2023-2026 | +36.4% | +49.0% | **+12.6 pp** | **+16.8 pp** |
+
+El freno cumplió su promesa de protección **en las 9 ventanas** (mejora
+promedio de drawdown +7.1 pp) — y aun así se rechaza, porque el costo fue
+**−27.9 pp de retorno promedio**, 28 veces el límite pre-registrado. La
+autopsia: en mercados alcistas el capital visita −6% desde su pico varias
+veces por año; cada visita corta la exposición a la mitad y la
+recuperación a media velocidad compone en contra durante meses. Es un
+seguro que protege de verdad — a prima ruinosa. (El patrón de siempre:
+brilló en la ventana dolorosa 2023-2026, +12.6 pp, y la vara es el
+conjunto.) Nota del proceso: el run original guardó la mejora de drawdown
+con el signo invertido; el JSON de evidencia lo documenta y corrige, y el
+veredicto no cambia — el criterio que reprueba es el costo de retorno.
+
 ### Registro de señales hacia adelante (`track`): la única evidencia sin retrovisor
 
 Todas las validaciones anteriores son backtests — calculadas después de los

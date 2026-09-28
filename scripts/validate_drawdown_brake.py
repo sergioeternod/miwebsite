@@ -124,7 +124,7 @@ if __name__ == "__main__":
             entry["grid"][key] = {
                 "return_pct": b_ret, "max_drawdown_pct": b_dd,
                 "return_delta_pp": round(b_ret - base_ret, 2),
-                "drawdown_improvement_pp": round(base_dd - b_dd, 2),  # positivo = drawdown más chico
+                "drawdown_improvement_pp": round(b_dd - base_dd, 2),  # positivo = drawdown más chico (b_dd menos negativo)
             }
             if (trigger, release, expo) == PRIMARY:
                 entry.update({
