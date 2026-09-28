@@ -1,24 +1,45 @@
-"""Portfolio simulation over real market data for the last 3 years, with
-daily ensemble recalculation (step=1), plus a daily P&L series ready for
-charting. Requires the environment's network policy to allow reaching
-Yahoo Finance (see app/data/providers.py for the fallback chain used)."""
+"""Portfolio simulation over real market data for (approximately) the last
+3 years, with daily ensemble recalculation (step=1) and a daily P&L series
+ready for charting.
+
+The window targets 3 years before "today", but the validated pipeline
+requires a valid BUY >=55% selection on the start date; when the target
+date has none (e.g. a correction trough), we probe forward week by week
+and start at the first date with a valid book, reporting that date
+honestly in the output. Requires network access to Yahoo Finance
+(see app/data/providers.py for the fallback chain)."""
 
 import json
 import time
 
+import pandas as pd
+
 from app.portfolio import simulate_portfolio_real
 
-START_DATE = "2023-09-28"  # 3 years before "today" (2026-09-28) in this run
-PERIOD = "6y"  # ~3y of warmup before START_DATE + the 3y simulated window
+TARGET_START = "2023-09-28"  # 3 years before "today" (2026-09-28) in this run
+MAX_PROBE_WEEKS = 12
+PERIOD = "5y"  # ~2y of warmup before the start + the ~3y simulated window
 
 if __name__ == "__main__":
     t0 = time.time()
-    report = simulate_portfolio_real(
-        start_date=START_DATE,
-        period=PERIOD,
-        portfolio_size=5,
-        step=1,
-    )
+    report = None
+    start = pd.Timestamp(TARGET_START)
+    for _ in range(MAX_PROBE_WEEKS):
+        try:
+            report = simulate_portfolio_real(
+                start_date=str(start.date()),
+                period=PERIOD,
+                portfolio_size=5,
+                step=1,
+            )
+            break
+        except ValueError as exc:
+            if "No se encontraron símbolos" not in str(exc):
+                raise
+            print(f"sin selección válida el {start.date()}, probando la semana siguiente")
+            start += pd.Timedelta(days=7)
+    if report is None:
+        raise SystemExit(f"Sin selección válida en {MAX_PROBE_WEEKS} semanas desde {TARGET_START}.")
     elapsed = time.time() - t0
 
     with open("scripts/sim_3y_real_result.json", "w", encoding="utf-8") as f:
@@ -30,10 +51,11 @@ if __name__ == "__main__":
     print(f"total_pnl_amount={report['total_pnl_amount']} total_return_pct={report['total_return_pct']}")
     print("portfolio:", report["portfolio"])
     print("hindsight_summary:", report["hindsight_summary"])
-    for p in report["per_symbol"]:
-        print(
-            f"  {p['symbol']}: final_equity={p['final_equity']} pnl={p['pnl_amount']} "
-            f"num_trades={p['metrics']['num_trades']} win_rate={p['metrics']['win_rate_pct']}"
-        )
+    for seg in report["segments"]:
+        port = seg.get("portfolio")
+        syms = [p["symbol"] for p in port] if port and isinstance(port[0], dict) else port
+        print(f"  {seg['start_date']}: capital_start={seg['capital_start']} portfolio={syms or 'efectivo'}")
+    bench = report["benchmark_buy_hold"]
+    print(f"benchmark_buy_hold: return={bench['total_return_pct']}% | vs_benchmark_pct_points={report['vs_benchmark_pct_points']}")
     if report["errors"]:
         print("errors:", report["errors"])
