@@ -53,6 +53,8 @@ def log_scan(report: dict, path: str = DEFAULT_LOG_PATH) -> dict:
                 "action": e["overall_action"],
                 "confidence_pct": e["confidence_pct"],
                 "last_close": e.get("last_close"),
+                # atribución para los desgloses forward; los registros viejos no la traen
+                "strategy": (e.get("best_historical_strategy") or {}).get("strategy"),
             }
             for e in entries
         ],
