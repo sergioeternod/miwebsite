@@ -16,7 +16,7 @@ import pandas as pd
 
 from app.portfolio import simulate_portfolio_real
 
-TARGET_START = "2023-09-28"  # 3 years before "today" (2026-09-28) in this run
+TARGET_START = str((pd.Timestamp.today().normalize() - pd.DateOffset(years=3)).date())  # 3 años antes de hoy
 MAX_PROBE_WEEKS = 12
 PERIOD = "5y"  # ~2y of warmup before the start + the ~3y simulated window
 
