@@ -8,8 +8,8 @@ import time
 
 from app.portfolio import simulate_portfolio_real
 
-START_DATE = "2023-07-30"  # 3 years before "today" (2026-07-30) in this run
-PERIOD = "5y"  # ~2y of warmup before START_DATE + the 3y simulated window
+START_DATE = "2023-09-28"  # 3 years before "today" (2026-09-28) in this run
+PERIOD = "6y"  # ~3y of warmup before START_DATE + the 3y simulated window
 
 if __name__ == "__main__":
     t0 = time.time()

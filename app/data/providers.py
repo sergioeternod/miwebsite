@@ -93,17 +93,25 @@ def get_ohlcv(
 
     Returns a DataFrame indexed by date with columns:
     Open, High, Low, Close, Volume
+
+    The index is always tz-naive: yfinance modernos devuelven fechas
+    tz-aware y el resto del código compara contra fechas naive.
     """
+    df = None
     try:
-        return _get_ohlcv_yahoo(symbol, period, interval, start, end)
+        df = _get_ohlcv_yahoo(symbol, period, interval, start, end)
     except Exception as yahoo_exc:
         try:
-            return stooq_client.get_ohlcv(symbol, period=period, interval=interval, start=start, end=end)
+            df = stooq_client.get_ohlcv(symbol, period=period, interval=interval, start=start, end=end)
         except Exception as stooq_exc:
             raise DataUnavailableError(
                 f"No se pudo obtener data para '{symbol}': Yahoo Finance falló ({yahoo_exc}) "
                 f"y el respaldo Stooq también falló ({stooq_exc})."
             ) from stooq_exc
+    if getattr(df.index, "tz", None) is not None:
+        df = df.copy()
+        df.index = df.index.tz_localize(None)
+    return df
 
 
 def filter_date_range(
