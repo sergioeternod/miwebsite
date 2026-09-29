@@ -16,3 +16,4 @@ scripts/run_24m_monthly_result.json
 scripts/*.log
 scripts/*.out
 scripts/*.err
+scripts/*.done
