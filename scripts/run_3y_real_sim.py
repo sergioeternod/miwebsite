@@ -16,7 +16,14 @@ import pandas as pd
 
 from app.portfolio import simulate_portfolio_real
 
-TARGET_START = str((pd.Timestamp.today().normalize() - pd.DateOffset(years=3)).date())  # 3 años antes de hoy
+# Ancla el inicio a la malla trimestral (5 feb/may/ago/nov): el último nodo
+# que quede a >=3 años de hoy. Una ventana rodante pura mueve las fronteras
+# de re-selección día con día y el retorno salta decenas de puntos por un
+# solo día de corrimiento (p.ej. +47% -> +167% al capturar o no un trimestre
+# 100% TSLA); anclada, la serie publicada es estable entre días.
+_hoy = pd.Timestamp.today().normalize()
+_grid = [pd.Timestamp(year=y, month=m, day=5) for y in range(_hoy.year - 4, _hoy.year + 1) for m in (2, 5, 8, 11)]
+TARGET_START = str(max(d for d in _grid if d <= _hoy - pd.DateOffset(years=3)).date())
 MAX_PROBE_WEEKS = 12
 PERIOD = "5y"  # ~2y of warmup before the start + the ~3y simulated window
 
