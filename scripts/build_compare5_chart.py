@@ -6,6 +6,9 @@ computes SMA200 regime bands and a buy-and-hold reference, and injects
 everything into scripts/templates/compare5_template.html. Output goes to
 the session scratchpad, ready to publish as the existing artifact."""
 
+import os
+os.environ.setdefault("MIWEB_PRICE_VINTAGE", "1")  # historial anclado a la añada (app/data/vintage.py)
+
 import json
 import sys
 from datetime import date

@@ -15,6 +15,8 @@ what each provider said.
 
 from __future__ import annotations
 
+import os
+
 import pandas as pd
 import yfinance as yf
 
@@ -96,7 +98,26 @@ def get_ohlcv(
 
     The index is always tz-naive: yfinance modernos devuelven fechas
     tz-aware y el resto del código compara contra fechas naive.
+
+    Con MIWEB_PRICE_VINTAGE=1 (solo barras diarias pedidas por periodo),
+    el historial sale de la añada congelada en data/price_vintage y la red
+    solo aporta las barras nuevas — ver app/data/vintage.py. Lo usan los
+    builders de gráficas publicadas; el escaneo y el dashboard no.
     """
+    if os.environ.get("MIWEB_PRICE_VINTAGE") == "1" and interval == "1d" and start is None and end is None:
+        from app.data.vintage import pinned_ohlcv
+
+        return pinned_ohlcv(symbol, period, _fetch_live)
+    return _fetch_live(symbol, period, interval, start, end)
+
+
+def _fetch_live(
+    symbol: str,
+    period: str | None,
+    interval: str,
+    start: str | None,
+    end: str | None,
+) -> pd.DataFrame:
     df = None
     try:
         df = _get_ohlcv_yahoo(symbol, period, interval, start, end)

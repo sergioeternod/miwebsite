@@ -9,6 +9,9 @@ and start at the first date with a valid book, reporting that date
 honestly in the output. Requires network access to Yahoo Finance
 (see app/data/providers.py for the fallback chain)."""
 
+import os
+os.environ.setdefault("MIWEB_PRICE_VINTAGE", "1")  # historial anclado a la añada (app/data/vintage.py)
+
 import json
 import time
 

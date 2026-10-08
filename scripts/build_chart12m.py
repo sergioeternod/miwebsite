@@ -7,6 +7,9 @@ selection), fetches the three index benchmarks, and injects everything
 into scripts/templates/chart12m_template.html. Output goes to the session
 scratchpad, ready to publish as the existing artifact."""
 
+import os
+os.environ.setdefault("MIWEB_PRICE_VINTAGE", "1")  # historial anclado a la añada (app/data/vintage.py)
+
 import json
 import sys
 from datetime import date
