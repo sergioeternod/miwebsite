@@ -82,20 +82,18 @@
   <h1>Ganancias de los últimos 12 meses</h1>
   <p class="sub">El modelo actualizado — solo largos, régimen de riesgo, stop-loss 15%, re-selección
   trimestral y tilt accionario (100% acciones cuando el S&amp;P 500 está sobre su media de 200 días) y tilt de P/E punto-en-tiempo (SEC EDGAR) —
-  recalculado cada día de mercado sobre $10,000 iniciales, comisiones incluidas, comparado contra el
-  modelo anterior y los principales índices.</p>
+  recalculado cada día de mercado sobre $10,000 iniciales, comisiones incluidas, comparado contra los principales índices.</p>
 
   <div class="tiles">
 __TILES__
   </div>
 
   <section>
-    <h2>Curva de capital: modelo nuevo vs anterior vs índices</h2>
+    <h2>Curva de capital: modelo vs índices</h2>
     <p class="desc">Todas las series parten de los mismos $10,000. Las marcas verticales son las
     re-selecciones trimestrales. __REGIME_LINE__</p>
     <div class="legend">
-      <span style="--c: var(--line)">Modelo nuevo</span>
-      <span class="dashed" style="--c: var(--ink-3)">Modelo anterior</span>
+      <span style="--c: var(--line)">Modelo</span>
       <span style="--c: var(--s2)">S&amp;P 500</span>
       <span style="--c: var(--s3)">Nasdaq</span>
       <span style="--c: var(--s4)">Dow Jones</span>
@@ -155,8 +153,7 @@ function drawEquity() {
   const svg = document.getElementById('eq'); svg.innerHTML = '';
   const W = 960, H = 380, m = {t: 16, r: 128, b: 28, l: 56};
   const series = [
-    {label: 'Modelo nuevo', pts: DATA.daily, color: css('--line'), width: 2.4, area: true},
-    {label: 'Modelo anterior', pts: DATA.old_daily, color: css('--ink-3'), width: 1.6, dash: '5 4'},
+    {label: 'Modelo', pts: DATA.daily, color: css('--line'), width: 2.4, area: true},
     {label: 'S&P 500', pts: DATA.indexes[0].pts, color: css('--s2'), width: 1.6},
     {label: 'Nasdaq', pts: DATA.indexes[1].pts, color: css('--s3'), width: 1.6},
     {label: 'Dow Jones', pts: DATA.indexes[2].pts, color: css('--s4'), width: 1.6},

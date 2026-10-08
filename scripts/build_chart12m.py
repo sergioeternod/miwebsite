@@ -70,12 +70,8 @@ if __name__ == "__main__":
     grid = [pd.Timestamp(year=y, month=m, day=5) for y in range(hoy.year - 2, hoy.year + 1) for m in (2, 5, 8, 11)]
     target = max(d for d in grid if d <= hoy - pd.DateOffset(years=1))
     new = run_arm(target)
-    # el "modelo anterior" es el previo a ambos tilts; si no se apagan
-    # explícito, la línea de comparación deja de ser el modelo que existió
-    old = run_arm(target, equity_regime_tilt=False, fundamental_pe_tilt=False)
 
     daily = curve_points(new)
-    old_daily = curve_points(old)
     equity = [p["e"] for p in daily]
     initial = new["initial_capital"]
 
@@ -110,9 +106,8 @@ if __name__ == "__main__":
         indexes.append({"label": label, "ret": round((pts[-1]["e"] / initial - 1) * 100, 2), "pts": pts})
 
     data = {
-        "daily": daily, "old_daily": old_daily, "months": months, "initial": initial,
+        "daily": daily, "months": months, "initial": initial,
         "ret_new": new["total_return_pct"], "dd_new": max_drawdown_pct(equity),
-        "ret_old": old["total_return_pct"], "dd_old": max_drawdown_pct([p["e"] for p in old_daily]),
         "rebalances": [s["date"] for s in segments[1:]],
         "segments": segments, "indexes": indexes,
     }
@@ -121,8 +116,7 @@ if __name__ == "__main__":
         return f"{'+' if v >= 0 else '−'}{abs(v):.2f}%"
 
     tiles = "\n".join([
-        f"    <div class='tile'><div class='k'>Modelo nuevo</div><div class='v {'up' if data['ret_new'] >= 0 else 'down'}'>{pct(data['ret_new'])}</div><div class='n'>drawdown máx {data['dd_new']:.1f}%</div></div>",
-        f"    <div class='tile'><div class='k'>Modelo anterior</div><div class='v'>{pct(data['ret_old'])}</div><div class='n'>sin tilts accionario ni de P/E</div></div>",
+        f"    <div class='tile'><div class='k'>Modelo</div><div class='v {'up' if data['ret_new'] >= 0 else 'down'}'>{pct(data['ret_new'])}</div><div class='n'>drawdown máx {data['dd_new']:.1f}%</div></div>",
     ] + [
         f"    <div class='tile'><div class='k'>{x['label'].replace('&', '&amp;')}</div><div class='v'>{pct(x['ret'])}</div><div class='n'>drawdown máx {max_drawdown_pct([p['e'] for p in x['pts']]):.1f}%</div></div>"
         for x in indexes
@@ -139,8 +133,7 @@ if __name__ == "__main__":
     idx_rets = [x["ret"] for x in indexes]
     nasdaq_dd = max_drawdown_pct([p["e"] for p in indexes[1]["pts"]])
     note = (
-        f"el modelo cierra el periodo en {pct(data['ret_new'])} contra {pct(min(idx_rets))} a {pct(max(idx_rets))} de los índices "
-        f"(el modelo anterior, sin los tilts accionario ni de P/E, habría hecho {pct(data['ret_old'])}). "
+        f"el modelo cierra el periodo en {pct(data['ret_new'])} contra {pct(min(idx_rets))} a {pct(max(idx_rets))} de los índices. "
         f"El régimen de riesgo recorta exposición en picos de volatilidad y las rotaciones pagan comisión — ese freno mantiene el "
         f"drawdown en {data['dd_new']:.1f}% contra {nasdaq_dd:.1f}% del Nasdaq. En las 9 ventanas históricas esta configuración le ganó "
         f"al S&amp;P en 8; su punto ciego conocido son las correcciones rápidas con el mercado aún sobre su media de 200 días. "
@@ -158,6 +151,6 @@ if __name__ == "__main__":
     with open(out_path, "w", encoding="utf-8") as f:
         f.write(html)
     print("wrote", out_path, len(html), "bytes")
-    print(f"nuevo {pct(data['ret_new'])} (dd {data['dd_new']}%) | anterior {pct(data['ret_old'])} | " +
+    print(f"nuevo {pct(data['ret_new'])} (dd {data['dd_new']}%) | " +
           " | ".join(f"{x['label']} {pct(x['ret'])}" for x in indexes))
     print("meses:", [(m["m"], m["pct"]) for m in months])
