@@ -77,14 +77,18 @@ def pinned_ohlcv(symbol: str, period: str, fetch) -> pd.DataFrame:
         bumped = True
     else:
         fresh = fetch(symbol, TAIL_PERIOD, "1d", None, None)
-        common = cached.index.intersection(fresh.index)
+        # La última barra guardada es provisional: pudo escribirse a media
+        # sesión (el ciclo corre intradía y cripto/FX nunca "cierran"), así
+        # que se excluye del chequeo de empalme y se reemplaza con la fresca.
+        base = cached[cached.index < cached.index.max()]
+        common = base.index.intersection(fresh.index)
         if len(common) == 0:
             # sin traslape utilizable (hueco largo): añada nueva deliberada
             merged = _full_fetch(symbol, fetch)
             bumped = True
         else:
-            diff_pct = ((fresh.loc[common, "Close"] - cached.loc[common, "Close"]).abs()
-                        / cached.loc[common, "Close"] * 100)
+            diff_pct = ((fresh.loc[common, "Close"] - base.loc[common, "Close"]).abs()
+                        / base.loc[common, "Close"] * 100)
             if float(diff_pct.max()) > SEAM_TOL_PCT:
                 print(
                     f"[vintage] {symbol}: revisión de datos detectada en el empalme "
@@ -94,8 +98,8 @@ def pinned_ohlcv(symbol: str, period: str, fetch) -> pd.DataFrame:
                 merged = _full_fetch(symbol, fetch)
                 bumped = True
             else:
-                new_rows = fresh[fresh.index > cached.index.max()]
-                merged = pd.concat([cached, new_rows]) if len(new_rows) else cached
+                new_rows = fresh[fresh.index > base.index.max()]
+                merged = pd.concat([base, new_rows]) if len(new_rows) else cached
 
     merged = merged[~merged.index.duplicated(keep="last")].sort_index()
     _save(path, merged)
