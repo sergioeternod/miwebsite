@@ -42,6 +42,12 @@ def _period_to_days(period: str) -> int:
     return int(m.group(1)) * _PERIOD_DAYS[m.group(2)]
 
 
+def _grid_floor(ts: pd.Timestamp) -> pd.Timestamp:
+    """Último nodo de la malla trimestral (5 feb/may/ago/nov) <= ts."""
+    nodes = [pd.Timestamp(year=y, month=m, day=5) for y in (ts.year - 1, ts.year) for m in (2, 5, 8, 11)]
+    return max(d for d in nodes if d <= ts)
+
+
 def _cache_path(symbol: str) -> Path:
     return VINTAGE_DIR / (re.sub(r"[^A-Za-z0-9.\-]", "_", symbol) + ".csv")
 
@@ -103,7 +109,15 @@ def pinned_ohlcv(symbol: str, period: str, fetch) -> pd.DataFrame:
 
     merged = merged[~merged.index.duplicated(keep="last")].sort_index()
     _save(path, merged)
-    cutoff = pd.Timestamp.today().normalize() - pd.DateOffset(days=_period_to_days(period))
+    # El borde izquierdo también se ancla a la malla trimestral (5 feb/may/
+    # ago/nov): un corte "hoy - periodo" avanza un día cada día, y soltar una
+    # sola barra de warmup bastó para voltear una selección al filo del
+    # cutoff (2026-10-11: el pick del 5-feb cambió de AMZN a AMZN+^DJI sin
+    # ninguna revisión de datos, -20 pp en la gráfica de 12 meses). Anclado,
+    # las corridas dentro de un trimestre son idénticas; el borde se mueve
+    # solo al cruzar un nodo, un salto trimestral atribuible.
+    raw_cutoff = pd.Timestamp.today().normalize() - pd.DateOffset(days=_period_to_days(period))
+    cutoff = _grid_floor(raw_cutoff)
     out = merged[merged.index >= cutoff].copy()
     out.attrs["vintage_bumped"] = bumped
     return out
