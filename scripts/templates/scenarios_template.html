@@ -1,0 +1,222 @@
+<title>Mejor y peor escenario</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<style>
+  /* Layout: una columna; ventaja vs S&P por ventana, drawdowns, y las dos anatomías (mejor y peor trienio). */
+  :root {
+    --surface: #fcfcfb; --card: #f4f3f0; --ink: #0b0b0b; --ink-2: #52514e; --ink-3: #898781;
+    --grid: #e1e0d9; --axis: #c3c2b7; --border: rgba(11,11,11,.10);
+    --pos: #006300; --neg: #d03b3b;
+    --s1: #2a78d6; --s2: #eb6834;
+    --div-pos: #2a78d6; --div-neg: #e34948; --hl: rgba(227,73,72,.10); --hlbest: rgba(42,120,214,.08);
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      color-scheme: dark;
+      --surface: #1a1a19; --card: #232322; --ink: #f0efec; --ink-2: #c3c2b7; --ink-3: #898781;
+      --grid: #2c2c2a; --axis: #383835; --border: rgba(255,255,255,.10);
+      --pos: #0ca30c; --neg: #e66767;
+      --s1: #3987e5; --s2: #d95926;
+      --div-pos: #3987e5; --div-neg: #e66767; --hl: rgba(230,103,103,.12); --hlbest: rgba(57,135,229,.10);
+    }
+  }
+  :root[data-theme="dark"] {
+    color-scheme: dark;
+    --surface: #1a1a19; --card: #232322; --ink: #f0efec; --ink-2: #c3c2b7; --ink-3: #898781;
+    --grid: #2c2c2a; --axis: #383835; --border: rgba(255,255,255,.10);
+    --pos: #0ca30c; --neg: #e66767;
+    --s1: #3987e5; --s2: #d95926;
+    --div-pos: #3987e5; --div-neg: #e66767; --hl: rgba(230,103,103,.12); --hlbest: rgba(57,135,229,.10);
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--surface); color: var(--ink);
+    font: 15px/1.55 system-ui, -apple-system, "Segoe UI", sans-serif;
+    padding-left: max(16px, env(safe-area-inset-left, 0px));
+    padding-right: max(16px, env(safe-area-inset-right, 0px));
+    padding-block: 0;
+  }
+  main { max-width: 880px; margin: 0 auto; padding-block: 36px 56px; }
+  .eyebrow { font-size: 12px; letter-spacing: .12em; text-transform: uppercase; color: var(--ink-3); margin: 0 0 6px; }
+  h1 { font-size: clamp(23px, 4vw, 31px); line-height: 1.15; margin: 0 0 6px; text-wrap: balance; }
+  .sub { color: var(--ink-2); margin: 0 0 26px; max-width: 66ch; }
+  .tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 12px; margin-bottom: 36px; }
+  .tile { background: var(--card); border-radius: 10px; padding: 13px 15px; }
+  .tile .k { font-size: 11px; letter-spacing: .09em; text-transform: uppercase; color: var(--ink-3); margin-bottom: 3px; }
+  .tile .v { font-size: 22px; font-weight: 700; }
+  .tile .n { font-size: 12px; color: var(--ink-2); margin-top: 2px; }
+  .v.up { color: var(--pos); } .v.down { color: var(--neg); }
+  section { margin-bottom: 44px; }
+  h2 { font-size: 17px; margin: 0 0 4px; }
+  .desc { color: var(--ink-2); font-size: 13.5px; margin: 0 0 14px; max-width: 72ch; }
+  svg { display: block; width: 100%; height: auto; }
+  .gridline { stroke: var(--grid); stroke-width: 1; }
+  .axisline { stroke: var(--axis); stroke-width: 1.2; }
+  .tick { fill: var(--ink-3); font-size: 11px; font-variant-numeric: tabular-nums; }
+  .lbl { fill: var(--ink-2); font-size: 12px; }
+  .vall { fill: var(--ink); font-size: 12px; font-variant-numeric: tabular-nums; font-weight: 700; }
+  .legend { display: flex; flex-wrap: wrap; gap: 14px; font-size: 12.5px; color: var(--ink-2); margin-bottom: 10px; }
+  .legend span { display: inline-flex; align-items: center; gap: 6px; }
+  .legend i { width: 11px; height: 11px; border-radius: 2px; background: var(--c); }
+  .note { background: var(--card); border-radius: 10px; padding: 13px 17px; color: var(--ink-2); font-size: 13.5px; }
+  .note strong { color: var(--ink); }
+  .recent-band { fill: var(--hl); }
+</style>
+<main>
+  <p class="eyebrow">9 ventanas de 3 años · 2004 → 2026 · simulación con datos reales · actualizado __UPDATED__</p>
+  <h1>Mejor y peor escenario del modelo</h1>
+  <p class="sub">El modelo se validó corriéndolo en 9 trienios históricos; gana al S&amp;P 500 en 8.
+  Esta página muestra los dos extremos: la mejor ventana y la peor, con lo que costó cada una en el camino.</p>
+
+  <div class="tiles" id="tiles"></div>
+
+  <section>
+    <h2>Ventaja del modelo sobre el S&amp;P 500, ventana por ventana</h2>
+    <p class="desc">Puntos porcentuales de diferencia entre el retorno del modelo y el del índice en cada
+    trienio. La franja sombreada marca las ventanas que tocan los últimos 5 años: ahí conviven una de las
+    mejores ventanas y la única derrota.</p>
+    <svg id="divchart" viewBox="0 0 880 330" role="img" aria-label="Diferencia en puntos porcentuales entre modelo y S&P 500 en nueve ventanas"></svg>
+  </section>
+
+  <section>
+    <h2>Lo que duele en el camino: caída máxima desde el pico</h2>
+    <p class="desc">Aunque una ventana termine en positivo, el capital cae a medio camino. Esta es la peor
+    caída (drawdown máximo) del modelo en cada trienio. Las dos más hondas son justo las dos ventanas más
+    recientes — el mercado 2021-2026, con sus rallies concentrados y correcciones rápidas, es el terreno
+    más hostil que el modelo ha pisado.</p>
+    <svg id="ddchart" viewBox="0 0 880 330" role="img" aria-label="Drawdown máximo del modelo en cada ventana"></svg>
+  </section>
+
+  <section>
+    <h2 id="best-title"></h2>
+    <p class="desc">__DESC_BEST__</p>
+    <div class="legend">
+      <span style="--c:var(--s1)"><i></i>Modelo</span>
+      <span style="--c:var(--s2)"><i></i>S&amp;P 500</span>
+    </div>
+    <svg id="bestduel" viewBox="0 0 880 210" role="img" aria-label="Retorno del modelo y del S&P 500 en la mejor ventana"></svg>
+  </section>
+
+  <section>
+    <h2 id="worst-title"></h2>
+    <p class="desc">__DESC_WORST__</p>
+    <div class="legend">
+      <span style="--c:var(--s1)"><i></i>Modelo</span>
+      <span style="--c:var(--s2)"><i></i>S&amp;P 500</span>
+    </div>
+    <svg id="worstduel" viewBox="0 0 880 210" role="img" aria-label="Retorno del modelo y del S&P 500 en la peor ventana"></svg>
+  </section>
+
+  <section>
+    <p class="note"><strong>Lectura honesta:</strong> __NOTE__</p>
+  </section>
+</main>
+<script>
+const DATA = __DATA__;
+</script>
+<script>
+(function () {
+  const W9 = DATA.windows;
+  const NS = "http://www.w3.org/2000/svg";
+  const el = (n, a, txt) => {
+    const e = document.createElementNS(NS, n);
+    for (const k in a) e.setAttribute(k, a[k]);
+    if (txt !== undefined) e.textContent = txt;
+    return e;
+  };
+  const fmt = (v, dec) => (v >= 0 ? "+" : "−") + Math.abs(v).toFixed(dec === undefined ? 1 : dec);
+
+  // tiles
+  document.getElementById("tiles").innerHTML = [
+    `<div class="tile"><div class="k">Marcador vs S&amp;P</div><div class="v">${DATA.wins} de ${W9.length}</div><div class="n">ventanas ganadas al índice</div></div>`,
+    `<div class="tile"><div class="k">Mejor ventana (${DATA.best.p})</div><div class="v up">${fmt(DATA.best.pp)} pp</div><div class="n">modelo ${fmt(DATA.best.model)}% vs S&amp;P ${fmt(DATA.best.sp)}%</div></div>`,
+    `<div class="tile"><div class="k">Peor ventana (${DATA.worst.p})</div><div class="v down">${fmt(DATA.worst.pp)} pp</div><div class="n">modelo ${fmt(DATA.worst.model)}% vs S&amp;P ${fmt(DATA.worst.sp)}%</div></div>`,
+    `<div class="tile"><div class="k">Peor drawdown</div><div class="v down">${DATA.worst_dd.toFixed(1)}%</div><div class="n">caída máxima desde el pico (${DATA.worst_dd_p})</div></div>`,
+    `<div class="tile"><div class="k">Peor cierre absoluto</div><div class="v${DATA.worst_close >= 0 ? " up" : " down"}">${fmt(DATA.worst_close)}%</div><div class="n">${DATA.worst_close >= 0 ? "ninguna ventana terminó en pérdida" : "ventana " + DATA.worst_close_p}</div></div>`,
+  ].join("");
+  document.getElementById("best-title").textContent = "Anatomía del mejor escenario: " + DATA.best.p;
+  document.getElementById("worst-title").textContent = "Anatomía de la derrota: " + DATA.worst.p;
+
+  function band(svg, T, rowH) {
+    const firstRecent = W9.findIndex(w => w.recent);
+    const n = W9.filter(w => w.recent).length;
+    svg.appendChild(el("rect", { x: 0, y: T + firstRecent * rowH, width: 880, height: rowH * n, class: "recent-band", rx: 8 }));
+    return firstRecent;
+  }
+
+  // 1: barras divergentes vs S&P
+  (function () {
+    const svg = document.getElementById("divchart");
+    const W = 880, H = 330, L = 92, R = 70, T = 14, B = 26;
+    const rowH = (H - T - B) / W9.length;
+    const vals = W9.map(w => w.pp);
+    const min = Math.floor((Math.min(...vals, 0) - 15) / 20) * 20, max = Math.ceil((Math.max(...vals) + 10) / 20) * 20;
+    const x = v => L + (v - min) / (max - min) * (W - L - R);
+    const fr = band(svg, T, rowH);
+    svg.appendChild(el("text", { x: W - 8, y: T + fr * rowH + 16, "text-anchor": "end", class: "tick" }, "últimos 5 años"));
+    for (let v = min + 20; v < max; v += 40) {
+      if (v === 0) continue;
+      svg.appendChild(el("line", { x1: x(v), x2: x(v), y1: T, y2: H - B, class: "gridline" }));
+      svg.appendChild(el("text", { x: x(v), y: H - B + 16, "text-anchor": "middle", class: "tick" }, fmt(v, 0) + " pp"));
+    }
+    svg.appendChild(el("line", { x1: x(0), x2: x(0), y1: T, y2: H - B, class: "axisline" }));
+    svg.appendChild(el("text", { x: x(0), y: H - B + 16, "text-anchor": "middle", class: "tick" }, "0 pp"));
+    W9.forEach((w, i) => {
+      const yC = T + i * rowH + rowH / 2;
+      const neg = w.pp < 0;
+      const bx = neg ? x(w.pp) : x(0), bw = Math.abs(x(w.pp) - x(0));
+      svg.appendChild(el("rect", { x: bx, y: yC - 8, width: bw, height: 16, rx: 4, fill: neg ? "var(--div-neg)" : "var(--div-pos)" }));
+      svg.appendChild(el("text", { x: L - 8, y: yC + 4, "text-anchor": "end", class: "lbl", "font-weight": (neg || w.pp === DATA.best.pp) ? 700 : 400 }, w.p));
+      svg.appendChild(el("text", { x: neg ? x(0) + 6 : bx + bw + 6, y: yC + 4, "text-anchor": "start", class: "vall" }, fmt(w.pp) + (w.tag ? " · " + w.tag : "")));
+    });
+  })();
+
+  // 2: drawdown máximo por ventana
+  (function () {
+    const svg = document.getElementById("ddchart");
+    const W = 880, H = 330, L = 92, R = 30, T = 14, B = 26;
+    const rowH = (H - T - B) / W9.length;
+    const worst = Math.min(...W9.map(w => w.dd));
+    const min = Math.floor((worst - 4) / 10) * 10;
+    const x = v => L + (v - min) / (0 - min) * (W - L - R);
+    band(svg, T, rowH);
+    for (let v = min + (-min % 10 || 10); v <= 0; v += 10) {
+      svg.appendChild(el("line", { x1: x(v), x2: x(v), y1: T, y2: H - B, class: v === 0 ? "axisline" : "gridline" }));
+      svg.appendChild(el("text", { x: x(v), y: H - B + 16, "text-anchor": "middle", class: "tick" }, v + "%"));
+    }
+    W9.forEach((w, i) => {
+      const yC = T + i * rowH + rowH / 2;
+      const bx = x(w.dd), bw = x(0) - x(w.dd);
+      svg.appendChild(el("rect", { x: bx, y: yC - 8, width: bw, height: 16, rx: 4,
+        fill: w.dd === worst ? "var(--div-neg)" : "var(--s1)", opacity: w.dd === worst ? 1 : 0.55 }));
+      svg.appendChild(el("text", { x: L - 8, y: yC + 4, "text-anchor": "end", class: "lbl", "font-weight": w.dd === worst ? 700 : 400 }, w.p));
+      svg.appendChild(el("text", { x: bx - 6, y: yC + 4, "text-anchor": "end", class: "vall" }, w.dd.toFixed(1) + "%"));
+    });
+  })();
+
+  // 3 y 4: duelos modelo vs S&P
+  function duel(svgId, win, subModel, subSp) {
+    const svg = document.getElementById(svgId);
+    const W = 880, H = 210, L = 92, R = 60, T = 14, B = 26;
+    const max = Math.ceil((Math.max(win.model, win.sp) + 12) / 20) * 20;
+    const x = v => L + v / max * (W - L - R);
+    for (let v = 0; v <= max; v += max > 100 ? 40 : 20) {
+      svg.appendChild(el("line", { x1: x(v), x2: x(v), y1: T, y2: H - B, class: v === 0 ? "axisline" : "gridline" }));
+      svg.appendChild(el("text", { x: x(v), y: H - B + 16, "text-anchor": "middle", class: "tick" }, "+" + v + "%"));
+    }
+    const bars = [
+      { label: "Modelo", v: win.model, color: "var(--s1)", sub: subModel },
+      { label: "S&P 500", v: win.sp, color: "var(--s2)", sub: subSp },
+    ];
+    const rowH = (H - T - B) / bars.length;
+    bars.forEach((b, i) => {
+      const yC = T + i * rowH + rowH / 2;
+      svg.appendChild(el("rect", { x: x(0), y: yC - 14, width: x(b.v) - x(0), height: 28, rx: 4, fill: b.color }));
+      svg.appendChild(el("text", { x: L - 8, y: yC + 4, "text-anchor": "end", class: "lbl" }, b.label));
+      svg.appendChild(el("text", { x: x(b.v) + 8, y: yC - 1, class: "vall" }, fmt(b.v) + "%"));
+      svg.appendChild(el("text", { x: x(b.v) + 8, y: yC + 13, class: "tick" }, b.sub));
+    });
+  }
+  duel("bestduel", DATA.best, "rotación trimestral", "comprar y mantener");
+  duel("worstduel", DATA.worst, "rotación trimestral", "comprar y mantener");
+})();
+</script>
