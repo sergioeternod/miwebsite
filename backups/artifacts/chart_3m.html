@@ -1,0 +1,256 @@
+<title>Ganancia últimos 3 meses</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<style>
+  /* Layout: una columna de lectura, selector de unidad, tiles y dos paneles de línea. */
+  :root {
+    --surface: #fcfcfb; --card: #f4f3f0; --ink: #0b0b0b; --ink-2: #52514e; --ink-3: #898781;
+    --grid: #e1e0d9; --axis: #c3c2b7; --border: rgba(11,11,11,.10);
+    --pos: #006300; --neg: #d03b3b;
+    --s1: #2a78d6; --s2: #eb6834; --s3: #1baf7a; --s4: #eda100; --sbook: #6250d6;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      color-scheme: dark;
+      --surface: #1a1a19; --card: #232322; --ink: #f0efec; --ink-2: #c3c2b7; --ink-3: #898781;
+      --grid: #2c2c2a; --axis: #383835; --border: rgba(255,255,255,.10);
+      --pos: #0ca30c; --neg: #e66767;
+      --s1: #3987e5; --s2: #d95926; --s3: #199e70; --s4: #c98500; --sbook: #9085e9;
+    }
+  }
+  :root[data-theme="dark"] {
+    color-scheme: dark;
+    --surface: #1a1a19; --card: #232322; --ink: #f0efec; --ink-2: #c3c2b7; --ink-3: #898781;
+    --grid: #2c2c2a; --axis: #383835; --border: rgba(255,255,255,.10);
+    --pos: #0ca30c; --neg: #e66767;
+    --s1: #3987e5; --s2: #d95926; --s3: #199e70; --s4: #c98500; --sbook: #9085e9;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--surface); color: var(--ink);
+    font: 15px/1.55 system-ui, -apple-system, "Segoe UI", sans-serif;
+    padding-left: max(16px, env(safe-area-inset-left, 0px));
+    padding-right: max(16px, env(safe-area-inset-right, 0px));
+    padding-block: 0;
+  }
+  main { max-width: 920px; margin: 0 auto; padding-block: 36px 56px; }
+  .eyebrow { font-size: 12px; letter-spacing: .12em; text-transform: uppercase; color: var(--ink-3); margin: 0 0 6px; }
+  h1 { font-size: clamp(23px, 4vw, 31px); line-height: 1.15; margin: 0 0 6px; text-wrap: balance; }
+  .sub { color: var(--ink-2); margin: 0 0 18px; max-width: 66ch; }
+  .seg { display: inline-flex; background: var(--card); border: 1px solid var(--border); border-radius: 9px; padding: 3px; gap: 2px; }
+  .seg button {
+    appearance: none; border: 0; background: transparent; color: var(--ink-2); cursor: pointer;
+    font: 600 13px/1 system-ui, -apple-system, "Segoe UI", sans-serif;
+    padding: 7px 13px; border-radius: 7px;
+  }
+  .seg button[aria-pressed="true"] { background: var(--surface); color: var(--ink); box-shadow: 0 1px 3px rgba(0,0,0,.14); }
+  .seg button:focus-visible { outline: 2px solid var(--s1); outline-offset: 1px; }
+  .selnote { font-size: 12.5px; color: var(--ink-3); margin: 8px 0 20px; }
+  .tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 12px; margin-bottom: 34px; }
+  .tile { background: var(--card); border-radius: 10px; padding: 13px 15px; }
+  .tile .k { font-size: 11px; letter-spacing: .09em; text-transform: uppercase; color: var(--ink-3); margin-bottom: 3px; display: flex; align-items: center; gap: 6px; }
+  .tile .k .sw { width: 9px; height: 9px; border-radius: 2px; flex: none; }
+  .tile .v { font-size: 22px; font-weight: 700; }
+  .tile .n { font-size: 12px; color: var(--ink-2); margin-top: 2px; }
+  .v.up { color: var(--pos); } .v.down { color: var(--neg); }
+  section { margin-bottom: 40px; }
+  h2 { font-size: 17px; margin: 0 0 4px; }
+  .desc { color: var(--ink-2); font-size: 13.5px; margin: 0 0 12px; max-width: 72ch; }
+  .legend { display: flex; flex-wrap: wrap; gap: 14px; font-size: 12.5px; color: var(--ink-2); margin-bottom: 8px; }
+  .legend span { display: inline-flex; align-items: center; gap: 6px; }
+  .legend i { width: 14px; height: 3px; border-radius: 2px; background: var(--c); }
+  .chartwrap { position: relative; }
+  svg { display: block; width: 100%; height: auto; }
+  .gridline { stroke: var(--grid); stroke-width: 1; }
+  .axisline { stroke: var(--axis); stroke-width: 1; }
+  .tick { fill: var(--ink-3); font-size: 11px; font-variant-numeric: tabular-nums; }
+  .endlbl { font-size: 11.5px; fill: var(--ink-2); font-weight: 600; }
+  .tooltip {
+    position: absolute; pointer-events: none; background: var(--card); color: var(--ink);
+    border: 1px solid var(--border); border-radius: 8px; padding: 7px 10px; font-size: 12.5px;
+    box-shadow: 0 2px 10px rgba(0,0,0,.14); opacity: 0; white-space: nowrap;
+    font-variant-numeric: tabular-nums; z-index: 3;
+  }
+  .tooltip .sw { display: inline-block; width: 9px; height: 9px; border-radius: 2px; margin-right: 5px; }
+  .tooltip .row { display: flex; justify-content: space-between; gap: 14px; }
+  .note { background: var(--card); border-radius: 10px; padding: 13px 17px; color: var(--ink-2); font-size: 13.5px; }
+  .note strong { color: var(--ink); }
+</style>
+<main>
+  <p class="eyebrow">22 jul 2026 → 22 oct 2026 · datos reales</p>
+  <h1>Ganancia de los últimos 3 meses</h1>
+  <p class="sub">El modelo simulado y los tres índices parten de los mismos $10,000 al inicio de la
+  ventana; abajo, el libro real en papel desde su arranque. Precios de cierre diarios, historial anclado a la
+  añada. El selector cambia cómo se expresa la ganancia en los totales y etiquetas.</p>
+
+  <div class="seg" role="group" aria-label="Unidad de la ganancia">
+    <button type="button" id="mode-periodo" aria-pressed="true">Del periodo</button>
+    <button type="button" id="mode-mensual" aria-pressed="false">Mensual</button>
+    <button type="button" id="mode-anual" aria-pressed="false">Anualizada</button>
+  </div>
+  <p class="selnote" id="selnote"></p>
+
+  <div class="tiles" id="tiles"></div>
+
+  <section>
+    <h2>Modelo vs índices</h2>
+    <p class="desc">Valor de $10,000 invertidos el 22 jul 2026. Por mes el modelo hizo: jul +2.59%, ago +2.32%, sep −2.02%, oct +2.15% (el último mes es parcial).</p>
+    <div class="legend" id="leg1"></div>
+    <div class="chartwrap" id="wrap1"><svg id="ch1" viewBox="0 0 920 360" role="img" aria-label="Capital del modelo comparado con S&P 500, Nasdaq y Dow Jones en los últimos 3 meses"></svg><div class="tooltip" id="tip1"></div></div>
+  </section>
+
+  <section>
+    <h2>Libro real vs S&amp;P 500</h2>
+    <p class="desc">El libro en papel arrancó el 17 ago 2026 con $10,000 a precios de entrada, por eso el primer cierre puede aparecer bajo la base. Hoy va en −0.57% contra −1.36% del S&amp;P desde la misma fecha; MSFT (+5.73%, 18% del libro) es el motor y AMZN (−3.70%, 15%) el lastre.</p>
+    <div class="legend" id="leg2"></div>
+    <div class="chartwrap" id="wrap2"><svg id="ch2" viewBox="0 0 920 320" role="img" aria-label="Valor del libro real comparado con el S&P 500 desde su arranque"></svg><div class="tooltip" id="tip2"></div></div>
+  </section>
+
+  <section>
+    <p class="note"><strong>Lectura honesta:</strong> tres meses es una ventana corta y el modelo es una simulación histórica — el libro real, que sí sigue reglas en vivo, va en −0.57% desde el 17 ago 2026. En la ventana el modelo hizo +5.07% contra +2.44% del S&amp;P. No es asesoría financiera ni garantiza resultados futuros.</p>
+  </section>
+</main>
+<script>
+const DATA = {"panel1":[{"label":"Modelo","pts":[{"d":"2026-07-22","v":10000.0},{"d":"2026-07-23","v":9867.53},{"d":"2026-07-24","v":9870.35},{"d":"2026-07-27","v":9910.45},{"d":"2026-07-28","v":9958.46},{"d":"2026-07-29","v":9810.57},{"d":"2026-07-30","v":10170.98},{"d":"2026-07-31","v":10259.4},{"d":"2026-08-03","v":10437.28},{"d":"2026-08-04","v":10599.45},{"d":"2026-08-05","v":10595.2},{"d":"2026-08-06","v":10589.73},{"d":"2026-08-07","v":10628.99},{"d":"2026-08-10","v":10652.33},{"d":"2026-08-11","v":10602.15},{"d":"2026-08-12","v":10560.76},{"d":"2026-08-13","v":10591.42},{"d":"2026-08-14","v":10565.65},{"d":"2026-08-17","v":10484.12},{"d":"2026-08-18","v":10449.96},{"d":"2026-08-19","v":10495.53},{"d":"2026-08-20","v":10392.85},{"d":"2026-08-21","v":10440.78},{"d":"2026-08-24","v":10464.35},{"d":"2026-08-25","v":10492.92},{"d":"2026-08-26","v":10494.92},{"d":"2026-08-27","v":10534.82},{"d":"2026-08-28","v":10597.67},{"d":"2026-08-31","v":10497.58},{"d":"2026-09-01","v":10392.21},{"d":"2026-09-02","v":10411.48},{"d":"2026-09-03","v":10564.83},{"d":"2026-09-04","v":10490.05},{"d":"2026-09-08","v":10395.59},{"d":"2026-09-09","v":10316.03},{"d":"2026-09-10","v":10275.07},{"d":"2026-09-11","v":10379.3},{"d":"2026-09-14","v":10372.76},{"d":"2026-09-15","v":10272.93},{"d":"2026-09-16","v":10173.52},{"d":"2026-09-17","v":10292.16},{"d":"2026-09-18","v":10289.96},{"d":"2026-09-21","v":10422.92},{"d":"2026-09-22","v":10375.77},{"d":"2026-09-23","v":10303.36},{"d":"2026-09-24","v":10281.51},{"d":"2026-09-25","v":10405.3},{"d":"2026-09-28","v":10307.71},{"d":"2026-09-29","v":10295.07},{"d":"2026-09-30","v":10286.03},{"d":"2026-10-01","v":10288.16},{"d":"2026-10-02","v":10367.47},{"d":"2026-10-05","v":10425.42},{"d":"2026-10-06","v":10506.91},{"d":"2026-10-07","v":10498.76},{"d":"2026-10-08","v":10432.31},{"d":"2026-10-09","v":10571.28},{"d":"2026-10-12","v":10590.19},{"d":"2026-10-13","v":10580.56},{"d":"2026-10-14","v":10475.23},{"d":"2026-10-15","v":10551.13},{"d":"2026-10-16","v":10433.88},{"d":"2026-10-19","v":10534.6},{"d":"2026-10-20","v":10575.1},{"d":"2026-10-21","v":10621.99},{"d":"2026-10-22","v":10507.33}]},{"label":"S&P 500","pts":[{"d":"2026-07-22","v":10000.0},{"d":"2026-07-23","v":9879.11},{"d":"2026-07-24","v":9884.01},{"d":"2026-07-27","v":9885.62},{"d":"2026-07-28","v":9906.41},{"d":"2026-07-29","v":9756.22},{"d":"2026-07-30","v":9918.22},{"d":"2026-07-31","v":9987.68},{"d":"2026-08-03","v":10135.41},{"d":"2026-08-04","v":10316.79},{"d":"2026-08-05","v":10299.5},{"d":"2026-08-06","v":10281.38},{"d":"2026-08-07","v":10344.96},{"d":"2026-08-10","v":10338.92},{"d":"2026-08-11","v":10305.7},{"d":"2026-08-12","v":10332.77},{"d":"2026-08-13","v":10400.1},{"d":"2026-08-14","v":10382.46},{"d":"2026-08-17","v":10328.18},{"d":"2026-08-18","v":10257.1},{"d":"2026-08-19","v":10278.73},{"d":"2026-08-20","v":10189.63},{"d":"2026-08-21","v":10233.92},{"d":"2026-08-24","v":10205.23},{"d":"2026-08-25","v":10237.8},{"d":"2026-08-26","v":10235.69},{"d":"2026-08-27","v":10309.42},{"d":"2026-08-28","v":10283.77},{"d":"2026-08-31","v":10249.61},{"d":"2026-09-01","v":10176.7},{"d":"2026-09-02","v":10223.55},{"d":"2026-09-03","v":10331.71},{"d":"2026-09-04","v":10292.89},{"d":"2026-09-08","v":10232.78},{"d":"2026-09-09","v":10183.22},{"d":"2026-09-10","v":10123.67},{"d":"2026-09-11","v":10210.72},{"d":"2026-09-14","v":10161.38},{"d":"2026-09-15","v":10115.71},{"d":"2026-09-16","v":10070.48},{"d":"2026-09-17","v":10185.1},{"d":"2026-09-18","v":10202.08},{"d":"2026-09-21","v":10354.37},{"d":"2026-09-22","v":10354.29},{"d":"2026-09-23","v":10276.14},{"d":"2026-09-24","v":10273.6},{"d":"2026-09-25","v":10325.98},{"d":"2026-09-28","v":10246.34},{"d":"2026-09-29","v":10229.2},{"d":"2026-09-30","v":10203.47},{"d":"2026-10-01","v":10223.35},{"d":"2026-10-02","v":10298.39},{"d":"2026-10-05","v":10366.71},{"d":"2026-10-06","v":10426.69},{"d":"2026-10-07","v":10403.8},{"d":"2026-10-08","v":10380.59},{"d":"2026-10-09","v":10416.83},{"d":"2026-10-12","v":10411.1},{"d":"2026-10-13","v":10408.71},{"d":"2026-10-14","v":10293.35},{"d":"2026-10-15","v":10326.85},{"d":"2026-10-16","v":10214.0},{"d":"2026-10-19","v":10255.73},{"d":"2026-10-20","v":10284.86},{"d":"2026-10-21","v":10344.33},{"d":"2026-10-22","v":10243.59}]},{"label":"Nasdaq","pts":[{"d":"2026-07-22","v":10000.0},{"d":"2026-07-23","v":9784.67},{"d":"2026-07-24","v":9721.66},{"d":"2026-07-27","v":9704.64},{"d":"2026-07-28","v":9683.16},{"d":"2026-07-29","v":9514.24},{"d":"2026-07-30","v":9778.63},{"d":"2026-07-31","v":9876.59},{"d":"2026-08-03","v":10086.8},{"d":"2026-08-04","v":10348.02},{"d":"2026-08-05","v":10261.78},{"d":"2026-08-06","v":10255.91},{"d":"2026-08-07","v":10389.14},{"d":"2026-08-10","v":10355.94},{"d":"2026-08-11","v":10293.7},{"d":"2026-08-12","v":10349.38},{"d":"2026-08-13","v":10432.89},{"d":"2026-08-14","v":10404.13},{"d":"2026-08-17","v":10371.34},{"d":"2026-08-18","v":10233.09},{"d":"2026-08-19","v":10249.19},{"d":"2026-08-20","v":10146.46},{"d":"2026-08-21","v":10190.55},{"d":"2026-08-24","v":10112.61},{"d":"2026-08-25","v":10179.21},{"d":"2026-08-26","v":10170.99},{"d":"2026-08-27","v":10331.03},{"d":"2026-08-28","v":10276.95},{"d":"2026-08-31","v":10264.68},{"d":"2026-09-01","v":10159.15},{"d":"2026-09-02","v":10205.1},{"d":"2026-09-03","v":10347.66},{"d":"2026-09-04","v":10317.65},{"d":"2026-09-08","v":10284.35},{"d":"2026-09-09","v":10218.93},{"d":"2026-09-10","v":10152.13},{"d":"2026-09-11","v":10249.95},{"d":"2026-09-14","v":10192.87},{"d":"2026-09-15","v":10113.14},{"d":"2026-09-16","v":10111.92},{"d":"2026-09-17","v":10283.13},{"d":"2026-09-18","v":10323.71},{"d":"2026-09-21","v":10557.08},{"d":"2026-09-22","v":10604.65},{"d":"2026-09-23","v":10484.66},{"d":"2026-09-24","v":10485.96},{"d":"2026-09-25","v":10536.3},{"d":"2026-09-28","v":10439.64},{"d":"2026-09-29","v":10430.75},{"d":"2026-09-30","v":10455.47},{"d":"2026-10-01","v":10459.58},{"d":"2026-10-02","v":10583.85},{"d":"2026-10-05","v":10695.35},{"d":"2026-10-06","v":10743.02},{"d":"2026-10-07","v":10719.24},{"d":"2026-10-08","v":10590.83},{"d":"2026-10-09","v":10652.09},{"d":"2026-10-12","v":10605.27},{"d":"2026-10-13","v":10589.11},{"d":"2026-10-14","v":10390.01},{"d":"2026-10-15","v":10397.86},{"d":"2026-10-16","v":10174.82},{"d":"2026-10-19","v":10288.03},{"d":"2026-10-20","v":10285.67},{"d":"2026-10-21","v":10393.9},{"d":"2026-10-22","v":10212.34}]},{"label":"Dow Jones","pts":[{"d":"2026-07-22","v":10000.0},{"d":"2026-07-23","v":9902.92},{"d":"2026-07-24","v":9948.04},{"d":"2026-07-27","v":9998.37},{"d":"2026-07-28","v":10101.25},{"d":"2026-07-29","v":9880.42},{"d":"2026-07-30","v":9997.98},{"d":"2026-07-31","v":10051.02},{"d":"2026-08-03","v":10183.81},{"d":"2026-08-04","v":10357.59},{"d":"2026-08-05","v":10408.0},{"d":"2026-08-06","v":10319.14},{"d":"2026-08-07","v":10348.22},{"d":"2026-08-10","v":10336.54},{"d":"2026-08-11","v":10301.28},{"d":"2026-08-12","v":10297.15},{"d":"2026-08-13","v":10310.51},{"d":"2026-08-14","v":10289.9},{"d":"2026-08-17","v":10237.69},{"d":"2026-08-18","v":10215.4},{"d":"2026-08-19","v":10238.31},{"d":"2026-08-20","v":10103.53},{"d":"2026-08-21","v":10202.69},{"d":"2026-08-24","v":10229.53},{"d":"2026-08-25","v":10260.22},{"d":"2026-08-26","v":10238.47},{"d":"2026-08-27","v":10258.69},{"d":"2026-08-28","v":10256.88},{"d":"2026-08-31","v":10185.25},{"d":"2026-09-01","v":10104.99},{"d":"2026-09-02","v":10161.51},{"d":"2026-09-03","v":10281.03},{"d":"2026-09-04","v":10228.97},{"d":"2026-09-08","v":10108.68},{"d":"2026-09-09","v":10031.04},{"d":"2026-09-10","v":9970.42},{"d":"2026-09-11","v":10067.93},{"d":"2026-09-14","v":10038.8},{"d":"2026-09-15","v":9975.97},{"d":"2026-09-16","v":9855.09},{"d":"2026-09-17","v":9915.63},{"d":"2026-09-18","v":9897.36},{"d":"2026-09-21","v":9967.49},{"d":"2026-09-22","v":9932.03},{"d":"2026-09-23","v":9864.6},{"d":"2026-09-24","v":9833.66},{"d":"2026-09-25","v":9925.32},{"d":"2026-09-28","v":9858.85},{"d":"2026-09-29","v":9833.64},{"d":"2026-09-30","v":9748.64},{"d":"2026-10-01","v":9752.57},{"d":"2026-10-02","v":9800.52},{"d":"2026-10-05","v":9817.94},{"d":"2026-10-06","v":9866.46},{"d":"2026-10-07","v":9801.08},{"d":"2026-10-08","v":9786.97},{"d":"2026-10-09","v":9892.06},{"d":"2026-10-12","v":9929.52},{"d":"2026-10-13","v":9894.96},{"d":"2026-10-14","v":9885.65},{"d":"2026-10-15","v":9992.17},{"d":"2026-10-16","v":9958.6},{"d":"2026-10-19","v":9951.63},{"d":"2026-10-20","v":10053.1},{"d":"2026-10-21","v":10122.08},{"d":"2026-10-22","v":10102.72}]}],"panel2":[{"label":"Libro real","pts":[{"d":"2026-08-17","v":9899.04},{"d":"2026-08-18","v":9863.91},{"d":"2026-08-19","v":9924.35},{"d":"2026-08-20","v":9810.46},{"d":"2026-08-21","v":9857.14},{"d":"2026-08-24","v":9892.01},{"d":"2026-08-25","v":9922.99},{"d":"2026-08-26","v":9927.76},{"d":"2026-08-27","v":9966.62},{"d":"2026-08-28","v":10046.97},{"d":"2026-08-31","v":9951.39},{"d":"2026-09-01","v":9851.14},{"d":"2026-09-02","v":9869.53},{"d":"2026-09-03","v":10014.69},{"d":"2026-09-04","v":9944.34},{"d":"2026-09-08","v":9854.99},{"d":"2026-09-09","v":9779.04},{"d":"2026-09-10","v":9740.21},{"d":"2026-09-11","v":9839.5},{"d":"2026-09-14","v":9832.33},{"d":"2026-09-15","v":9737.35},{"d":"2026-09-16","v":9643.21},{"d":"2026-09-17","v":9756.02},{"d":"2026-09-18","v":9754.56},{"d":"2026-09-21","v":9880.8},{"d":"2026-09-22","v":9835.73},{"d":"2026-09-23","v":9766.14},{"d":"2026-09-24","v":9745.61},{"d":"2026-09-25","v":9861.95},{"d":"2026-09-28","v":9769.34},{"d":"2026-09-29","v":9757.49},{"d":"2026-09-30","v":9749.25},{"d":"2026-10-01","v":9751.1},{"d":"2026-10-02","v":9826.49},{"d":"2026-10-05","v":9880.94},{"d":"2026-10-06","v":9958.71},{"d":"2026-10-07","v":9951.66},{"d":"2026-10-08","v":9880.6},{"d":"2026-10-09","v":10020.46},{"d":"2026-10-12","v":10037.55},{"d":"2026-10-13","v":10028.19},{"d":"2026-10-14","v":9928.18},{"d":"2026-10-15","v":9999.82},{"d":"2026-10-16","v":9888.52},{"d":"2026-10-19","v":9985.84},{"d":"2026-10-20","v":10024.23},{"d":"2026-10-21","v":10068.45},{"d":"2026-10-22","v":9943.0}]},{"label":"S&P 500","pts":[{"d":"2026-08-17","v":9947.73},{"d":"2026-08-18","v":9879.27},{"d":"2026-08-19","v":9900.1},{"d":"2026-08-20","v":9814.28},{"d":"2026-08-21","v":9856.93},{"d":"2026-08-24","v":9829.3},{"d":"2026-08-25","v":9860.67},{"d":"2026-08-26","v":9858.64},{"d":"2026-08-27","v":9929.65},{"d":"2026-08-28","v":9904.95},{"d":"2026-08-31","v":9872.05},{"d":"2026-09-01","v":9801.83},{"d":"2026-09-02","v":9846.95},{"d":"2026-09-03","v":9951.13},{"d":"2026-09-04","v":9913.74},{"d":"2026-09-08","v":9855.84},{"d":"2026-09-09","v":9808.11},{"d":"2026-09-10","v":9750.75},{"d":"2026-09-11","v":9834.6},{"d":"2026-09-14","v":9787.07},{"d":"2026-09-15","v":9743.08},{"d":"2026-09-16","v":9699.52},{"d":"2026-09-17","v":9809.91},{"d":"2026-09-18","v":9826.27},{"d":"2026-09-21","v":9972.95},{"d":"2026-09-22","v":9972.87},{"d":"2026-09-23","v":9897.6},{"d":"2026-09-24","v":9895.15},{"d":"2026-09-25","v":9945.61},{"d":"2026-09-28","v":9868.9},{"d":"2026-09-29","v":9852.4},{"d":"2026-09-30","v":9827.61},{"d":"2026-10-01","v":9846.76},{"d":"2026-10-02","v":9919.03},{"d":"2026-10-05","v":9984.83},{"d":"2026-10-06","v":10042.6},{"d":"2026-10-07","v":10020.56},{"d":"2026-10-08","v":9973.8},{"d":"2026-10-09","v":10033.11},{"d":"2026-10-12","v":10027.59},{"d":"2026-10-13","v":10025.29},{"d":"2026-10-14","v":9914.18},{"d":"2026-10-15","v":9946.44},{"d":"2026-10-16","v":9837.76},{"d":"2026-10-19","v":9877.94},{"d":"2026-10-20","v":9906.0},{"d":"2026-10-21","v":9963.28},{"d":"2026-10-22","v":9864.05}]}],"window":["2026-07-22","2026-10-22"]};
+</script>
+<script>
+(function () {
+  const MESES = ["ene","feb","mar","abr","may","jun","jul","ago","sep","oct","nov","dic"];
+  const COLOR = { "Modelo": "--s1", "S&P 500": "--s2", "Nasdaq": "--s3", "Dow Jones": "--s4", "Libro real": "--sbook" };
+  const fmtD = iso => { const [y,m,d] = iso.split("-"); return `${+d} ${MESES[+m-1]}`; };
+  const fmt$ = v => "$" + Math.round(v).toLocaleString("en-US");
+  const fmtPct = v => (v >= 0 ? "+" : "−") + Math.abs(v).toFixed(2) + "%";
+  const days = (a, b) => (new Date(b) - new Date(a)) / 864e5;
+
+  let MODE = "periodo";
+  const NOTAS = {
+    periodo: "Acumulado del periodo que muestra cada serie.",
+    mensual: "Tasa mensual compuesta equivalente al acumulado de cada serie.",
+    anual: "Tasa anual compuesta equivalente — extrapolación aritmética del periodo, no una promesa.",
+  };
+  function rate(v, nDays) {
+    const f = v / 10000;
+    if (MODE === "periodo") return (f - 1) * 100;
+    const exp = MODE === "mensual" ? 30.44 / nDays : 365.25 / nDays;
+    return (Math.pow(f, exp) - 1) * 100;
+  }
+
+  function seriesDays(s) { return days(s.pts[0].d, s.pts[s.pts.length - 1].d); }
+  function endRate(s) { return rate(s.pts[s.pts.length - 1].v, seriesDays(s)); }
+
+  function renderTiles() {
+    const el = document.getElementById("tiles");
+    const libro = DATA.panel2[0], spxLibro = DATA.panel2[1];
+    const items = DATA.panel1.map(s => {
+      const r = endRate(s);
+      const n = s.label === "Modelo"
+        ? fmt$(s.pts[s.pts.length - 1].v) + " al " + fmtD(s.pts[s.pts.length - 1].d)
+        : "misma ventana";
+      return { label: s.label, r, n };
+    });
+    items.push({
+      label: "Libro real", r: endRate(libro),
+      n: "desde " + fmtD(libro.pts[0].d) + " · S&P " + fmtPct(endRate(spxLibro)),
+    });
+    el.innerHTML = items.map(it => {
+      const cls = it.r >= 0.005 ? " up" : (it.r <= -0.005 ? " down" : "");
+      return `<div class="tile"><div class="k"><span class="sw" style="background:var(${COLOR[it.label]})"></span>${it.label.replace("&", "&amp;")}</div>` +
+        `<div class="v${cls}">${fmtPct(it.r)}</div><div class="n">${it.n}</div></div>`;
+    }).join("");
+  }
+
+  function draw(svgId, tipId, legId, series) {
+    const svg = document.getElementById(svgId);
+    const tip = document.getElementById(tipId);
+    const wrap = svg.parentElement;
+    svg.replaceChildren();
+    tip.style.opacity = 0;
+    const W = svg.viewBox.baseVal.width, H = svg.viewBox.baseVal.height;
+    const M = { t: 16, r: 148, b: 28, l: 54 };
+    const dates = series[0].pts.map(p => p.d);
+    const all = series.flatMap(s => s.pts.map(p => p.v));
+    let lo = Math.min(...all), hi = Math.max(...all);
+    const pad = (hi - lo) * 0.07; lo -= pad; hi += pad;
+    const x = i => M.l + i / (dates.length - 1) * (W - M.l - M.r);
+    const y = v => M.t + (hi - v) / (hi - lo) * (H - M.t - M.b);
+    const NS = "http://www.w3.org/2000/svg";
+    const el = (n, a) => { const e = document.createElementNS(NS, n); for (const k in a) e.setAttribute(k, a[k]); return e; };
+
+    document.getElementById(legId).innerHTML = series.map(s =>
+      `<span style="--c:var(${COLOR[s.label]})"><i></i>${s.label.replace("&", "&amp;")}</span>`).join("");
+
+    const step = Math.max(100, Math.round((hi - lo) / 4 / 100) * 100);
+    for (let v = Math.ceil(lo / step) * step; v <= hi; v += step) {
+      svg.appendChild(el("line", { x1: M.l, x2: W - M.r, y1: y(v), y2: y(v), class: "gridline" }));
+      const t = el("text", { x: M.l - 8, y: y(v) + 4, "text-anchor": "end", class: "tick" });
+      t.textContent = fmt$(v); svg.appendChild(t);
+    }
+    svg.appendChild(el("line", { x1: M.l, x2: W - M.r, y1: H - M.b, y2: H - M.b, class: "axisline" }));
+    const seen = {};
+    dates.forEach((d, i) => {
+      const mo = d.slice(0, 7);
+      if (i === 0 || !seen[mo]) {
+        seen[mo] = true;
+        const t = el("text", { x: x(i), y: H - M.b + 18, "text-anchor": i === 0 ? "start" : "middle", class: "tick" });
+        t.textContent = i === 0 ? fmtD(d) : `1 ${MESES[+d.slice(5, 7) - 1]}`;
+        svg.appendChild(t);
+      }
+    });
+
+    series.forEach(s => {
+      const dPath = s.pts.map((p, i) => (i ? "L" : "M") + x(dates.indexOf(p.d)).toFixed(1) + " " + y(p.v).toFixed(1)).join("");
+      svg.appendChild(el("path", { d: dPath, fill: "none", stroke: `var(${COLOR[s.label]})`, "stroke-width": 2, "stroke-linejoin": "round" }));
+    });
+
+    const ends = series.map((s, si) => ({ si, yy: y(s.pts[s.pts.length - 1].v) })).sort((a, b) => a.yy - b.yy);
+    for (let i = 1; i < ends.length; i++) if (ends[i].yy - ends[i - 1].yy < 15) ends[i].yy = ends[i - 1].yy + 15;
+    ends.forEach(e => {
+      const s = series[e.si];
+      svg.appendChild(el("circle", { cx: W - M.r + 6, cy: e.yy, r: 3.5, fill: `var(${COLOR[s.label]})` }));
+      const t = el("text", { x: W - M.r + 14, y: e.yy + 4, class: "endlbl" });
+      t.textContent = `${s.label} ${fmtPct(endRate(s))}`;
+      svg.appendChild(t);
+    });
+
+    const cross = el("line", { y1: M.t, y2: H - M.b, class: "axisline", opacity: 0 });
+    svg.appendChild(cross);
+    const dots = series.map(s => { const c = el("circle", { r: 4, fill: `var(${COLOR[s.label]})`, opacity: 0 }); svg.appendChild(c); return c; });
+    wrap.onpointermove = ev => {
+      const r = svg.getBoundingClientRect();
+      const px = (ev.clientX - r.left) / r.width * W;
+      let i = Math.round((px - M.l) / (W - M.l - M.r) * (dates.length - 1));
+      i = Math.max(0, Math.min(dates.length - 1, i));
+      cross.setAttribute("x1", x(i)); cross.setAttribute("x2", x(i)); cross.setAttribute("opacity", 1);
+      let html = `<div style="color:var(--ink-3);margin-bottom:3px">${fmtD(dates[i])} ${dates[i].slice(0, 4)} · acumulado</div>`;
+      series.forEach((s, si) => {
+        const p = s.pts[i]; if (!p) return;
+        dots[si].setAttribute("cx", x(i)); dots[si].setAttribute("cy", y(p.v)); dots[si].setAttribute("opacity", 1);
+        html += `<div class="row"><span><span class="sw" style="background:var(${COLOR[s.label]})"></span>${s.label.replace("&", "&amp;")}</span><span>${fmt$(p.v)} · ${fmtPct((p.v / 10000 - 1) * 100)}</span></div>`;
+      });
+      tip.innerHTML = html;
+      tip.style.opacity = 1;
+      const left = (ev.clientX - r.left) + 14, maxLeft = r.width - tip.offsetWidth - 8;
+      tip.style.left = Math.min(left, Math.max(8, maxLeft)) + "px";
+      tip.style.top = Math.max(0, ev.clientY - r.top - tip.offsetHeight - 12) + "px";
+    };
+    wrap.onpointerleave = () => { tip.style.opacity = 0; cross.setAttribute("opacity", 0); dots.forEach(d => d.setAttribute("opacity", 0)); };
+  }
+
+  function renderAll() {
+    document.getElementById("selnote").textContent = NOTAS[MODE];
+    ["periodo", "mensual", "anual"].forEach(m =>
+      document.getElementById("mode-" + m).setAttribute("aria-pressed", String(m === MODE)));
+    renderTiles();
+    draw("ch1", "tip1", "leg1", DATA.panel1);
+    draw("ch2", "tip2", "leg2", DATA.panel2);
+  }
+  ["periodo", "mensual", "anual"].forEach(m => {
+    document.getElementById("mode-" + m).addEventListener("click", () => { MODE = m; renderAll(); });
+  });
+  try { const saved = localStorage.getItem("gan3m-mode"); if (saved && NOTAS[saved]) MODE = saved; } catch (e) {}
+  const origRender = renderAll;
+  ["periodo", "mensual", "anual"].forEach(m => {
+    document.getElementById("mode-" + m).addEventListener("click", () => { try { localStorage.setItem("gan3m-mode", m); } catch (e) {} });
+  });
+  renderAll();
+})();
+</script>
