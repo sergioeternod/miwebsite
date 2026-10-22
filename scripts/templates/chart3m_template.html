@@ -1,0 +1,201 @@
+<title>Ganancia últimos 3 meses</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<style>
+  /* Layout: una columna de lectura, tiles arriba, dos paneles de línea apilados. */
+  :root {
+    --surface: #fcfcfb; --card: #f4f3f0; --ink: #0b0b0b; --ink-2: #52514e; --ink-3: #898781;
+    --grid: #e1e0d9; --axis: #c3c2b7; --border: rgba(11,11,11,.10);
+    --pos: #006300; --neg: #d03b3b;
+    --s1: #2a78d6; --s2: #eb6834; --s3: #1baf7a; --s4: #eda100; --sbook: #6250d6;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      color-scheme: dark;
+      --surface: #1a1a19; --card: #232322; --ink: #f0efec; --ink-2: #c3c2b7; --ink-3: #898781;
+      --grid: #2c2c2a; --axis: #383835; --border: rgba(255,255,255,.10);
+      --pos: #0ca30c; --neg: #e66767;
+      --s1: #3987e5; --s2: #d95926; --s3: #199e70; --s4: #c98500; --sbook: #9085e9;
+    }
+  }
+  :root[data-theme="dark"] {
+    color-scheme: dark;
+    --surface: #1a1a19; --card: #232322; --ink: #f0efec; --ink-2: #c3c2b7; --ink-3: #898781;
+    --grid: #2c2c2a; --axis: #383835; --border: rgba(255,255,255,.10);
+    --pos: #0ca30c; --neg: #e66767;
+    --s1: #3987e5; --s2: #d95926; --s3: #199e70; --s4: #c98500; --sbook: #9085e9;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--surface); color: var(--ink);
+    font: 15px/1.55 system-ui, -apple-system, "Segoe UI", sans-serif;
+    padding-left: max(16px, env(safe-area-inset-left, 0px));
+    padding-right: max(16px, env(safe-area-inset-right, 0px));
+    padding-block: 0;
+  }
+  main { max-width: 920px; margin: 0 auto; padding-block: 36px 56px; }
+  .eyebrow { font-size: 12px; letter-spacing: .12em; text-transform: uppercase; color: var(--ink-3); margin: 0 0 6px; }
+  h1 { font-size: clamp(23px, 4vw, 31px); line-height: 1.15; margin: 0 0 6px; text-wrap: balance; }
+  .sub { color: var(--ink-2); margin: 0 0 26px; max-width: 66ch; }
+  .tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 12px; margin-bottom: 34px; }
+  .tile { background: var(--card); border-radius: 10px; padding: 13px 15px; }
+  .tile .k { font-size: 11px; letter-spacing: .09em; text-transform: uppercase; color: var(--ink-3); margin-bottom: 3px; display: flex; align-items: center; gap: 6px; }
+  .tile .k .sw { width: 9px; height: 9px; border-radius: 2px; flex: none; }
+  .tile .v { font-size: 22px; font-weight: 700; }
+  .tile .n { font-size: 12px; color: var(--ink-2); margin-top: 2px; }
+  .v.up { color: var(--pos); } .v.down { color: var(--neg); }
+  section { margin-bottom: 40px; }
+  h2 { font-size: 17px; margin: 0 0 4px; }
+  .desc { color: var(--ink-2); font-size: 13.5px; margin: 0 0 12px; max-width: 72ch; }
+  .legend { display: flex; flex-wrap: wrap; gap: 14px; font-size: 12.5px; color: var(--ink-2); margin-bottom: 8px; }
+  .legend span { display: inline-flex; align-items: center; gap: 6px; }
+  .legend i { width: 14px; height: 3px; border-radius: 2px; background: var(--c); }
+  .chartwrap { position: relative; }
+  svg { display: block; width: 100%; height: auto; }
+  .gridline { stroke: var(--grid); stroke-width: 1; }
+  .axisline { stroke: var(--axis); stroke-width: 1; }
+  .tick { fill: var(--ink-3); font-size: 11px; font-variant-numeric: tabular-nums; }
+  .endlbl { font-size: 11.5px; fill: var(--ink-2); font-weight: 600; }
+  .tooltip {
+    position: absolute; pointer-events: none; background: var(--card); color: var(--ink);
+    border: 1px solid var(--border); border-radius: 8px; padding: 7px 10px; font-size: 12.5px;
+    box-shadow: 0 2px 10px rgba(0,0,0,.14); opacity: 0; white-space: nowrap;
+    font-variant-numeric: tabular-nums; z-index: 3;
+  }
+  .tooltip .sw { display: inline-block; width: 9px; height: 9px; border-radius: 2px; margin-right: 5px; }
+  .tooltip .row { display: flex; justify-content: space-between; gap: 14px; }
+  .note { background: var(--card); border-radius: 10px; padding: 13px 17px; color: var(--ink-2); font-size: 13.5px; }
+  .note strong { color: var(--ink); }
+</style>
+<main>
+  <p class="eyebrow">__WINDOW__ · datos reales</p>
+  <h1>Ganancia de los últimos 3 meses</h1>
+  <p class="sub">El modelo simulado y los tres índices parten de los mismos $10,000 al inicio de la
+  ventana; abajo, el libro real en papel desde su arranque. Precios de cierre diarios, historial anclado a la
+  añada. Todos los porcentajes son ganancia acumulada del periodo mostrado, no tasas anualizadas.</p>
+
+  <div class="tiles">
+__TILES__
+  </div>
+
+  <section>
+    <h2>Modelo vs índices</h2>
+    <p class="desc">__DESC1__</p>
+    <div class="legend" id="leg1"></div>
+    <div class="chartwrap" id="wrap1"><svg id="ch1" viewBox="0 0 920 360" role="img" aria-label="Capital del modelo comparado con S&P 500, Nasdaq y Dow Jones, julio a octubre de 2026"></svg><div class="tooltip" id="tip1"></div></div>
+  </section>
+
+  <section>
+    <h2>Libro real vs S&amp;P 500</h2>
+    <p class="desc">__DESC2__</p>
+    <div class="legend" id="leg2"></div>
+    <div class="chartwrap" id="wrap2"><svg id="ch2" viewBox="0 0 920 320" role="img" aria-label="Valor del libro real comparado con el S&P 500 desde el 17 de agosto de 2026"></svg><div class="tooltip" id="tip2"></div></div>
+  </section>
+
+  <section>
+    <p class="note"><strong>Lectura honesta:</strong> __NOTE__</p>
+  </section>
+</main>
+<script>
+const DATA = __DATA__;
+</script>
+<script>
+(function () {
+  const MESES = ["ene","feb","mar","abr","may","jun","jul","ago","sep","oct","nov","dic"];
+  const css = n => getComputedStyle(document.documentElement).getPropertyValue(n).trim();
+  const fmtD = iso => { const [y,m,d] = iso.split("-"); return `${+d} ${MESES[+m-1]}`; };
+  const fmt$ = v => "$" + Math.round(v).toLocaleString("en-US");
+  const fmtPct = v => (v >= 0 ? "+" : "−") + Math.abs(v).toFixed(2) + "%";
+
+  function draw(svgId, tipId, legId, series, colorVars) {
+    const svg = document.getElementById(svgId);
+    const tip = document.getElementById(tipId);
+    const wrap = svg.parentElement;
+    const W = svg.viewBox.baseVal.width, H = svg.viewBox.baseVal.height;
+    const M = { t: 16, r: 132, b: 28, l: 54 };
+    const dates = series[0].pts.map(p => p.d);
+    const all = series.flatMap(s => s.pts.map(p => p.v));
+    let lo = Math.min(...all), hi = Math.max(...all);
+    const pad = (hi - lo) * 0.07; lo -= pad; hi += pad;
+    const x = i => M.l + i / (dates.length - 1) * (W - M.l - M.r);
+    const y = v => M.t + (hi - v) / (hi - lo) * (H - M.t - M.b);
+    const NS = "http://www.w3.org/2000/svg";
+    const el = (n, a) => { const e = document.createElementNS(NS, n); for (const k in a) e.setAttribute(k, a[k]); return e; };
+
+    // leyenda
+    const leg = document.getElementById(legId);
+    leg.innerHTML = series.map((s, i) =>
+      `<span style="--c:var(${colorVars[i]})"><i></i>${s.label}</span>`).join("");
+
+    // rejilla y: 4 niveles redondeados a $100
+    const step = Math.max(100, Math.round((hi - lo) / 4 / 100) * 100);
+    const y0 = Math.ceil(lo / step) * step;
+    for (let v = y0; v <= hi; v += step) {
+      svg.appendChild(el("line", { x1: M.l, x2: W - M.r, y1: y(v), y2: y(v), class: "gridline" }));
+      const t = el("text", { x: M.l - 8, y: y(v) + 4, "text-anchor": "end", class: "tick" });
+      t.textContent = fmt$(v); svg.appendChild(t);
+    }
+    // base del eje
+    svg.appendChild(el("line", { x1: M.l, x2: W - M.r, y1: H - M.b, y2: H - M.b, class: "axisline" }));
+    // ticks x: inicio de cada mes + primer punto
+    const seen = {};
+    dates.forEach((d, i) => {
+      const mo = d.slice(0, 7);
+      if (i === 0 || !seen[mo]) {
+        seen[mo] = true;
+        if (i > 0 || true) {
+          const t = el("text", { x: x(i), y: H - M.b + 18, "text-anchor": i === 0 ? "start" : "middle", class: "tick" });
+          t.textContent = i === 0 ? fmtD(d) : `1 ${MESES[+d.slice(5, 7) - 1]}`;
+          svg.appendChild(t);
+        }
+      }
+    });
+
+    // líneas
+    series.forEach((s, si) => {
+      const dPath = s.pts.map((p, i) => (i ? "L" : "M") + x(dates.indexOf(p.d)).toFixed(1) + " " + y(p.v).toFixed(1)).join("");
+      svg.appendChild(el("path", { d: dPath, fill: "none", stroke: `var(${colorVars[si]})`, "stroke-width": 2, "stroke-linejoin": "round" }));
+    });
+
+    // etiquetas finales con anti-colisión simple
+    const ends = series.map((s, si) => ({ si, v: s.pts[s.pts.length - 1].v, yy: y(s.pts[s.pts.length - 1].v) }))
+      .sort((a, b) => a.yy - b.yy);
+    for (let i = 1; i < ends.length; i++) if (ends[i].yy - ends[i - 1].yy < 15) ends[i].yy = ends[i - 1].yy + 15;
+    ends.forEach(e => {
+      const s = series[e.si];
+      svg.appendChild(el("circle", { cx: W - M.r + 6, cy: e.yy, r: 3.5, fill: `var(${colorVars[e.si]})` }));
+      const t = el("text", { x: W - M.r + 14, y: e.yy + 4, class: "endlbl" });
+      t.textContent = `${s.label} ${fmtPct((e.v / 10000 - 1) * 100)}`;
+      svg.appendChild(t);
+    });
+
+    // crosshair + tooltip
+    const cross = el("line", { y1: M.t, y2: H - M.b, class: "axisline", opacity: 0 });
+    svg.appendChild(cross);
+    const dots = series.map((s, si) => { const c = el("circle", { r: 4, fill: `var(${colorVars[si]})`, opacity: 0 }); svg.appendChild(c); return c; });
+    function onMove(ev) {
+      const r = svg.getBoundingClientRect();
+      const px = (ev.clientX - r.left) / r.width * W;
+      let i = Math.round((px - M.l) / (W - M.l - M.r) * (dates.length - 1));
+      i = Math.max(0, Math.min(dates.length - 1, i));
+      cross.setAttribute("x1", x(i)); cross.setAttribute("x2", x(i)); cross.setAttribute("opacity", 1);
+      let html = `<div style="color:var(--ink-3);margin-bottom:3px">${fmtD(dates[i])} 2026</div>`;
+      series.forEach((s, si) => {
+        const p = s.pts[i]; if (!p) return;
+        dots[si].setAttribute("cx", x(i)); dots[si].setAttribute("cy", y(p.v)); dots[si].setAttribute("opacity", 1);
+        html += `<div class="row"><span><span class="sw" style="background:var(${colorVars[si]})"></span>${s.label}</span><span>${fmt$(p.v)} · ${fmtPct((p.v / 10000 - 1) * 100)}</span></div>`;
+      });
+      tip.innerHTML = html;
+      tip.style.opacity = 1;
+      const left = (ev.clientX - r.left) + 14, maxLeft = r.width - tip.offsetWidth - 8;
+      tip.style.left = Math.min(left, Math.max(8, maxLeft)) + "px";
+      tip.style.top = Math.max(0, ev.clientY - r.top - tip.offsetHeight - 12) + "px";
+    }
+    function onLeave() { tip.style.opacity = 0; cross.setAttribute("opacity", 0); dots.forEach(d => d.setAttribute("opacity", 0)); }
+    wrap.addEventListener("pointermove", onMove);
+    wrap.addEventListener("pointerleave", onLeave);
+  }
+
+  draw("ch1", "tip1", "leg1", DATA.panel1, ["--s1", "--s2", "--s3", "--s4"]);
+  draw("ch2", "tip2", "leg2", DATA.panel2, ["--sbook", "--s2"]);
+})();
+</script>
