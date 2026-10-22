@@ -1,7 +1,7 @@
 <title>Ganancia últimos 3 meses</title>
 <meta name="claude:viewport-fit-sides" content="cover">
 <style>
-  /* Layout: una columna de lectura, tiles arriba, dos paneles de línea apilados. */
+  /* Layout: una columna de lectura, selector de unidad, tiles y dos paneles de línea. */
   :root {
     --surface: #fcfcfb; --card: #f4f3f0; --ink: #0b0b0b; --ink-2: #52514e; --ink-3: #898781;
     --grid: #e1e0d9; --axis: #c3c2b7; --border: rgba(11,11,11,.10);
@@ -35,7 +35,16 @@
   main { max-width: 920px; margin: 0 auto; padding-block: 36px 56px; }
   .eyebrow { font-size: 12px; letter-spacing: .12em; text-transform: uppercase; color: var(--ink-3); margin: 0 0 6px; }
   h1 { font-size: clamp(23px, 4vw, 31px); line-height: 1.15; margin: 0 0 6px; text-wrap: balance; }
-  .sub { color: var(--ink-2); margin: 0 0 26px; max-width: 66ch; }
+  .sub { color: var(--ink-2); margin: 0 0 18px; max-width: 66ch; }
+  .seg { display: inline-flex; background: var(--card); border: 1px solid var(--border); border-radius: 9px; padding: 3px; gap: 2px; }
+  .seg button {
+    appearance: none; border: 0; background: transparent; color: var(--ink-2); cursor: pointer;
+    font: 600 13px/1 system-ui, -apple-system, "Segoe UI", sans-serif;
+    padding: 7px 13px; border-radius: 7px;
+  }
+  .seg button[aria-pressed="true"] { background: var(--surface); color: var(--ink); box-shadow: 0 1px 3px rgba(0,0,0,.14); }
+  .seg button:focus-visible { outline: 2px solid var(--s1); outline-offset: 1px; }
+  .selnote { font-size: 12.5px; color: var(--ink-3); margin: 8px 0 20px; }
   .tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 12px; margin-bottom: 34px; }
   .tile { background: var(--card); border-radius: 10px; padding: 13px 15px; }
   .tile .k { font-size: 11px; letter-spacing: .09em; text-transform: uppercase; color: var(--ink-3); margin-bottom: 3px; display: flex; align-items: center; gap: 6px; }
@@ -71,24 +80,29 @@
   <h1>Ganancia de los últimos 3 meses</h1>
   <p class="sub">El modelo simulado y los tres índices parten de los mismos $10,000 al inicio de la
   ventana; abajo, el libro real en papel desde su arranque. Precios de cierre diarios, historial anclado a la
-  añada. Todos los porcentajes son ganancia acumulada del periodo mostrado, no tasas anualizadas.</p>
+  añada. El selector cambia cómo se expresa la ganancia en los totales y etiquetas.</p>
 
-  <div class="tiles">
-__TILES__
+  <div class="seg" role="group" aria-label="Unidad de la ganancia">
+    <button type="button" id="mode-periodo" aria-pressed="true">Del periodo</button>
+    <button type="button" id="mode-mensual" aria-pressed="false">Mensual</button>
+    <button type="button" id="mode-anual" aria-pressed="false">Anualizada</button>
   </div>
+  <p class="selnote" id="selnote"></p>
+
+  <div class="tiles" id="tiles"></div>
 
   <section>
     <h2>Modelo vs índices</h2>
     <p class="desc">__DESC1__</p>
     <div class="legend" id="leg1"></div>
-    <div class="chartwrap" id="wrap1"><svg id="ch1" viewBox="0 0 920 360" role="img" aria-label="Capital del modelo comparado con S&P 500, Nasdaq y Dow Jones, julio a octubre de 2026"></svg><div class="tooltip" id="tip1"></div></div>
+    <div class="chartwrap" id="wrap1"><svg id="ch1" viewBox="0 0 920 360" role="img" aria-label="Capital del modelo comparado con S&P 500, Nasdaq y Dow Jones en los últimos 3 meses"></svg><div class="tooltip" id="tip1"></div></div>
   </section>
 
   <section>
     <h2>Libro real vs S&amp;P 500</h2>
     <p class="desc">__DESC2__</p>
     <div class="legend" id="leg2"></div>
-    <div class="chartwrap" id="wrap2"><svg id="ch2" viewBox="0 0 920 320" role="img" aria-label="Valor del libro real comparado con el S&P 500 desde el 17 de agosto de 2026"></svg><div class="tooltip" id="tip2"></div></div>
+    <div class="chartwrap" id="wrap2"><svg id="ch2" viewBox="0 0 920 320" role="img" aria-label="Valor del libro real comparado con el S&P 500 desde su arranque"></svg><div class="tooltip" id="tip2"></div></div>
   </section>
 
   <section>
@@ -101,17 +115,57 @@ const DATA = __DATA__;
 <script>
 (function () {
   const MESES = ["ene","feb","mar","abr","may","jun","jul","ago","sep","oct","nov","dic"];
-  const css = n => getComputedStyle(document.documentElement).getPropertyValue(n).trim();
+  const COLOR = { "Modelo": "--s1", "S&P 500": "--s2", "Nasdaq": "--s3", "Dow Jones": "--s4", "Libro real": "--sbook" };
   const fmtD = iso => { const [y,m,d] = iso.split("-"); return `${+d} ${MESES[+m-1]}`; };
   const fmt$ = v => "$" + Math.round(v).toLocaleString("en-US");
   const fmtPct = v => (v >= 0 ? "+" : "−") + Math.abs(v).toFixed(2) + "%";
+  const days = (a, b) => (new Date(b) - new Date(a)) / 864e5;
 
-  function draw(svgId, tipId, legId, series, colorVars) {
+  let MODE = "periodo";
+  const NOTAS = {
+    periodo: "Acumulado del periodo que muestra cada serie.",
+    mensual: "Tasa mensual compuesta equivalente al acumulado de cada serie.",
+    anual: "Tasa anual compuesta equivalente — extrapolación aritmética del periodo, no una promesa.",
+  };
+  function rate(v, nDays) {
+    const f = v / 10000;
+    if (MODE === "periodo") return (f - 1) * 100;
+    const exp = MODE === "mensual" ? 30.44 / nDays : 365.25 / nDays;
+    return (Math.pow(f, exp) - 1) * 100;
+  }
+
+  function seriesDays(s) { return days(s.pts[0].d, s.pts[s.pts.length - 1].d); }
+  function endRate(s) { return rate(s.pts[s.pts.length - 1].v, seriesDays(s)); }
+
+  function renderTiles() {
+    const el = document.getElementById("tiles");
+    const libro = DATA.panel2[0], spxLibro = DATA.panel2[1];
+    const items = DATA.panel1.map(s => {
+      const r = endRate(s);
+      const n = s.label === "Modelo"
+        ? fmt$(s.pts[s.pts.length - 1].v) + " al " + fmtD(s.pts[s.pts.length - 1].d)
+        : "misma ventana";
+      return { label: s.label, r, n };
+    });
+    items.push({
+      label: "Libro real", r: endRate(libro),
+      n: "desde " + fmtD(libro.pts[0].d) + " · S&P " + fmtPct(endRate(spxLibro)),
+    });
+    el.innerHTML = items.map(it => {
+      const cls = it.r >= 0.005 ? " up" : (it.r <= -0.005 ? " down" : "");
+      return `<div class="tile"><div class="k"><span class="sw" style="background:var(${COLOR[it.label]})"></span>${it.label.replace("&", "&amp;")}</div>` +
+        `<div class="v${cls}">${fmtPct(it.r)}</div><div class="n">${it.n}</div></div>`;
+    }).join("");
+  }
+
+  function draw(svgId, tipId, legId, series) {
     const svg = document.getElementById(svgId);
     const tip = document.getElementById(tipId);
     const wrap = svg.parentElement;
+    svg.replaceChildren();
+    tip.style.opacity = 0;
     const W = svg.viewBox.baseVal.width, H = svg.viewBox.baseVal.height;
-    const M = { t: 16, r: 132, b: 28, l: 54 };
+    const M = { t: 16, r: 148, b: 28, l: 54 };
     const dates = series[0].pts.map(p => p.d);
     const all = series.flatMap(s => s.pts.map(p => p.v));
     let lo = Math.min(...all), hi = Math.max(...all);
@@ -121,81 +175,82 @@ const DATA = __DATA__;
     const NS = "http://www.w3.org/2000/svg";
     const el = (n, a) => { const e = document.createElementNS(NS, n); for (const k in a) e.setAttribute(k, a[k]); return e; };
 
-    // leyenda
-    const leg = document.getElementById(legId);
-    leg.innerHTML = series.map((s, i) =>
-      `<span style="--c:var(${colorVars[i]})"><i></i>${s.label}</span>`).join("");
+    document.getElementById(legId).innerHTML = series.map(s =>
+      `<span style="--c:var(${COLOR[s.label]})"><i></i>${s.label.replace("&", "&amp;")}</span>`).join("");
 
-    // rejilla y: 4 niveles redondeados a $100
     const step = Math.max(100, Math.round((hi - lo) / 4 / 100) * 100);
-    const y0 = Math.ceil(lo / step) * step;
-    for (let v = y0; v <= hi; v += step) {
+    for (let v = Math.ceil(lo / step) * step; v <= hi; v += step) {
       svg.appendChild(el("line", { x1: M.l, x2: W - M.r, y1: y(v), y2: y(v), class: "gridline" }));
       const t = el("text", { x: M.l - 8, y: y(v) + 4, "text-anchor": "end", class: "tick" });
       t.textContent = fmt$(v); svg.appendChild(t);
     }
-    // base del eje
     svg.appendChild(el("line", { x1: M.l, x2: W - M.r, y1: H - M.b, y2: H - M.b, class: "axisline" }));
-    // ticks x: inicio de cada mes + primer punto
     const seen = {};
     dates.forEach((d, i) => {
       const mo = d.slice(0, 7);
       if (i === 0 || !seen[mo]) {
         seen[mo] = true;
-        if (i > 0 || true) {
-          const t = el("text", { x: x(i), y: H - M.b + 18, "text-anchor": i === 0 ? "start" : "middle", class: "tick" });
-          t.textContent = i === 0 ? fmtD(d) : `1 ${MESES[+d.slice(5, 7) - 1]}`;
-          svg.appendChild(t);
-        }
+        const t = el("text", { x: x(i), y: H - M.b + 18, "text-anchor": i === 0 ? "start" : "middle", class: "tick" });
+        t.textContent = i === 0 ? fmtD(d) : `1 ${MESES[+d.slice(5, 7) - 1]}`;
+        svg.appendChild(t);
       }
     });
 
-    // líneas
-    series.forEach((s, si) => {
+    series.forEach(s => {
       const dPath = s.pts.map((p, i) => (i ? "L" : "M") + x(dates.indexOf(p.d)).toFixed(1) + " " + y(p.v).toFixed(1)).join("");
-      svg.appendChild(el("path", { d: dPath, fill: "none", stroke: `var(${colorVars[si]})`, "stroke-width": 2, "stroke-linejoin": "round" }));
+      svg.appendChild(el("path", { d: dPath, fill: "none", stroke: `var(${COLOR[s.label]})`, "stroke-width": 2, "stroke-linejoin": "round" }));
     });
 
-    // etiquetas finales con anti-colisión simple
-    const ends = series.map((s, si) => ({ si, v: s.pts[s.pts.length - 1].v, yy: y(s.pts[s.pts.length - 1].v) }))
-      .sort((a, b) => a.yy - b.yy);
+    const ends = series.map((s, si) => ({ si, yy: y(s.pts[s.pts.length - 1].v) })).sort((a, b) => a.yy - b.yy);
     for (let i = 1; i < ends.length; i++) if (ends[i].yy - ends[i - 1].yy < 15) ends[i].yy = ends[i - 1].yy + 15;
     ends.forEach(e => {
       const s = series[e.si];
-      svg.appendChild(el("circle", { cx: W - M.r + 6, cy: e.yy, r: 3.5, fill: `var(${colorVars[e.si]})` }));
+      svg.appendChild(el("circle", { cx: W - M.r + 6, cy: e.yy, r: 3.5, fill: `var(${COLOR[s.label]})` }));
       const t = el("text", { x: W - M.r + 14, y: e.yy + 4, class: "endlbl" });
-      t.textContent = `${s.label} ${fmtPct((e.v / 10000 - 1) * 100)}`;
+      t.textContent = `${s.label} ${fmtPct(endRate(s))}`;
       svg.appendChild(t);
     });
 
-    // crosshair + tooltip
     const cross = el("line", { y1: M.t, y2: H - M.b, class: "axisline", opacity: 0 });
     svg.appendChild(cross);
-    const dots = series.map((s, si) => { const c = el("circle", { r: 4, fill: `var(${colorVars[si]})`, opacity: 0 }); svg.appendChild(c); return c; });
-    function onMove(ev) {
+    const dots = series.map(s => { const c = el("circle", { r: 4, fill: `var(${COLOR[s.label]})`, opacity: 0 }); svg.appendChild(c); return c; });
+    wrap.onpointermove = ev => {
       const r = svg.getBoundingClientRect();
       const px = (ev.clientX - r.left) / r.width * W;
       let i = Math.round((px - M.l) / (W - M.l - M.r) * (dates.length - 1));
       i = Math.max(0, Math.min(dates.length - 1, i));
       cross.setAttribute("x1", x(i)); cross.setAttribute("x2", x(i)); cross.setAttribute("opacity", 1);
-      let html = `<div style="color:var(--ink-3);margin-bottom:3px">${fmtD(dates[i])} 2026</div>`;
+      let html = `<div style="color:var(--ink-3);margin-bottom:3px">${fmtD(dates[i])} ${dates[i].slice(0, 4)} · acumulado</div>`;
       series.forEach((s, si) => {
         const p = s.pts[i]; if (!p) return;
         dots[si].setAttribute("cx", x(i)); dots[si].setAttribute("cy", y(p.v)); dots[si].setAttribute("opacity", 1);
-        html += `<div class="row"><span><span class="sw" style="background:var(${colorVars[si]})"></span>${s.label}</span><span>${fmt$(p.v)} · ${fmtPct((p.v / 10000 - 1) * 100)}</span></div>`;
+        html += `<div class="row"><span><span class="sw" style="background:var(${COLOR[s.label]})"></span>${s.label.replace("&", "&amp;")}</span><span>${fmt$(p.v)} · ${fmtPct((p.v / 10000 - 1) * 100)}</span></div>`;
       });
       tip.innerHTML = html;
       tip.style.opacity = 1;
       const left = (ev.clientX - r.left) + 14, maxLeft = r.width - tip.offsetWidth - 8;
       tip.style.left = Math.min(left, Math.max(8, maxLeft)) + "px";
       tip.style.top = Math.max(0, ev.clientY - r.top - tip.offsetHeight - 12) + "px";
-    }
-    function onLeave() { tip.style.opacity = 0; cross.setAttribute("opacity", 0); dots.forEach(d => d.setAttribute("opacity", 0)); }
-    wrap.addEventListener("pointermove", onMove);
-    wrap.addEventListener("pointerleave", onLeave);
+    };
+    wrap.onpointerleave = () => { tip.style.opacity = 0; cross.setAttribute("opacity", 0); dots.forEach(d => d.setAttribute("opacity", 0)); };
   }
 
-  draw("ch1", "tip1", "leg1", DATA.panel1, ["--s1", "--s2", "--s3", "--s4"]);
-  draw("ch2", "tip2", "leg2", DATA.panel2, ["--sbook", "--s2"]);
+  function renderAll() {
+    document.getElementById("selnote").textContent = NOTAS[MODE];
+    ["periodo", "mensual", "anual"].forEach(m =>
+      document.getElementById("mode-" + m).setAttribute("aria-pressed", String(m === MODE)));
+    renderTiles();
+    draw("ch1", "tip1", "leg1", DATA.panel1);
+    draw("ch2", "tip2", "leg2", DATA.panel2);
+  }
+  ["periodo", "mensual", "anual"].forEach(m => {
+    document.getElementById("mode-" + m).addEventListener("click", () => { MODE = m; renderAll(); });
+  });
+  try { const saved = localStorage.getItem("gan3m-mode"); if (saved && NOTAS[saved]) MODE = saved; } catch (e) {}
+  const origRender = renderAll;
+  ["periodo", "mensual", "anual"].forEach(m => {
+    document.getElementById("mode-" + m).addEventListener("click", () => { try { localStorage.setItem("gan3m-mode", m); } catch (e) {} });
+  });
+  renderAll();
 })();
 </script>

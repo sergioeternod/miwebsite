@@ -112,22 +112,12 @@ if __name__ == "__main__":
             f"En la ventana el modelo hizo {pct(rets['Modelo'])} contra {pct(rets['S&P 500'])} del S&amp;P. "
             f"No es asesoría financiera ni garantiza resultados futuros.")
 
-    sw = {"Modelo": "--s1", "S&P 500": "--s2", "Nasdaq": "--s3", "Dow Jones": "--s4"}
-    tiles = "\n".join(
-        [f"    <div class=\"tile\"><div class=\"k\"><span class=\"sw\" style=\"background:var({sw[s['label']]})\"></span>"
-         f"{s['label'].replace('&', '&amp;')}</div>"
-         f"<div class=\"v{' up' if rets[s['label']] >= 0.005 else (' down' if rets[s['label']] <= -0.005 else '')}\">{pct(rets[s['label']])}</div>"
-         f"<div class=\"n\">{'$' + format(round(s['pts'][-1]['v']), ',') + ' al ' + fmt_date(end) if s['label'] == 'Modelo' else 'misma ventana'}</div></div>"
-         for s in panel1]
-        + [f"    <div class=\"tile\"><div class=\"k\"><span class=\"sw\" style=\"background:var(--sbook)\"></span>Libro real</div>"
-           f"<div class=\"v{' up' if book_ret >= 0.005 else (' down' if book_ret <= -0.005 else '')}\">{pct(book_ret)}</div>"
-           f"<div class=\"n\">desde {fmt_date(inception)} · S&amp;P {pct(spx_book_ret)}</div></div>"])
-
+    # Los tiles y las etiquetas se renderizan en el navegador (selector de
+    # unidad: del periodo / mensual / anualizada) a partir de __DATA__.
     data = {"panel1": panel1, "panel2": panel2, "window": [start, end]}
     tpl = open(TEMPLATE, encoding="utf-8").read()
     html = (tpl.replace("__DATA__", json.dumps(data, ensure_ascii=False, separators=(",", ":")))
             .replace("__WINDOW__", f"{fmt_date(start)} → {fmt_date(end)}")
-            .replace("__TILES__", tiles)
             .replace("__DESC1__", desc1)
             .replace("__DESC2__", desc2)
             .replace("__NOTE__", note))
