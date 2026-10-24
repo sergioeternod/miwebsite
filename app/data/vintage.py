@@ -82,7 +82,22 @@ def pinned_ohlcv(symbol: str, period: str, fetch) -> pd.DataFrame:
         merged = _full_fetch(symbol, fetch)
         bumped = True
     else:
-        fresh = fetch(symbol, TAIL_PERIOD, "1d", None, None)
+        # Si la descarga fresca falla (429 de Yahoo, red), la añada completa
+        # sigue siendo utilizable: servirla tal cual (la última barra queda
+        # un día vieja y la corrida siguiente la repara) es estrictamente
+        # mejor que lanzar — una excepción aquí saca al símbolo del universo
+        # de la simulación, y si es el símbolo de régimen (^GSPC) el tilt
+        # accionario queda "no aplicable" todo el periodo (2026-10-24: el
+        # 12m publicable cayó de +25% a +4% por un 429 transitorio).
+        try:
+            fresh = fetch(symbol, TAIL_PERIOD, "1d", None, None)
+        except Exception as exc:
+            print(f"[vintage] {symbol}: sin datos frescos ({exc}); usando la añada tal cual",
+                  file=sys.stderr)
+            cutoff = _grid_floor(pd.Timestamp.today().normalize() - pd.DateOffset(days=_period_to_days(period)))
+            out = cached[cached.index >= cutoff].copy()
+            out.attrs["vintage_bumped"] = False
+            return out
         # La última barra guardada es provisional: pudo escribirse a media
         # sesión (el ciclo corre intradía y cripto/FX nunca "cierran"), así
         # que se excluye del chequeo de empalme y se reemplaza con la fresca.
