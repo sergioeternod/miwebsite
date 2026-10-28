@@ -1367,4 +1367,17 @@ def main() -> None:
 
 
 if __name__ == "__main__":
-    main()
+    # Los 429 de Yahoo vienen en ráfagas y a veces se escapan por un camino
+    # no blindado (2026-10-27/28: dos corridas del ciclo tronaron y el
+    # reintento manual funcionó). Un reintento con pausa cubre el caso sin
+    # ocultar fallas persistentes.
+    import time as _time
+    import traceback as _traceback
+
+    try:
+        main()
+    except Exception:
+        _traceback.print_exc()
+        print("build_dashboard: fallo transitorio, reintentando en 60s...", file=sys.stderr)
+        _time.sleep(60)
+        main()
