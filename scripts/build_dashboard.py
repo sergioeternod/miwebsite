@@ -657,7 +657,13 @@ def main() -> None:
             else None
         )
         if r["is_stock"]:
-            rel = sector_relative_valuation(r["symbol"], r["pe"])
+            # get_asset_profile adentro puede tronar con un 429 de Yahoo
+            # (causa del reintento del 2026-11-03); sin lectura sectorial
+            # la fila sigue siendo útil.
+            try:
+                rel = sector_relative_valuation(r["symbol"], r["pe"])
+            except Exception:
+                rel = {}
             r["rel_reading"], r["rel_ratio"] = rel.get("reading"), rel.get("ratio")
         else:
             r["rel_reading"], r["rel_ratio"] = None, None
