@@ -686,7 +686,10 @@ def main() -> None:
             continue
         rec = recommend(df, symbol=s, initial_capital=NOMINAL_CAPITAL, commission_bps=None, allow_short=False)
         vrep = vrep_for(s)
-        rel = sector_relative_valuation(s, vrep.get("trailing_pe"))
+        try:
+            rel = sector_relative_valuation(s, vrep.get("trailing_pe"))
+        except Exception:
+            rel = {}
         guidance_txt = {"bullish": "revisiones al alza", "bearish": "revisiones a la baja", "neutral": "revisiones estables"}.get(
             vrep.get("guidance_signal", "neutral"), "sin lectura"
         )
