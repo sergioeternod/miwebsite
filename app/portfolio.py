@@ -255,6 +255,7 @@ def _select_portfolio(
     max_per_asset_class: int | None = DEFAULT_MAX_PER_ASSET_CLASS,
     short_confidence_premium: float = 0.0,
     fundamental_pe_tilt: bool = True,
+    sma_buy_confirmation: bool = False,
 ) -> list[dict]:
     """Ranks symbols using only data strictly before the simulation's start
     index (no lookahead), and returns the top `portfolio_size` — BUY and
@@ -308,6 +309,25 @@ def _select_portfolio(
             required_confidence += short_confidence_premium
         if rec["overall_action"] not in allowed_actions or rec["confidence_pct"] < required_confidence:
             continue
+
+        if (
+            sma_buy_confirmation
+            and rec["overall_action"] == "BUY"
+            and str(rec.get("best_historical_strategy", {}).get("strategy", "")).startswith("sma_crossover")
+        ):
+            # Hipótesis 7 (ver scripts/validate_sma_confirmation_PREREG.md):
+            # un BUY cuyo respaldo histórico es sma_crossover solo entra si
+            # trend_confirmation también está largo en esta misma frontera.
+            trend = next(
+                (
+                    s
+                    for s in rec.get("per_strategy", [])
+                    if str(s.get("strategy", "")).startswith("trend_confirmation")
+                ),
+                None,
+            )
+            if trend is None or trend.get("signal") not in ("BUY", "HOLD_LONG"):
+                continue
 
         best_strategy = rec.get("best_historical_strategy", {})
         risk_multiplier = _risk_multiplier(best_strategy.get("sharpe_ratio"), best_strategy.get("max_drawdown_pct"))
@@ -723,6 +743,7 @@ def _run_simulation(
     emergency_reselect: bool = False,
     max_position_weight: float | None = None,
     fundamental_pe_tilt: bool = True,
+    sma_buy_confirmation: bool = False,
 ) -> dict:
     if step < 1:
         raise ValueError("step debe ser >= 1")
@@ -735,7 +756,7 @@ def _run_simulation(
             include_earnings, include_news, max_per_asset_class, risk_parity_sizing,
             stop_loss_pct, short_confidence_premium, risk_regime_sizing, rebalance_months,
             equity_regime_tilt, emergency_reselect, max_position_weight,
-            fundamental_pe_tilt,
+            fundamental_pe_tilt, sma_buy_confirmation,
         )
 
     if end_date:
@@ -770,6 +791,7 @@ def _run_simulation(
         selection_cap,
         short_confidence_premium,
         fundamental_pe_tilt=fundamental_pe_tilt,
+        sma_buy_confirmation=sma_buy_confirmation,
     )
     if not portfolio:
         raise ValueError(
@@ -882,6 +904,7 @@ def _run_rebalanced_simulation(
     emergency_reselect: bool = False,
     max_position_weight: float | None = None,
     fundamental_pe_tilt: bool = True,
+    sma_buy_confirmation: bool = False,
 ) -> dict:
     """Same day-by-day walk-forward, but instead of marrying the portfolio
     chosen on day one for the whole period, the selection is redone every
@@ -996,6 +1019,7 @@ def _run_rebalanced_simulation(
             selection_cap,
             short_confidence_premium,
             fundamental_pe_tilt=fundamental_pe_tilt,
+            sma_buy_confirmation=sma_buy_confirmation,
         )
         if k == 0 and not portfolio:
             raise ValueError(
