@@ -104,7 +104,14 @@ def pinned_ohlcv(symbol: str, period: str, fetch) -> pd.DataFrame:
         base = cached[cached.index < cached.index.max()]
         common = base.index.intersection(fresh.index)
         if len(common) == 0:
-            # sin traslape utilizable (hueco largo): añada nueva deliberada
+            # sin traslape utilizable (hueco largo o cola fresca vacía):
+            # añada nueva deliberada
+            print(
+                f"[vintage] {symbol}: sin traslape con la añada "
+                f"(cola fresca: {len(fresh)} barras, última guardada: "
+                f"{base.index.max().date() if len(base) else 'ninguna'}) — añada nueva completa",
+                file=sys.stderr,
+            )
             merged = _full_fetch(symbol, fetch)
             bumped = True
         else:
