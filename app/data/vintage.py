@@ -22,6 +22,7 @@ fetches only):
 
 from __future__ import annotations
 
+import os
 import re
 import sys
 from pathlib import Path
@@ -61,8 +62,16 @@ def _load(path: Path) -> pd.DataFrame | None:
 
 
 def _save(path: Path, df: pd.DataFrame) -> None:
+    # Escritura atómica: los tres builders del ciclo diario corren en
+    # paralelo sobre los mismos CSVs sin lock, y to_csv trunca antes de
+    # escribir — un lector concurrente veía un archivo a medias (solo el
+    # encabezado), lo tomaba por caché vacía y re-añadaba el símbolo en
+    # silencio (GC_F, 2026-11-12 y 13). Con replace() el archivo siempre
+    # está completo para cualquier lector.
     VINTAGE_DIR.mkdir(parents=True, exist_ok=True)
-    df.to_csv(path)
+    tmp = path.with_name(path.name + f".tmp-{os.getpid()}")
+    df.to_csv(tmp)
+    os.replace(tmp, path)
 
 
 def _full_fetch(symbol: str, fetch) -> pd.DataFrame:
@@ -79,6 +88,11 @@ def pinned_ohlcv(symbol: str, period: str, fetch) -> pd.DataFrame:
     bumped = False
 
     if cached is None or cached.empty:
+        print(
+            f"[vintage] {symbol}: sin caché previa utilizable "
+            f"({'no existe' if cached is None else 'archivo vacío'}) — añada nueva completa",
+            file=sys.stderr,
+        )
         merged = _full_fetch(symbol, fetch)
         bumped = True
     else:
