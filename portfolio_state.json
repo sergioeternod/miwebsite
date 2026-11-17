@@ -1,33 +1,21 @@
 {
   "created": "2026-08-17",
-  "as_of": "2026-11-16",
+  "as_of": "2026-11-17",
   "positions": {
-    "^GSPC": {
-      "weight": 0.3177,
-      "entry_price": 7785.7598,
-      "entry_date": "2026-08-17",
-      "confidence_at_selection": 93.1
-    },
     "^DJI": {
-      "weight": 0.3505,
-      "entry_price": 53732.4102,
-      "entry_date": "2026-08-17",
-      "confidence_at_selection": 81.0
+      "weight": 0.6594,
+      "entry_price": 51608.1719,
+      "entry_date": "2026-11-17",
+      "confidence_at_selection": 79.6
     },
-    "MSFT": {
-      "weight": 0.1832,
-      "entry_price": 495.4,
-      "entry_date": "2026-08-17",
-      "confidence_at_selection": 79.0
-    },
-    "AMZN": {
-      "weight": 0.1485,
-      "entry_price": 262.65,
-      "entry_date": "2026-08-17",
-      "confidence_at_selection": 86.7
+    "AAPL": {
+      "weight": 0.3406,
+      "entry_price": 352.78,
+      "entry_date": "2026-11-17",
+      "confidence_at_selection": 61.8
     }
   },
-  "cash_weight": 0.0001,
-  "next_rebalance": "2026-11-17",
+  "cash_weight": 0.0,
+  "next_rebalance": "2027-02-17",
   "regime_risk_on": true
 }
