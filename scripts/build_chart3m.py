@@ -56,11 +56,24 @@ if __name__ == "__main__":
     state = json.load(open("portfolio_state.json"))
     inception = min(p["entry_date"] for p in state["positions"].values())
     closes = {sym: get_ohlcv(sym, period="1y")["Close"] for sym in state["positions"]}
-    idx = closes["^GSPC"].index
+    # El S&P es el benchmark del panel, no una posición: traerlo aparte en vez
+    # de asumir que el libro lo tiene (el rebalanceo del 2026-11-17 lo sacó y
+    # este script tronaba con KeyError).
+    bench = closes.get("^GSPC")
+    if bench is None:
+        bench = get_ohlcv("^GSPC", period="1y")["Close"]
+    idx = bench.index
     idx = idx[idx >= pd.Timestamp(inception)]
     cash = state.get("cash_weight", 0.0)
     book_pts, spx_pts = [], []
-    spx_entry = state["positions"]["^GSPC"]["entry_price"]
+    if len(idx) == 0:
+        # Día cero del libro (recién rebalanceado, aún sin barra diaria
+        # posterior a la entrada): ambas series arrancan planas en 10000.
+        book_pts = [{"d": inception, "v": 10000.0}]
+        spx_pts = [{"d": inception, "v": 10000.0}]
+        spx_entry = None
+    else:
+        spx_entry = float(bench[bench.index >= pd.Timestamp(inception)].iloc[0])
     for d in idx:
         v = cash
         complete = True
@@ -73,7 +86,7 @@ if __name__ == "__main__":
         if not complete:
             continue
         book_pts.append({"d": str(d.date()), "v": round(v * 10000, 2)})
-        spx = closes["^GSPC"][closes["^GSPC"].index <= d]
+        spx = bench[bench.index <= d]
         spx_pts.append({"d": str(d.date()), "v": round(float(spx.iloc[-1]) / spx_entry * 10000, 2)})
     panel2 = [{"label": "Libro real", "pts": book_pts}, {"label": "S&P 500", "pts": spx_pts}]
 
