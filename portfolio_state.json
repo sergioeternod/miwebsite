@@ -1,6 +1,6 @@
 {
   "created": "2026-08-17",
-  "as_of": "2026-11-17",
+  "as_of": "2026-11-18",
   "positions": {
     "^DJI": {
       "weight": 0.6594,
@@ -17,5 +17,5 @@
   },
   "cash_weight": 0.0,
   "next_rebalance": "2027-02-17",
-  "regime_risk_on": true
+  "regime_risk_on": false
 }
